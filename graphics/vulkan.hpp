@@ -21,8 +21,7 @@ private:
     bool enableValidation;
 
     vk::DynamicLoader dl;
-    vk::Instance instance;
-    vk::DebugUtilsMessengerEXT debugMessenger;
+    vk::UniqueInstance instance;
 
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
         VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,

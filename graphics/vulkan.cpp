@@ -66,13 +66,12 @@ void Vulkan::init(SDL_Window* window)
         .ppEnabledExtensionNames = extensionNames.data()
     };
 
-    instance = vk::createInstance(instanceInfo, nullptr);
-    VULKAN_HPP_DEFAULT_DISPATCHER.init(instance);
+    instance = vk::createInstanceUnique(instanceInfo, nullptr);
+    VULKAN_HPP_DEFAULT_DISPATCHER.init(instance.get());
 }
 
 void Vulkan::cleanup()
 {
-    vkDestroyInstance(instance, nullptr);
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL Vulkan::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -80,6 +79,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Vulkan::debugCallback(VkDebugUtilsMessageSeverity
     void* pUserData)
 {
     char prefix[64];
+
     if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
         strcpy(prefix, "VERBOSE : ");
     } else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
@@ -89,6 +89,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Vulkan::debugCallback(VkDebugUtilsMessageSeverity
     } else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
         strcpy(prefix, "ERROR : ");
     }
+
     if (messageType & VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT) {
         strcat(prefix, "GENERAL");
     } else if (messageType & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT) {
@@ -96,6 +97,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Vulkan::debugCallback(VkDebugUtilsMessageSeverity
     } else if (messageType & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT) {
         strcat(prefix, "PERFORMANCE");
     }
+
     printf("(%s) %s\n", prefix, pCallbackData->pMessage);
     return VK_FALSE;
 }
