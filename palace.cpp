@@ -1,32 +1,27 @@
-#include "graphics/sdl.hpp"
-#include "graphics/vk.hpp"
+#include "graphics/sdl2.hpp"
+#include "graphics/vulkan.hpp"
 
-using namespace palace;
+using namespace pl;
 
-SDL_Window* window;
-SDL_Surface* surface;
-
-vk::Instance instance;
-
-int SCREEN_WIDTH = 800;
-int SCREEN_HEIGHT = 600;
+uint32_t WIDTH = 800;
+uint32_t HEIGHT = 600;
 
 int main() {
-    sdl::init();
+    Vulkan vulkan;
 
-    while (true)
-    {
+    SDL_Window* window = Sdl2::createWindow();
+    vulkan.init(window);
+
+    while (true) {
         SDL_Event event;
-        if (SDL_PollEvent(&event))
-        {
+        if (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT)
-            {
                 break;
-            }
         }
     }
 
-    sdl::quit();
+    vulkan.cleanup();
+    Sdl2::quit(window);
 
     return 0;
 }

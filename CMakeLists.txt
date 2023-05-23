@@ -8,8 +8,8 @@ find_package(Vulkan REQUIRED)
 add_subdirectory(ext)
 
 add_executable(palace "palace.cpp"
-	"graphics/sdl.hpp"
-	"graphics/vk.hpp")
+	"graphics/sdl2.hpp"
+	"graphics/vulkan.hpp" "graphics/vulkan.cpp")
 target_link_libraries(palace Vulkan::Vulkan SDL2::SDL2)
 
 add_custom_command(TARGET palace POST_BUILD
