@@ -3,21 +3,25 @@
 
 #include "include.hpp"
 
+#include "vulkandevice.hpp"
 #include "vulkaninstance.hpp"
 
 namespace graphics {
 
 class Vulkan {
-public:
-    void init(SDL_Window* sdlWindow, bool enableValidation);
-    void cleanup();
-
 private:
-    SDL_Window* window;
-    bool validationEnabled;
+    SDL_Window* m_window;
+    bool m_validation;
 
-    vk::DynamicLoader dl;
-    VulkanInstance instance;
+    vk::DynamicLoader m_dl;
+    vulkan::instance m_instance;
+    vulkan::device m_device;
+
+    VkSurfaceKHR m_surface;
+
+public:
+    Vulkan(SDL_Window* sdlWindow, bool enableValidation);
+    void cleanup();
 };
 
 }

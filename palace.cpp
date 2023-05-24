@@ -5,10 +5,8 @@ int WIDTH = 800;
 int HEIGHT = 600;
 
 int main() {
-    graphics::Vulkan vulkan;
-
     SDL_Window* window = graphics::createSdl2Window();
-    vulkan.init(window, true);
+    graphics::Vulkan vulkan(window, true);
 
     while (true) {
         SDL_Event event;

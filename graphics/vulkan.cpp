@@ -4,21 +4,30 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
 namespace graphics {
 
-void Vulkan::init(SDL_Window* sdlWindow, bool enableValidation)
+Vulkan::Vulkan(SDL_Window* sdlWindow, bool enableValidation)
 {
-    // dynamic dispatcher
-    auto vkGetInstanceProcAddr = dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
+    m_window = sdlWindow;
+    m_validation = enableValidation;
+
+    // setup dynamic dispatcher
+    auto vkGetInstanceProcAddr = m_dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
     VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
 
-    this->window = sdlWindow;
-    this->validationEnabled = enableValidation;
+    // instance
+    m_instance = vulkan::instance(m_window, m_validation);
+    VULKAN_HPP_DEFAULT_DISPATCHER.init(m_instance.get());
 
-    this->instance = VulkanInstance::create(window, validationEnabled);
-    VULKAN_HPP_DEFAULT_DISPATCHER.init(instance.get());
+    // device
+    m_device = vulkan::device(m_instance.get());
+
+    // surface
+    // TODO: vulkan-hpp uniquesurface destructor fails
+    SDL_Vulkan_CreateSurface(m_window, m_instance.get(), &m_surface);
 }
 
 void Vulkan::cleanup()
 {
+    vkDestroySurfaceKHR(m_instance.get(), m_surface, nullptr);
 }
 
 }

@@ -1,6 +1,8 @@
 #include "vulkandebug.hpp"
 
-vk::DebugUtilsMessengerCreateInfoEXT graphics::vkdebug::createInfo()
+namespace graphics::vulkan {
+
+vk::DebugUtilsMessengerCreateInfoEXT debug::createInfo()
 {
     return {
         .messageSeverity = vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError,
@@ -9,7 +11,7 @@ vk::DebugUtilsMessengerCreateInfoEXT graphics::vkdebug::createInfo()
     };
 }
 
-VkBool32 graphics::vkdebug::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+VkBool32 debug::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
     VkDebugUtilsMessageTypeFlagsEXT messageType,
     const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
     void* pUserData)
@@ -36,4 +38,6 @@ VkBool32 graphics::vkdebug::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT
 
     printf("(%s) %s\n", prefix, pCallbackData->pMessage);
     return VK_FALSE;
+}
+
 }

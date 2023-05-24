@@ -1,11 +1,13 @@
 #include "vulkaninstance.hpp"
 
-namespace graphics {
+namespace graphics::vulkan {
 
-VulkanInstance VulkanInstance::create(SDL_Window* sdlWindow, bool validationEnabled)
+instance::instance()
 {
-    VulkanInstance VkInst;
+}
 
+instance::instance(SDL_Window* sdlWindow, bool validationEnabled)
+{
     // sdl2 extensions
     unsigned int extensionCount;
     SDL_Vulkan_GetInstanceExtensions(sdlWindow, &extensionCount, nullptr);
@@ -27,7 +29,7 @@ VulkanInstance VulkanInstance::create(SDL_Window* sdlWindow, bool validationEnab
     if (validationEnabled) {
         extensionNames.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
         validationLayers.push_back("VK_LAYER_KHRONOS_validation");
-        debugInfo = vkdebug::createInfo();
+        debugInfo = debug::createInfo();
     }
 
     // application
@@ -50,13 +52,12 @@ VulkanInstance VulkanInstance::create(SDL_Window* sdlWindow, bool validationEnab
         .ppEnabledExtensionNames = extensionNames.data()
     };
 
-    VkInst.instance = vk::createInstanceUnique(instanceInfo, nullptr);
-    return VkInst;
+    m_vkinstance = vk::createInstanceUnique(instanceInfo, nullptr);
 }
 
-vk::Instance VulkanInstance::get()
+vk::Instance instance::get()
 {
-    return instance.get();
+    return m_vkinstance.get();
 }
 
 }

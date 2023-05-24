@@ -5,14 +5,16 @@
 
 #include "vulkandebug.hpp"
 
-namespace graphics {
+namespace graphics::vulkan {
 
-struct VulkanInstance {
+struct instance {
 private:
-    vk::UniqueInstance instance;
+    vk::UniqueInstance m_vkinstance;
 
 public:
-    static VulkanInstance create(SDL_Window* sdlWindow, bool validationEnabled);
+    instance();
+    instance(SDL_Window* sdlWindow, bool validationEnabled);
+
     vk::Instance get();
 };
 

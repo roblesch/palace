@@ -3,7 +3,7 @@
 
 #include "include.hpp"
 
-namespace graphics::vkdebug {
+namespace graphics::vulkan::debug {
 
 vk::DebugUtilsMessengerCreateInfoEXT createInfo();
 
