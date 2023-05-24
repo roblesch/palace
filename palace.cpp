@@ -1,16 +1,14 @@
 #include "graphics/sdl2.hpp"
 #include "graphics/vulkan.hpp"
 
-using namespace pl;
-
-uint32_t WIDTH = 800;
-uint32_t HEIGHT = 600;
+int WIDTH = 800;
+int HEIGHT = 600;
 
 int main() {
-    Vulkan vulkan;
+    graphics::Vulkan vulkan;
 
-    SDL_Window* window = Sdl2::createWindow();
-    vulkan.init(window);
+    SDL_Window* window = graphics::createSdl2Window();
+    vulkan.init(window, true);
 
     while (true) {
         SDL_Event event;
@@ -21,7 +19,7 @@ int main() {
     }
 
     vulkan.cleanup();
-    Sdl2::quit(window);
+    graphics::quitSdl2(window);
 
     return 0;
 }

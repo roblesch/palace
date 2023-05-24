@@ -1,33 +1,28 @@
-#ifndef PALACE_SDL2_HPP
-#define PALACE_SDL2_HPP
+#ifndef PALACE_GRAPHICS_SDL2_HPP
+#define PALACE_GRAPHICS_SDL2_HPP
 
-#define SDL_MAIN_HANDLED
-#include <SDL.h>
-#include <SDL_vulkan.h>
+#include "include.hpp"
 
-extern uint32_t WIDTH;
-extern uint32_t HEIGHT;
+extern int WIDTH;
+extern int HEIGHT;
 
-namespace pl {
+namespace graphics {
 
-class Sdl2 {
-public:
-    static SDL_Window* createWindow()
-    {
-        SDL_Init(SDL_INIT_VIDEO);
-        SDL_Vulkan_LoadLibrary(nullptr);
+SDL_Window* createSdl2Window()
+{
+    SDL_Init(SDL_INIT_VIDEO);
+    SDL_Vulkan_LoadLibrary(nullptr);
 
-        return SDL_CreateWindow("palace",
-            SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH, HEIGHT,
-            SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | SDL_WINDOW_VULKAN);
-    }
+    return SDL_CreateWindow("palace",
+        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH, HEIGHT,
+        SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | SDL_WINDOW_VULKAN);
+}
 
-    static void quit(SDL_Window* window)
-    {
-        SDL_DestroyWindow(window);
-        SDL_Quit();
-    }
-};
+void quitSdl2(SDL_Window* window)
+{
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+}
 
 }
 

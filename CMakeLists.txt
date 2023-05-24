@@ -6,11 +6,13 @@ set(CMAKE_CXX_STANDARD 20)
 find_package(Vulkan REQUIRED)
 
 add_subdirectory(ext)
+add_subdirectory(graphics)
 
-add_executable(palace "palace.cpp"
-	"graphics/sdl2.hpp"
-	"graphics/vulkan.hpp" "graphics/vulkan.cpp")
-target_link_libraries(palace Vulkan::Vulkan SDL2::SDL2)
+add_executable(palace "palace.cpp")
+target_link_libraries(palace
+		graphics
+		Vulkan::Vulkan
+		SDL2::SDL2)
 
 if(WIN32)
 add_custom_command(TARGET palace POST_BUILD
