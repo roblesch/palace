@@ -7,7 +7,7 @@ namespace pl {
 void Vulkan::init(SDL_Window* window)
 {
     // dynamic dispatcher
-    PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
+    auto vkGetInstanceProcAddr = dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
     VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
 
     // sdl2 extensions
@@ -18,46 +18,40 @@ void Vulkan::init(SDL_Window* window)
     SDL_Vulkan_GetInstanceExtensions(window, &extensionCount, extensionNames.data());
 
     // optionals
+    vk::DebugUtilsMessengerCreateInfoEXT debugInfo {};
     vk::InstanceCreateFlagBits flags {};
     std::vector<const char*> validationLayers;
-    const void* pNext = nullptr;
 
-    // molten vk
 #ifdef __APPLE__
+    // molten vk
+    extensionNames.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
     extensionNames.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
-    flags |= vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR;
+    flags = vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR;
 #endif
 
     // validation layers
-#ifdef NDEBUG
-    this->enableValidation = false;
-#else
-    this->enableValidation = true;
-#endif
-
     if (enableValidation) {
         extensionNames.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
         validationLayers.push_back("VK_LAYER_KHRONOS_validation");
-        vk::DebugUtilsMessengerCreateInfoEXT debugInfo {
+        debugInfo = {
             .messageSeverity = vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError,
             .messageType = vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation | vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance,
             .pfnUserCallback = debugCallback
         };
-        pNext = &debugInfo;
     }
 
     // application
     vk::ApplicationInfo appInfo {
-        .pApplicationName = "Hello Triangle",
-        .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
-        .pEngineName = "No Engine",
-        .engineVersion = VK_MAKE_VERSION(1, 0, 0),
+        .pApplicationName = "viewer",
+        .applicationVersion = VK_MAKE_VERSION(0, 0, 1),
+        .pEngineName = "palace",
+        .engineVersion = VK_MAKE_VERSION(0, 0, 1),
         .apiVersion = VK_API_VERSION_1_0
     };
 
     // instance
     vk::InstanceCreateInfo instanceInfo {
-        .pNext                   = pNext,
+        .pNext                   = &debugInfo,
         .flags                   = flags,
         .pApplicationInfo        = &appInfo,
         .enabledLayerCount       = uint32_t(validationLayers.size()),

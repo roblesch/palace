@@ -18,7 +18,11 @@ public:
 private:
     SDL_Window* window;
 
-    bool enableValidation;
+#ifdef NDEBUG
+    bool enableValidation = false;
+#else
+    bool enableValidation = true;
+#endif
 
     vk::DynamicLoader dl;
     vk::UniqueInstance instance;
