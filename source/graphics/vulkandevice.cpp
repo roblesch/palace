@@ -2,7 +2,7 @@
 
 namespace graphics::vulkan {
 
-device::device(vk::Instance instance, vk::SurfaceKHR surface)
+Device::Device(vk::Instance instance, vk::SurfaceKHR surface)
 {
     // select a physical device
     uint32_t deviceCount = 0;

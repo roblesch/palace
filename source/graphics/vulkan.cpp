@@ -20,7 +20,7 @@ Vulkan::Vulkan(bool enableValidation)
     VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
 
     // create instance
-    m_instance = vulkan::instance(m_window, m_validation);
+    m_instance = vulkan::Instance(m_window, m_validation);
     VULKAN_HPP_DEFAULT_DISPATCHER.init(m_instance.get());
 
     // create surface
@@ -30,7 +30,7 @@ Vulkan::Vulkan(bool enableValidation)
     m_surface = vk::UniqueSurfaceKHR(surface, deleter);
 
     // create device
-    m_device = vulkan::device(m_instance.get(), m_surface.get());
+    m_device = vulkan::Device(m_instance.get(), m_surface.get());
 }
 
 Vulkan::~Vulkan()

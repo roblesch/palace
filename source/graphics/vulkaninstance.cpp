@@ -2,7 +2,7 @@
 
 namespace graphics::vulkan {
 
-instance::instance(SDL_Window* sdlWindow, bool validationEnabled)
+Instance::Instance(SDL_Window* sdlWindow, bool validationEnabled)
 {
     // sdl2 extensions
     unsigned int extensionCount;
@@ -51,7 +51,7 @@ instance::instance(SDL_Window* sdlWindow, bool validationEnabled)
     m_vkinstance = vk::createInstanceUnique(instanceInfo, nullptr);
 }
 
-vk::Instance instance::get()
+vk::Instance Instance::get()
 {
     return m_vkinstance.get();
 }

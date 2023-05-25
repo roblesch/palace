@@ -5,7 +5,7 @@
 
 namespace graphics::vulkan {
 
-struct device {
+struct Device {
 private:
     vk::PhysicalDevice m_pdevice;
     vk::UniqueDevice m_ldevice;
@@ -19,8 +19,8 @@ private:
     vk::Queue m_pqueue;
 
 public:
-    device() = default;
-    explicit device(vk::Instance instance, vk::SurfaceKHR surface);
+    Device() = default;
+    explicit Device(vk::Instance instance, vk::SurfaceKHR surface);
 };
 
 }

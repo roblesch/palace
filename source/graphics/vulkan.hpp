@@ -17,8 +17,8 @@ private:
     bool m_validation;
 
     vk::DynamicLoader m_dl;
-    vulkan::instance m_instance;
-    vulkan::device m_device;
+    vulkan::Instance m_instance;
+    vulkan::Device m_device;
 
     vk::UniqueSurfaceKHR m_surface;
 
