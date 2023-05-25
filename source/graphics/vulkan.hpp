@@ -1,10 +1,13 @@
 #ifndef PALACE_GRAPHICS_VULKAN_HPP
 #define PALACE_GRAPHICS_VULKAN_HPP
 
-#include "include.hpp"
+#include "vulkaninclude.hpp"
 
 #include "vulkandevice.hpp"
 #include "vulkaninstance.hpp"
+
+extern int WIDTH;
+extern int HEIGHT;
 
 namespace graphics {
 
@@ -20,8 +23,10 @@ private:
     VkSurfaceKHR m_surface;
 
 public:
-    Vulkan(SDL_Window* sdlWindow, bool enableValidation);
-    void cleanup();
+    Vulkan(bool enableValidation);
+    ~Vulkan();
+
+    void run();
 };
 
 }

@@ -2,10 +2,6 @@
 
 namespace graphics::vulkan {
 
-instance::instance()
-{
-}
-
 instance::instance(SDL_Window* sdlWindow, bool validationEnabled)
 {
     // sdl2 extensions
@@ -34,21 +30,21 @@ instance::instance(SDL_Window* sdlWindow, bool validationEnabled)
 
     // application
     vk::ApplicationInfo appInfo {
-        .pApplicationName   = "viewer",
+        .pApplicationName = "viewer",
         .applicationVersion = VK_MAKE_VERSION(0, 0, 1),
-        .pEngineName        = "palace",
-        .engineVersion      = VK_MAKE_VERSION(0, 0, 1),
-        .apiVersion         = VK_API_VERSION_1_0
+        .pEngineName = "palace",
+        .engineVersion = VK_MAKE_VERSION(0, 0, 1),
+        .apiVersion = VK_API_VERSION_1_0
     };
 
     // instance
     vk::InstanceCreateInfo instanceInfo {
-        .pNext                   = &debugInfo,
-        .flags                   = flags,
-        .pApplicationInfo        = &appInfo,
-        .enabledLayerCount       = uint32_t(validationLayers.size()),
-        .ppEnabledLayerNames     = validationLayers.data(),
-        .enabledExtensionCount   = uint32_t(extensionNames.size()),
+        .pNext = &debugInfo,
+        .flags = flags,
+        .pApplicationInfo = &appInfo,
+        .enabledLayerCount = uint32_t(validationLayers.size()),
+        .ppEnabledLayerNames = validationLayers.data(),
+        .enabledExtensionCount = uint32_t(extensionNames.size()),
         .ppEnabledExtensionNames = extensionNames.data()
     };
 

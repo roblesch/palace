@@ -1,7 +1,7 @@
 #ifndef PALACE_GRAPHICS_VULKANDEBUG_HPP
 #define PALACE_GRAPHICS_VULKANDEBUG_HPP
 
-#include "include.hpp"
+#include "vulkaninclude.hpp"
 
 namespace graphics::vulkan::debug {
 

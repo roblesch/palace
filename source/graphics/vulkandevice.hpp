@@ -1,7 +1,7 @@
 #ifndef PALACE_GRAPHICS_VULKANDEVICE_HPP
 #define PALACE_GRAPHICS_VULKANDEVICE_HPP
 
-#include "include.hpp"
+#include "vulkaninclude.hpp"
 
 namespace graphics::vulkan {
 
@@ -15,9 +15,8 @@ private:
     } queueFamilyIndices;
 
 public:
-    device();
+    device() = default;
     explicit device(vk::Instance instance);
-
 };
 
 }

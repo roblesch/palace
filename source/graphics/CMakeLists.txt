@@ -1,11 +1,11 @@
 add_library(graphics
-        "sdl2.hpp"
         "vulkan.cpp"
         "vulkan.hpp"
         "vulkandebug.cpp"
         "vulkandebug.hpp"
         "vulkandevice.cpp"
         "vulkandevice.hpp"
+        "vulkaninclude.hpp"
         "vulkaninstance.cpp"
         "vulkaninstance.hpp")
 

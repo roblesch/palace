@@ -1,8 +1,7 @@
 #ifndef PALACE_GRAPHICS_VULKANINSTANCE_HPP
 #define PALACE_GRAPHICS_VULKANINSTANCE_HPP
 
-#include "include.hpp"
-
+#include "vulkaninclude.hpp"
 #include "vulkandebug.hpp"
 
 namespace graphics::vulkan {
@@ -12,7 +11,7 @@ private:
     vk::UniqueInstance m_vkinstance;
 
 public:
-    instance();
+    instance() = default;
     instance(SDL_Window* sdlWindow, bool validationEnabled);
 
     vk::Instance get();
