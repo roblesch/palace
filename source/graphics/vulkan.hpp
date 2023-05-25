@@ -20,7 +20,7 @@ private:
     vulkan::instance m_instance;
     vulkan::device m_device;
 
-    VkSurfaceKHR m_surface;
+    vk::UniqueSurfaceKHR m_surface;
 
 public:
     Vulkan(bool enableValidation);

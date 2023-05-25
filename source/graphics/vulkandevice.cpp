@@ -2,7 +2,7 @@
 
 namespace graphics::vulkan {
 
-device::device(vk::Instance instance)
+device::device(vk::Instance instance, vk::SurfaceKHR surface)
 {
     // select a physical device
     uint32_t deviceCount = 0;
@@ -34,39 +34,48 @@ device::device(vk::Instance instance)
     std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
     vkGetPhysicalDeviceQueueFamilyProperties(m_pdevice, &queueFamilyCount, queueFamilies.data());
 
-    for (int i = 0; i < queueFamilyCount; i++) {
+    for (uint32_t i = 0; i < queueFamilyCount; i++) {
         if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
             queueFamilyIndices.graphics = i;
-            break;
+        }
+
+        VkBool32 presentSupport = false;
+        vkGetPhysicalDeviceSurfaceSupportKHR(m_pdevice, i, surface, &presentSupport);
+
+        if (presentSupport) {
+            queueFamilyIndices.present = i;
         }
     }
 
     // create a logical device
-    vk::DeviceQueueCreateInfo queueInfo {
-        .queueFamilyIndex = queueFamilyIndices.graphics,
-        .queueCount = 1,
-        .pQueuePriorities = new float(1.0f)
+    std::vector<vk::DeviceQueueCreateInfo> queueInfos {
+        { .queueFamilyIndex = queueFamilyIndices.graphics,
+            .queueCount = 1,
+            .pQueuePriorities = new float(1.0f) },
+        { .queueFamilyIndex = queueFamilyIndices.present,
+            .queueCount = 1,
+            .pQueuePriorities = new float(1.0f) }
     };
 
     vk::PhysicalDeviceFeatures deviceFeatures {};
 
-    uint32_t extensionCount = 0;
     std::vector<const char*> extensionNames;
-
 #ifdef __APPLE__
-    extensionCount = 1;
     extensionNames.push_back(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
 #endif
 
     vk::DeviceCreateInfo deviceInfo {
-        .queueCreateInfoCount = 1,
-        .pQueueCreateInfos = &queueInfo,
-        .enabledExtensionCount = extensionCount,
+        .queueCreateInfoCount = uint32_t(queueInfos.size()),
+        .pQueueCreateInfos = queueInfos.data(),
+        .enabledExtensionCount = uint32_t(extensionNames.size()),
         .ppEnabledExtensionNames = extensionNames.data(),
         .pEnabledFeatures = {}
     };
 
     m_ldevice = m_pdevice.createDeviceUnique(deviceInfo);
+
+    vkGetDeviceQueue(m_ldevice.get(), queueFamilyIndices.graphics, 0, (VkQueue*)&m_gqueue);
+    vkGetDeviceQueue(m_ldevice.get(), queueFamilyIndices.present, 0, (VkQueue*)&m_pqueue);
 }
 
 }

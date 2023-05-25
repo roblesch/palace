@@ -23,17 +23,19 @@ Vulkan::Vulkan(bool enableValidation)
     m_instance = vulkan::instance(m_window, m_validation);
     VULKAN_HPP_DEFAULT_DISPATCHER.init(m_instance.get());
 
-    // create device
-    m_device = vulkan::device(m_instance.get());
-
     // create surface
-    // TODO: vulkan-hpp uniquesurface destructor fails
-    SDL_Vulkan_CreateSurface(m_window, m_instance.get(), &m_surface);
+    VkSurfaceKHR surface;
+    SDL_Vulkan_CreateSurface(m_window, m_instance.get(), &surface);
+    vk::ObjectDestroy<vk::Instance, VULKAN_HPP_DEFAULT_DISPATCHER_TYPE> deleter(m_instance.get());
+    m_surface = vk::UniqueSurfaceKHR(surface, deleter);
+
+    // create device
+    m_device = vulkan::device(m_instance.get(), m_surface.get());
 }
 
 Vulkan::~Vulkan()
 {
-    vkDestroySurfaceKHR(m_instance.get(), m_surface, nullptr);
+    //vkDestroySurfaceKHR(m_instance.get(), m_surface.get(), nullptr);
     SDL_DestroyWindow(m_window);
     SDL_Quit();
 }

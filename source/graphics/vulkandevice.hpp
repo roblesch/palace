@@ -12,11 +12,15 @@ private:
 
     struct {
         uint32_t graphics;
+        uint32_t present;
     } queueFamilyIndices;
+
+    vk::Queue m_gqueue;
+    vk::Queue m_pqueue;
 
 public:
     device() = default;
-    explicit device(vk::Instance instance);
+    explicit device(vk::Instance instance, vk::SurfaceKHR surface);
 };
 
 }
