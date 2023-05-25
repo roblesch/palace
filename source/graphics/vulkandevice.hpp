@@ -3,7 +3,7 @@
 
 #include "vulkaninclude.hpp"
 
-namespace graphics::vulkan {
+namespace graphics::vk_ {
 
 struct Device {
 private:

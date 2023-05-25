@@ -19,8 +19,50 @@ Vulkan::Vulkan(bool enableValidation)
     auto vkGetInstanceProcAddr = m_dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
     VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
 
-    // create instance
-    m_instance = vulkan::Instance(m_window, m_validation);
+    // sdl2 extensions
+    unsigned int extensionCount;
+    SDL_Vulkan_GetInstanceExtensions(m_window, &extensionCount, nullptr);
+    std::vector<const char*> extensionNames(extensionCount);
+    SDL_Vulkan_GetInstanceExtensions(m_window, &extensionCount, extensionNames.data());
+
+    // molten vk
+    vk::InstanceCreateFlagBits flags {};
+#ifdef __APPLE__
+    extensionNames.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+    extensionNames.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+    flags = vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR;
+#endif
+
+    // application
+    vk::ApplicationInfo appInfo {
+        .pApplicationName = "viewer",
+        .applicationVersion = VK_MAKE_VERSION(0, 0, 1),
+        .pEngineName = "palace",
+        .engineVersion = VK_MAKE_VERSION(0, 0, 1),
+        .apiVersion = VK_API_VERSION_1_0
+    };
+
+    vk::DebugUtilsMessengerCreateInfoEXT debugInfo {};
+    std::vector<const char*> validationLayers;
+
+    // validation
+    if (m_validation) {
+        extensionNames.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+        validationLayers.push_back("VK_LAYER_KHRONOS_validation");
+        debugInfo = vk_::debug::createInfo();
+    }
+
+    // instance
+    vk::InstanceCreateInfo instanceInfo {
+        .pNext = &debugInfo,
+        .flags = flags,
+        .pApplicationInfo = &appInfo,
+        .enabledLayerCount = uint32_t(validationLayers.size()),
+        .ppEnabledLayerNames = validationLayers.data(),
+        .enabledExtensionCount = uint32_t(extensionNames.size()),
+        .ppEnabledExtensionNames = extensionNames.data()
+    };
+    m_instance = vk::createInstanceUnique(instanceInfo, nullptr);
     VULKAN_HPP_DEFAULT_DISPATCHER.init(m_instance.get());
 
     // create surface
@@ -30,12 +72,11 @@ Vulkan::Vulkan(bool enableValidation)
     m_surface = vk::UniqueSurfaceKHR(surface, deleter);
 
     // create device
-    m_device = vulkan::Device(m_instance.get(), m_surface.get());
+    m_device = vk_::Device(m_instance.get(), m_surface.get());
 }
 
 Vulkan::~Vulkan()
 {
-    //vkDestroySurfaceKHR(m_instance.get(), m_surface.get(), nullptr);
     SDL_DestroyWindow(m_window);
     SDL_Quit();
 }

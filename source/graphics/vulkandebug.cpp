@@ -1,6 +1,6 @@
 #include "vulkandebug.hpp"
 
-namespace graphics::vulkan {
+namespace graphics::vk_ {
 
 vk::DebugUtilsMessengerCreateInfoEXT debug::createInfo()
 {

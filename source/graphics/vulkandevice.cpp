@@ -1,6 +1,6 @@
 #include "vulkandevice.hpp"
 
-namespace graphics::vulkan {
+namespace graphics::vk_ {
 
 Device::Device(vk::Instance instance, vk::SurfaceKHR surface)
 {
