@@ -12,7 +12,6 @@ private:
 
     struct {
         uint32_t graphics;
-        uint32_t present;
     } queueFamilyIndices;
 
     vk::Queue m_gqueue;
