@@ -5,10 +5,10 @@
 
 namespace graphics::vk_ {
 
-struct Device {
+class Device {
 private:
-    vk::PhysicalDevice m_pdevice;
-    vk::UniqueDevice m_ldevice;
+    vk::PhysicalDevice m_physical;
+    vk::UniqueDevice m_device;
 
     struct {
         uint32_t graphics;
@@ -21,6 +21,9 @@ private:
 public:
     Device() = default;
     explicit Device(vk::Instance instance, vk::SurfaceKHR surface);
+
+    vk::PhysicalDevice physicalDevice();
+    vk::Device logicalDevice();
 };
 
 }

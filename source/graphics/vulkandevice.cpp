@@ -5,44 +5,30 @@ namespace graphics::vk_ {
 Device::Device(vk::Instance instance, vk::SurfaceKHR surface)
 {
     // select a physical device
-    uint32_t deviceCount = 0;
-    vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
-    std::vector<VkPhysicalDevice> devices(deviceCount);
-    vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
+    auto devices = instance.enumeratePhysicalDevices();
+    for (const auto& device : devices) {
+        auto deviceProperties = device.getProperties();
+        auto deviceFeatures = device.getFeatures();
 
-    for (const auto device : devices) {
-        VkPhysicalDeviceProperties deviceProperties;
-        VkPhysicalDeviceFeatures deviceFeatures;
-        vkGetPhysicalDeviceProperties(device, &deviceProperties);
-        vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
-
-        if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
-            m_pdevice = device;
+        if (deviceProperties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu) {
+            m_physical = device;
             break;
-        } else if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU) {
-            m_pdevice = device;
+        } else if (deviceProperties.deviceType == vk::PhysicalDeviceType::eIntegratedGpu) {
+            m_physical = device;
             break;
-        } else if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU) {
-            m_pdevice = device;
+        } else if (deviceProperties.deviceType == vk::PhysicalDeviceType::eCpu) {
+            m_physical = device;
             break;
         }
     }
 
     // fill queue family indices
-    uint32_t queueFamilyCount = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(m_pdevice, &queueFamilyCount, nullptr);
-    std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-    vkGetPhysicalDeviceQueueFamilyProperties(m_pdevice, &queueFamilyCount, queueFamilies.data());
-
-    for (uint32_t i = 0; i < queueFamilyCount; i++) {
-        if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+    auto queueFamilies = m_physical.getQueueFamilyProperties();
+    for (uint32_t i = 0; i < queueFamilies.size(); i++) {
+        if (queueFamilies[i].queueFlags & vk::QueueFlagBits::eGraphics) {
             queueFamilyIndices.graphics = i;
         }
-
-        VkBool32 presentSupport = false;
-        vkGetPhysicalDeviceSurfaceSupportKHR(m_pdevice, i, surface, &presentSupport);
-
-        if (presentSupport) {
+        if (m_physical.getSurfaceSupportKHR(i, surface)) {
             queueFamilyIndices.present = i;
         }
     }
@@ -58,11 +44,12 @@ Device::Device(vk::Instance instance, vk::SurfaceKHR surface)
     };
 
     vk::PhysicalDeviceFeatures deviceFeatures {};
-
-    std::vector<const char*> extensionNames;
+    std::vector<const char*> extensionNames = {
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 #ifdef __APPLE__
-    extensionNames.push_back(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
+        VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME
 #endif
+    };
 
     vk::DeviceCreateInfo deviceInfo {
         .queueCreateInfoCount = uint32_t(queueInfos.size()),
@@ -72,10 +59,19 @@ Device::Device(vk::Instance instance, vk::SurfaceKHR surface)
         .pEnabledFeatures = {}
     };
 
-    m_ldevice = m_pdevice.createDeviceUnique(deviceInfo);
+    m_device = m_physical.createDeviceUnique(deviceInfo);
+    m_gqueue = m_device.get().getQueue(queueFamilyIndices.graphics, 0);
+    m_pqueue = m_device.get().getQueue(queueFamilyIndices.present, 0);
+}
 
-    vkGetDeviceQueue(m_ldevice.get(), queueFamilyIndices.graphics, 0, (VkQueue*)&m_gqueue);
-    vkGetDeviceQueue(m_ldevice.get(), queueFamilyIndices.present, 0, (VkQueue*)&m_pqueue);
+vk::PhysicalDevice Device::physicalDevice()
+{
+    return m_physical;
+}
+
+vk::Device Device::logicalDevice()
+{
+    return m_device.get();
 }
 
 }

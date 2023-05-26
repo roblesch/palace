@@ -15,8 +15,8 @@ Vulkan::Vulkan(bool enableValidation)
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH, HEIGHT,
         SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | SDL_WINDOW_VULKAN);
 
-    // setup dynamic dispatcher
-    auto vkGetInstanceProcAddr = m_dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
+    // setup dispatch loader
+    auto vkGetInstanceProcAddr = m_dynamicloader.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
     VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
 
     // sdl2 extensions
@@ -36,9 +36,7 @@ Vulkan::Vulkan(bool enableValidation)
     // application
     vk::ApplicationInfo appInfo {
         .pApplicationName = "viewer",
-        .applicationVersion = VK_MAKE_VERSION(0, 0, 1),
         .pEngineName = "palace",
-        .engineVersion = VK_MAKE_VERSION(0, 0, 1),
         .apiVersion = VK_API_VERSION_1_0
     };
 
@@ -73,6 +71,9 @@ Vulkan::Vulkan(bool enableValidation)
 
     // create device
     m_device = vk_::Device(m_instance.get(), m_surface.get());
+
+    // create swapchain
+    m_swapchain = vk_::SwapChain(m_surface.get(), m_device.physicalDevice());
 }
 
 Vulkan::~Vulkan()

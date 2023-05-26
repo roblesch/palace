@@ -5,6 +5,8 @@ add_library(graphics
         "vulkandebug.hpp"
         "vulkandevice.cpp"
         "vulkandevice.hpp"
-        "vulkaninclude.hpp")
+        "vulkaninclude.hpp"
+        "vulkanswapchain.cpp"
+        "vulkanswapchain.hpp")
 
 target_link_libraries(graphics Vulkan::Vulkan SDL2::SDL2)
