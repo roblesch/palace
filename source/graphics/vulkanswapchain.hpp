@@ -8,6 +8,7 @@ namespace graphics::vk_ {
 class Swapchain {
 private:
     SDL_Window* m_window;
+    vk::PhysicalDevice m_physicalDevice;
     const vk::Device* m_device;
     vk::Format m_imageFormat;
     vk::Extent2D m_extent;

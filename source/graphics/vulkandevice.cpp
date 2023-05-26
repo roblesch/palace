@@ -36,7 +36,6 @@ Device::Device(const vk::Instance& instance, const vk::SurfaceKHR& surface)
 
     // logical device
     vk::PhysicalDeviceFeatures deviceFeatures {};
-
     std::vector<const char*> extensionNames = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 #ifdef __APPLE__
@@ -45,9 +44,9 @@ Device::Device(const vk::Instance& instance, const vk::SurfaceKHR& surface)
     };
 
     vk::DeviceCreateInfo deviceInfo {
-        .queueCreateInfoCount = uint32_t(queueInfos.size()),
+        .queueCreateInfoCount = static_cast<uint32_t>(queueInfos.size()),
         .pQueueCreateInfos = queueInfos.data(),
-        .enabledExtensionCount = uint32_t(extensionNames.size()),
+        .enabledExtensionCount = static_cast<uint32_t>(extensionNames.size()),
         .ppEnabledExtensionNames = extensionNames.data(),
         .pEnabledFeatures = {}
     };

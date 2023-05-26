@@ -6,6 +6,8 @@ add_library(graphics
         "vulkandevice.cpp"
         "vulkandevice.hpp"
         "vulkaninclude.hpp"
+        "vulkanpipeline.cpp"
+        "vulkanpipeline.hpp"
         "vulkanswapchain.cpp"
         "vulkanswapchain.hpp")
 

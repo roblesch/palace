@@ -53,9 +53,9 @@ Vulkan::Vulkan(bool enableValidation)
         .pNext = &debugInfo,
         .flags = flags,
         .pApplicationInfo = &appInfo,
-        .enabledLayerCount = uint32_t(validationLayers.size()),
+        .enabledLayerCount = static_cast<uint32_t>(validationLayers.size()),
         .ppEnabledLayerNames = validationLayers.data(),
-        .enabledExtensionCount = uint32_t(extensionNames.size()),
+        .enabledExtensionCount = static_cast<uint32_t>(extensionNames.size()),
         .ppEnabledExtensionNames = extensionNames.data()
     };
     m_uniqueInstance = vk::createInstanceUnique(instanceInfo, nullptr);

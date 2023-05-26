@@ -7,11 +7,12 @@ namespace graphics::vk_ {
 
 Swapchain::Swapchain(SDL_Window* window, const vk::SurfaceKHR& surface, const vk::PhysicalDevice& physicalDevice, const vk::Device& device)
     : m_window(window)
+    , m_physicalDevice(physicalDevice)
     , m_device(&device)
     , m_imageFormat(vk::Format::eB8G8R8A8Srgb)
 {
     // swapchain
-    vk::SurfaceCapabilitiesKHR surfaceCapabilities = physicalDevice.getSurfaceCapabilitiesKHR(surface);
+    vk::SurfaceCapabilitiesKHR surfaceCapabilities = m_physicalDevice.getSurfaceCapabilitiesKHR(surface);
     m_extent = surfaceCapabilities.currentExtent;
 
     vk::SwapchainCreateInfoKHR swapChainInfo {
