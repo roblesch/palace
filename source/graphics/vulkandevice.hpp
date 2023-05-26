@@ -7,22 +7,21 @@ namespace graphics::vk_ {
 
 class Device {
 private:
-    vk::PhysicalDevice m_physical;
-    vk::UniqueDevice m_device;
+    vk::PhysicalDevice m_physicalDevice;
+    vk::UniqueDevice m_uniqueDevice;
 
     struct {
         uint32_t graphics;
     } queueFamilyIndices;
 
-    vk::Queue m_gqueue;
-    vk::Queue m_pqueue;
+    vk::Queue m_graphicsQueue;
 
 public:
     Device() = default;
-    explicit Device(vk::Instance instance, vk::SurfaceKHR surface);
+    Device(const vk::Instance& instance, const vk::SurfaceKHR& surface);
 
     vk::PhysicalDevice physicalDevice();
-    vk::Device logicalDevice();
+    vk::Device device();
 };
 
 }

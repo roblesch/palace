@@ -5,21 +5,19 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 namespace graphics {
 
 Vulkan::Vulkan(bool enableValidation)
+    : m_validation(enableValidation)
 {
-    m_validation = enableValidation;
+    // dynamic dispatch loader
+    auto vkGetInstanceProcAddr = m_dynamicLoader.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
+    VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
 
-    // sdl2 initialization
+    // sdl2
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Vulkan_LoadLibrary(nullptr);
     m_window = SDL_CreateWindow("palace",
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH, HEIGHT,
         SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | SDL_WINDOW_VULKAN);
 
-    // setup dispatch loader
-    auto vkGetInstanceProcAddr = m_dynamicloader.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
-    VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
-
-    // sdl2 extensions
     unsigned int extensionCount;
     SDL_Vulkan_GetInstanceExtensions(m_window, &extensionCount, nullptr);
     std::vector<const char*> extensionNames(extensionCount);
@@ -60,20 +58,20 @@ Vulkan::Vulkan(bool enableValidation)
         .enabledExtensionCount = uint32_t(extensionNames.size()),
         .ppEnabledExtensionNames = extensionNames.data()
     };
-    m_instance = vk::createInstanceUnique(instanceInfo, nullptr);
-    VULKAN_HPP_DEFAULT_DISPATCHER.init(m_instance.get());
+    m_uniqueInstance = vk::createInstanceUnique(instanceInfo, nullptr);
+    VULKAN_HPP_DEFAULT_DISPATCHER.init(m_uniqueInstance.get());
 
-    // create surface
+    // surface
     VkSurfaceKHR surface;
-    SDL_Vulkan_CreateSurface(m_window, m_instance.get(), &surface);
-    vk::ObjectDestroy<vk::Instance, VULKAN_HPP_DEFAULT_DISPATCHER_TYPE> deleter(m_instance.get());
-    m_surface = vk::UniqueSurfaceKHR(surface, deleter);
+    SDL_Vulkan_CreateSurface(m_window, m_uniqueInstance.get(), &surface);
+    vk::ObjectDestroy<vk::Instance, VULKAN_HPP_DEFAULT_DISPATCHER_TYPE> deleter(m_uniqueInstance.get());
+    m_uniqueSurface = vk::UniqueSurfaceKHR(surface, deleter);
 
-    // create device
-    m_device = vk_::Device(m_instance.get(), m_surface.get());
+    // device
+    m_device = vk_::Device(m_uniqueInstance.get(), m_uniqueSurface.get());
 
-    // create swapchain
-    m_swapchain = vk_::SwapChain(m_surface.get(), m_device.physicalDevice());
+    // swapchain
+    m_swapchain = vk_::Swapchain(m_window, m_uniqueSurface.get(), m_device.physicalDevice(), m_device.device());
 }
 
 Vulkan::~Vulkan()

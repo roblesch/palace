@@ -5,18 +5,20 @@
 
 namespace graphics::vk_ {
 
-class SwapChain {
+class Swapchain {
 private:
-    struct {
-        vk::SurfaceCapabilitiesKHR capabilities;
-        std::vector<vk::SurfaceFormatKHR> formats;
-        std::vector<vk::PresentModeKHR> presentModes;
-    } swapChainSupportDetails;
+    SDL_Window* m_window;
+    const vk::Device* m_device;
+    vk::Format m_imageFormat;
+    vk::Extent2D m_extent;
+
+    vk::UniqueSwapchainKHR m_uniqueSwapchain;
+    std::vector<vk::Image> m_images;
+    std::vector<vk::UniqueImageView> m_uniqueImageViews;
 
 public:
-    SwapChain() = default;
-    SwapChain(vk::SurfaceKHR surface, vk::PhysicalDevice physicalDevice);
-
+    Swapchain() = default;
+    Swapchain(SDL_Window* window, const vk::SurfaceKHR& surface, const vk::PhysicalDevice& physicalDevice, const vk::Device& device);
 };
 
 }

@@ -2,39 +2,39 @@
 
 namespace graphics::vk_ {
 
-Device::Device(vk::Instance instance, vk::SurfaceKHR surface)
+Device::Device(const vk::Instance& instance, const vk::SurfaceKHR& surface)
 {
-    // select a physical device
+    // physical device
     auto devices = instance.enumeratePhysicalDevices();
     for (const auto& device : devices) {
         auto deviceProperties = device.getProperties();
         if (deviceProperties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu) {
-            m_physical = device;
+            m_physicalDevice = device;
             break;
         } else if (deviceProperties.deviceType == vk::PhysicalDeviceType::eIntegratedGpu) {
-            m_physical = device;
+            m_physicalDevice = device;
             break;
         } else if (deviceProperties.deviceType == vk::PhysicalDeviceType::eCpu) {
-            m_physical = device;
+            m_physicalDevice = device;
             break;
         }
     }
 
-    // fill queue family indices
-    auto queueFamilies = m_physical.getQueueFamilyProperties();
+    // queue families
+    auto queueFamilies = m_physicalDevice.getQueueFamilyProperties();
     for (uint32_t i = 0; i < queueFamilies.size(); i++) {
         if (queueFamilies[i].queueFlags & vk::QueueFlagBits::eGraphics) {
             queueFamilyIndices.graphics = i;
         }
     }
 
-    // create a logical device
     std::vector<vk::DeviceQueueCreateInfo> queueInfos {
         { .queueFamilyIndex = queueFamilyIndices.graphics,
             .queueCount = 1,
             .pQueuePriorities = new float(0.0f) }
     };
 
+    // logical device
     vk::PhysicalDeviceFeatures deviceFeatures {};
 
     std::vector<const char*> extensionNames = {
@@ -52,18 +52,18 @@ Device::Device(vk::Instance instance, vk::SurfaceKHR surface)
         .pEnabledFeatures = {}
     };
 
-    m_device = m_physical.createDeviceUnique(deviceInfo);
-    m_gqueue = m_device.get().getQueue(queueFamilyIndices.graphics, 0);
+    m_uniqueDevice = m_physicalDevice.createDeviceUnique(deviceInfo);
+    m_graphicsQueue = m_uniqueDevice.get().getQueue(queueFamilyIndices.graphics, 0);
 }
 
 vk::PhysicalDevice Device::physicalDevice()
 {
-    return m_physical;
+    return m_physicalDevice;
 }
 
-vk::Device Device::logicalDevice()
+vk::Device Device::device()
 {
-    return m_device.get();
+    return m_uniqueDevice.get();
 }
 
 }
