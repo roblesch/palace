@@ -1,4 +1,5 @@
 #include "vulkan.hpp"
+#include "vk_/constants.hpp"
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
@@ -15,7 +16,7 @@ Vulkan::Vulkan(bool enableValidation)
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Vulkan_LoadLibrary(nullptr);
     m_window = SDL_CreateWindow("palace",
-        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH, HEIGHT,
+        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, vk_::WINDOW_WIDTH, vk_::WINDOW_HEIGHT,
         SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | SDL_WINDOW_VULKAN);
 
     unsigned int extensionCount;
@@ -72,6 +73,8 @@ Vulkan::Vulkan(bool enableValidation)
 
     // swapchain
     m_swapchain = vk_::Swapchain(m_window, m_uniqueSurface.get(), m_device.physicalDevice(), m_device.device());
+
+    m_initialized = true;
 }
 
 Vulkan::~Vulkan()
@@ -80,8 +83,11 @@ Vulkan::~Vulkan()
     SDL_Quit();
 }
 
-void Vulkan::run()
+void Vulkan::run() const
 {
+    if (!m_initialized) {
+        return;
+    }
     while (true) {
         SDL_Event event;
         if (SDL_PollEvent(&event)) {

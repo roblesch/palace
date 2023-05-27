@@ -1,9 +1,9 @@
 #ifndef PALACE_GRAPHICS_VULKANDEBUG_HPP
 #define PALACE_GRAPHICS_VULKANDEBUG_HPP
 
-#include "vulkaninclude.hpp"
+#include "include.hpp"
 
-namespace graphics::vk_::debug {
+namespace vk_::debug {
 
 vk::DebugUtilsMessengerCreateInfoEXT createInfo();
 

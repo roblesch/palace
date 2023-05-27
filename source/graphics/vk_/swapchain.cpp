@@ -1,9 +1,6 @@
-#include "vulkanswapchain.hpp"
+#include "swapchain.hpp"
 
-extern int WIDTH;
-extern int HEIGHT;
-
-namespace graphics::vk_ {
+namespace vk_ {
 
 Swapchain::Swapchain(SDL_Window* window, const vk::SurfaceKHR& surface, const vk::PhysicalDevice& physicalDevice, const vk::Device& device)
     : m_window(window)
@@ -47,7 +44,6 @@ Swapchain::Swapchain(SDL_Window* window, const vk::SurfaceKHR& surface, const vk
                 .baseArrayLayer = 0,
                 .layerCount = 1 }
         };
-
         m_uniqueImageViews[i] = m_device->createImageViewUnique(imageViewInfo);
     }
 }

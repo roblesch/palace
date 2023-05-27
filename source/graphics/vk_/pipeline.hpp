@@ -1,9 +1,9 @@
 #ifndef PALACE_GRAPHICS_VULKANPIPELINE_HPP
 #define PALACE_GRAPHICS_VULKANPIPELINE_HPP
 
-#include "vulkaninclude.hpp"
+#include "include.hpp"
 
-namespace graphics::vk_ {
+namespace vk_ {
 
 class Pipeline {
 private:

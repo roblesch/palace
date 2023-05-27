@@ -1,14 +1,10 @@
+add_subdirectory(vk_)
+
 add_library(graphics
         "vulkan.cpp"
-        "vulkan.hpp"
-        "vulkandebug.cpp"
-        "vulkandebug.hpp"
-        "vulkandevice.cpp"
-        "vulkandevice.hpp"
-        "vulkaninclude.hpp"
-        "vulkanpipeline.cpp"
-        "vulkanpipeline.hpp"
-        "vulkanswapchain.cpp"
-        "vulkanswapchain.hpp")
+        "vulkan.hpp")
 
-target_link_libraries(graphics Vulkan::Vulkan SDL2::SDL2)
+target_link_libraries(graphics
+        Vulkan::Vulkan
+        SDL2::SDL2
+        vk_)

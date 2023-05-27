@@ -1,9 +1,9 @@
 #ifndef PALACE_GRAPHICS_VULKANDEVICE_HPP
 #define PALACE_GRAPHICS_VULKANDEVICE_HPP
 
-#include "vulkaninclude.hpp"
+#include "include.hpp"
 
-namespace graphics::vk_ {
+namespace vk_ {
 
 class Device {
 private:
@@ -12,7 +12,7 @@ private:
 
     struct {
         uint32_t graphics;
-    } queueFamilyIndices;
+    } queueFamilyIndices{};
 
     vk::Queue m_graphicsQueue;
 

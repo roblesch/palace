@@ -1,16 +1,16 @@
 #ifndef PALACE_GRAPHICS_VULKANSWAPCHAIN_HPP
 #define PALACE_GRAPHICS_VULKANSWAPCHAIN_HPP
 
-#include "vulkaninclude.hpp"
+#include "include.hpp"
 
-namespace graphics::vk_ {
+namespace vk_ {
 
 class Swapchain {
 private:
-    SDL_Window* m_window;
+    SDL_Window* m_window {};
     vk::PhysicalDevice m_physicalDevice;
-    const vk::Device* m_device;
-    vk::Format m_imageFormat;
+    const vk::Device* m_device {};
+    vk::Format m_imageFormat {};
     vk::Extent2D m_extent;
 
     vk::UniqueSwapchainKHR m_uniqueSwapchain;

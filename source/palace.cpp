@@ -1,9 +1,6 @@
 #include "graphics/vulkan.hpp"
 
-int WIDTH = 800;
-int HEIGHT = 600;
-
-int main()
+int main(const int argc, const char *argv[])
 {
     graphics::Vulkan vulkan(true);
     vulkan.run();
