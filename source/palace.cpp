@@ -1,9 +1,9 @@
-#include "graphics/vulkan.hpp"
+#include "engine/vulkan.hpp"
 
-int main(const int argc, const char *argv[])
+int main(const int argc, const char* argv[])
 {
-    graphics::Vulkan vulkan(true);
-    vulkan.run();
+	engine::Vulkan vulkan(true);
+	vulkan.run();
 
-    return 0;
+	return 0;
 }

@@ -1,11 +1,11 @@
-add_subdirectory(graphics)
+add_subdirectory(engine)
 
 add_executable(palace "palace.cpp")
 set_target_properties(palace PROPERTIES
 		RUNTIME_OUTPUT_DIRECTORY_DEBUG ${PROJECT_BINARY_DIR}
 		RUNTIME_OUTPUT_DIRECTORY_RELEASE ${PROJECT_BINARY_DIR})
 target_link_libraries(palace
-		graphics
+		engine
 		Vulkan::Vulkan
 		SDL2::SDL2)
 	
