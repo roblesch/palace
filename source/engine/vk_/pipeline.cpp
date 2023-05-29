@@ -1,5 +1,4 @@
 #include "pipeline.hpp"
 
-namespace vk_
-{
+namespace vk_ {
 }

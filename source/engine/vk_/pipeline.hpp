@@ -3,18 +3,16 @@
 
 #include "include.hpp"
 
-namespace vk_
-{
+namespace vk_ {
 
-	class Pipeline
-	{
-	private:
-		vk::UniqueShaderModule m_vertex;
-		vk::UniqueShaderModule m_fragment;
+class Pipeline {
+private:
+    vk::UniqueShaderModule m_vertex;
+    vk::UniqueShaderModule m_fragment;
 
-	public:
-		Pipeline() = default;
-	};
+public:
+    Pipeline() = default;
+};
 
 } // namespace vk_
 

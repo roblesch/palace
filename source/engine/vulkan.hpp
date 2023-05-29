@@ -7,33 +7,31 @@
 #include "vk_/pipeline.hpp"
 #include "vk_/swapchain.hpp"
 
-namespace engine
-{
+namespace engine {
 
-	class Vulkan
-	{
-	private:
-		bool m_validation;
-		bool m_initialized{};
+class Vulkan {
+private:
+    bool m_validation;
+    bool m_initialized {};
 
-		SDL_Window*			 m_window;
-		vk::DynamicLoader	 m_dynamicLoader;
-		vk::UniqueInstance	 m_uniqueInstance;
-		vk_::Device			 m_device;
-		vk::UniqueSurfaceKHR m_uniqueSurface;
-		vk_::Swapchain		 m_swapchain;
-		vk_::Pipeline		 m_pipeline;
+    SDL_Window* m_window;
+    vk::DynamicLoader m_dynamicLoader;
+    vk::UniqueInstance m_uniqueInstance;
+    vk_::Device m_device;
+    vk::UniqueSurfaceKHR m_uniqueSurface;
+    vk_::Swapchain m_swapchain;
+    vk_::Pipeline m_pipeline;
 
-		static constexpr int		 s_windowWidth = 800;
-		static constexpr int		 s_windowHeight = 600;
-		static constexpr const char* s_spirvDit = "/shaders";
+    static constexpr int s_windowWidth = 800;
+    static constexpr int s_windowHeight = 600;
+    static constexpr const char* s_spirvDir = "/shaders";
 
-	public:
-		explicit Vulkan(bool enableValidation);
-		~Vulkan();
+public:
+    explicit Vulkan(bool enableValidation);
+    ~Vulkan();
 
-		void run() const;
-	};
+    void run() const;
+};
 
 } // namespace engine
 

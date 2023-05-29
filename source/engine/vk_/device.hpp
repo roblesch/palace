@@ -3,29 +3,26 @@
 
 #include "include.hpp"
 
-namespace vk_
-{
+namespace vk_ {
 
-	class Device
-	{
-	private:
-		vk::PhysicalDevice m_physicalDevice;
-		vk::UniqueDevice   m_uniqueDevice;
+class Device {
+private:
+    vk::PhysicalDevice m_physicalDevice;
+    vk::UniqueDevice m_uniqueDevice;
 
-		struct
-		{
-			uint32_t graphics;
-		} queueFamilyIndices{};
+    struct {
+        uint32_t graphics;
+    } queueFamilyIndices {};
 
-		vk::Queue m_graphicsQueue;
+    vk::Queue m_graphicsQueue;
 
-	public:
-		Device() = default;
-		Device(const vk::Instance& instance, const vk::SurfaceKHR& surface);
+public:
+    Device() = default;
+    Device(const vk::Instance& instance, const vk::SurfaceKHR& surface);
 
-		vk::PhysicalDevice physicalDevice();
-		vk::Device		   device();
-	};
+    vk::PhysicalDevice physicalDevice();
+    vk::Device device();
+};
 
 } // namespace vk_
 
