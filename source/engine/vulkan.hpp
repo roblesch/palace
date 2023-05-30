@@ -16,6 +16,7 @@ private:
     static constexpr int s_windowWidth = 800;
     static constexpr int s_windowHeight = 600;
     static constexpr const std::string_view s_spirVDir = "/shaders";
+    static constexpr vk::Format s_imageFormat = vk::Format::eB8G8R8A8Srgb;
 
     bool m_isValidationEnabled;
     bool m_isInitialized {};

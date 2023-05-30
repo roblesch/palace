@@ -70,10 +70,10 @@ Vulkan::Vulkan(bool enableValidation)
     m_device = vk_::Device(m_uniqueInstance.get(), m_uniqueSurface.get());
 
     // swapchain
-    m_swapchain = vk_::Swapchain(m_window, m_uniqueSurface.get(), m_device.getPhysical(), m_device.get());
+    m_swapchain = vk_::Swapchain(m_window, m_uniqueSurface.get(), m_device.getPhysical(), &m_device.get(), s_imageFormat);
 
     // pipeline
-    m_pipeline = vk_::Pipeline(m_device.get(), std::string(s_spirVDir));
+    m_pipeline = vk_::Pipeline(&m_device.get(), std::string(s_spirVDir), m_swapchain.getExtent(), s_imageFormat);
 
     m_isInitialized = true;
 }

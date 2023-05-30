@@ -2,11 +2,11 @@
 
 namespace vk_ {
 
-Swapchain::Swapchain(SDL_Window* window, const vk::SurfaceKHR& surface, const vk::PhysicalDevice& physicalDevice, const vk::Device& device)
+Swapchain::Swapchain(SDL_Window* window, const vk::SurfaceKHR& surface, const vk::PhysicalDevice& physicalDevice, const vk::Device* device, const vk::Format& imageFormat)
     : m_window(window)
     , m_physicalDevice(physicalDevice)
-    , m_device(&device)
-    , m_imageFormat(vk::Format::eB8G8R8A8Srgb)
+    , m_device(device)
+    , m_imageFormat(imageFormat)
 {
     // swapchain
     vk::SurfaceCapabilitiesKHR surfaceCapabilities = m_physicalDevice.getSurfaceCapabilitiesKHR(surface);
@@ -27,7 +27,7 @@ Swapchain::Swapchain(SDL_Window* window, const vk::SurfaceKHR& surface, const vk
         .clipped = VK_TRUE
     };
 
-    m_uniqueSwapchain = device.createSwapchainKHRUnique(swapChainInfo);
+    m_uniqueSwapchain = m_device->createSwapchainKHRUnique(swapChainInfo);
     m_images = m_device->getSwapchainImagesKHR(m_uniqueSwapchain.get());
     m_uniqueImageViews.resize(m_images.size());
 
@@ -46,6 +46,16 @@ Swapchain::Swapchain(SDL_Window* window, const vk::SurfaceKHR& surface, const vk
         };
         m_uniqueImageViews[i] = m_device->createImageViewUnique(imageViewInfo);
     }
+}
+
+vk::Extent2D Swapchain::getExtent()
+{
+    return m_extent2D;
+}
+
+vk::Format Swapchain::getImageFormat()
+{
+    return m_imageFormat;
 }
 
 } // namespace vk_

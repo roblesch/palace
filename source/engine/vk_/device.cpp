@@ -55,12 +55,12 @@ Device::Device(const vk::Instance& instance, const vk::SurfaceKHR& surface)
     m_graphicsQueue = m_uniqueDevice.get().getQueue(queueFamilyIndices.graphics, 0);
 }
 
-vk::PhysicalDevice Device::getPhysical()
+vk::PhysicalDevice& Device::getPhysical()
 {
     return m_physicalDevice;
 }
 
-vk::Device Device::get()
+vk::Device& Device::get()
 {
     return m_uniqueDevice.get();
 }

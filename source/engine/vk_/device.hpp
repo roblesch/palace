@@ -20,8 +20,8 @@ public:
     Device() = default;
     Device(const vk::Instance& instance, const vk::SurfaceKHR& surface);
 
-    vk::PhysicalDevice getPhysical();
-    vk::Device get();
+    vk::PhysicalDevice& getPhysical();
+    vk::Device& get();
 };
 
 } // namespace vk_

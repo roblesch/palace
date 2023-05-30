@@ -19,7 +19,10 @@ private:
 
 public:
     Swapchain() = default;
-    Swapchain(SDL_Window* window, const vk::SurfaceKHR& surface, const vk::PhysicalDevice& physicalDevice, const vk::Device& device);
+    Swapchain(SDL_Window* window, const vk::SurfaceKHR& surface, const vk::PhysicalDevice& physicalDevice, const vk::Device* device, const vk::Format& imageFormat);
+
+    vk::Extent2D getExtent();
+    vk::Format getImageFormat();
 };
 
 } // namespace vk_
