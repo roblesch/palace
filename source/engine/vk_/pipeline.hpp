@@ -1,17 +1,23 @@
 #ifndef PALACE_ENGINE_VK_PIPELINE_HPP
 #define PALACE_ENGINE_VK_PIPELINE_HPP
 
+#include <string>
 #include "include.hpp"
 
 namespace vk_ {
 
 class Pipeline {
 private:
-    vk::UniqueShaderModule m_vertex;
-    vk::UniqueShaderModule m_fragment;
+    const vk::Device* m_device;
+
+    //vk::UniqueShaderModule m_vertexShaderModule;
+    //vk::UniqueShaderModule m_fragmentShaderModule;
+
+    vk::UniqueShaderModule loadShaderModule(const std::string& spirVFile);
 
 public:
     Pipeline() = default;
+    Pipeline(const vk::Device& device, const std::string& spirVDir);
 };
 
 } // namespace vk_

@@ -11,7 +11,7 @@ private:
     vk::PhysicalDevice m_physicalDevice;
     const vk::Device* m_device {};
     vk::Format m_imageFormat {};
-    vk::Extent2D m_extent;
+    vk::Extent2D m_extent2D;
 
     vk::UniqueSwapchainKHR m_uniqueSwapchain;
     std::vector<vk::Image> m_images;

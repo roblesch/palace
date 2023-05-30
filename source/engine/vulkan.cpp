@@ -5,7 +5,7 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 namespace engine {
 
 Vulkan::Vulkan(bool enableValidation)
-    : m_validation(enableValidation)
+    : m_isValidationEnabled(enableValidation)
 {
     // dynamic dispatch loader
     auto vkGetInstanceProcAddr = m_dynamicLoader.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
@@ -31,26 +31,32 @@ Vulkan::Vulkan(bool enableValidation)
 #endif
 
     // application
-    vk::ApplicationInfo appInfo { .pApplicationName = "viewer", .pEngineName = "palace", .apiVersion = VK_API_VERSION_1_0 };
+    vk::ApplicationInfo appInfo {
+        .pApplicationName = "viewer",
+        .pEngineName = "palace",
+        .apiVersion = VK_API_VERSION_1_0
+    };
 
     vk::DebugUtilsMessengerCreateInfoEXT debugInfo {};
     std::vector<const char*> validationLayers;
 
     // validation
-    if (m_validation) {
+    if (m_isValidationEnabled) {
         extensionNames.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
         validationLayers.push_back("VK_LAYER_KHRONOS_validation");
         debugInfo = vk_::debug::createInfo();
     }
 
     // instance
-    vk::InstanceCreateInfo instanceInfo { .pNext = &debugInfo,
+    vk::InstanceCreateInfo instanceInfo {
+        .pNext = &debugInfo,
         .flags = flags,
         .pApplicationInfo = &appInfo,
         .enabledLayerCount = static_cast<uint32_t>(validationLayers.size()),
         .ppEnabledLayerNames = validationLayers.data(),
         .enabledExtensionCount = static_cast<uint32_t>(extensionNames.size()),
-        .ppEnabledExtensionNames = extensionNames.data() };
+        .ppEnabledExtensionNames = extensionNames.data()
+    };
     m_uniqueInstance = vk::createInstanceUnique(instanceInfo, nullptr);
     VULKAN_HPP_DEFAULT_DISPATCHER.init(m_uniqueInstance.get());
 
@@ -64,9 +70,12 @@ Vulkan::Vulkan(bool enableValidation)
     m_device = vk_::Device(m_uniqueInstance.get(), m_uniqueSurface.get());
 
     // swapchain
-    m_swapchain = vk_::Swapchain(m_window, m_uniqueSurface.get(), m_device.physicalDevice(), m_device.device());
+    m_swapchain = vk_::Swapchain(m_window, m_uniqueSurface.get(), m_device.getPhysical(), m_device.get());
 
-    m_initialized = true;
+    // pipeline
+    m_pipeline = vk_::Pipeline(m_device.get(), std::string(s_spirVDir));
+
+    m_isInitialized = true;
 }
 
 Vulkan::~Vulkan()
@@ -77,7 +86,7 @@ Vulkan::~Vulkan()
 
 void Vulkan::run() const
 {
-    if (!m_initialized) {
+    if (!m_isInitialized) {
         return;
     }
     while (true) {

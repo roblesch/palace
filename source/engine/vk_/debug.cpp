@@ -16,16 +16,16 @@ VkBool32 debug::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeve
     const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
     void* pUserData)
 {
-    char prefix[64];
+    char prefix[64] = "VK:";
 
     if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
-        strcpy(prefix, "VERBOSE : ");
+        strcat(prefix, "VERBOSE:");
     } else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
-        strcpy(prefix, "INFO : ");
+        strcat(prefix, "INFO:");
     } else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-        strcpy(prefix, "WARNING : ");
+        strcat(prefix, "WARNING:");
     } else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
-        strcpy(prefix, "ERROR : ");
+        strcat(prefix, "ERROR:");
     }
 
     if (messageType & VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT) {

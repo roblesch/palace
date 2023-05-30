@@ -10,14 +10,14 @@ Swapchain::Swapchain(SDL_Window* window, const vk::SurfaceKHR& surface, const vk
 {
     // swapchain
     vk::SurfaceCapabilitiesKHR surfaceCapabilities = m_physicalDevice.getSurfaceCapabilitiesKHR(surface);
-    m_extent = surfaceCapabilities.currentExtent;
+    m_extent2D = surfaceCapabilities.currentExtent;
 
     vk::SwapchainCreateInfoKHR swapChainInfo {
         .surface = surface,
         .minImageCount = 2,
         .imageFormat = m_imageFormat,
         .imageColorSpace = vk::ColorSpaceKHR::eSrgbNonlinear,
-        .imageExtent = m_extent,
+        .imageExtent = m_extent2D,
         .imageArrayLayers = 1,
         .imageUsage = vk::ImageUsageFlagBits::eColorAttachment,
         .imageSharingMode = vk::SharingMode::eExclusive,

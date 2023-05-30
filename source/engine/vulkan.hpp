@@ -1,6 +1,8 @@
 #ifndef PALACE_ENGINE_VULKAN_HPP
 #define PALACE_ENGINE_VULKAN_HPP
 
+#include <string>
+
 #include "vk_/debug.hpp"
 #include "vk_/device.hpp"
 #include "vk_/include.hpp"
@@ -11,8 +13,12 @@ namespace engine {
 
 class Vulkan {
 private:
-    bool m_validation;
-    bool m_initialized {};
+    static constexpr int s_windowWidth = 800;
+    static constexpr int s_windowHeight = 600;
+    static constexpr const std::string_view s_spirVDir = "/shaders";
+
+    bool m_isValidationEnabled;
+    bool m_isInitialized {};
 
     SDL_Window* m_window;
     vk::DynamicLoader m_dynamicLoader;
@@ -21,10 +27,6 @@ private:
     vk::UniqueSurfaceKHR m_uniqueSurface;
     vk_::Swapchain m_swapchain;
     vk_::Pipeline m_pipeline;
-
-    static constexpr int s_windowWidth = 800;
-    static constexpr int s_windowHeight = 600;
-    static constexpr const char* s_spirvDir = "/shaders";
 
 public:
     explicit Vulkan(bool enableValidation);
