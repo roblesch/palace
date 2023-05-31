@@ -16,16 +16,18 @@ private:
     static constexpr int s_windowWidth = 800;
     static constexpr int s_windowHeight = 600;
     static constexpr const std::string_view s_spirVDir = "/shaders";
-    static constexpr vk::Format s_imageFormat = vk::Format::eB8G8R8A8Srgb;
 
     bool m_isValidationEnabled;
-    bool m_isInitialized {};
+    bool m_isInitialized;
 
     SDL_Window* m_window;
+    vk::Extent2D m_extent2D;
     vk::DynamicLoader m_dynamicLoader;
+
     vk::UniqueInstance m_uniqueInstance;
-    vk_::Device m_device;
     vk::UniqueSurfaceKHR m_uniqueSurface;
+
+    vk_::Device m_device;
     vk_::Swapchain m_swapchain;
     vk_::Pipeline m_pipeline;
 
@@ -33,7 +35,7 @@ public:
     explicit Vulkan(bool enableValidation);
     ~Vulkan();
 
-    void run() const;
+    void run();
 };
 
 } // namespace engine

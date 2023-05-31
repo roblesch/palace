@@ -6,19 +6,35 @@
 
 namespace vk_ {
 
-Pipeline::Pipeline(const vk::Device* device, const std::string& spirVDir, const vk::Extent2D& extent2D, const vk::Format& imageFormat)
-    : m_device(device)
-    , m_extent2D(extent2D)
-    , m_imageFormat(imageFormat)
+std::vector<char> Pipeline::readSpirVFile(const std::string& spirVFile)
+{
+    std::ifstream file(spirVFile, std::ios::binary | std::ios::in | std::ios::ate);
+
+    if (!file.is_open()) {
+        printf("(VK_:ERROR) Pipeline failed to open spir-v file for reading: %s", spirVFile.c_str());
+        exit(1);
+    }
+
+    size_t fileSize = file.tellg();
+    file.seekg(std::ios::beg);
+    std::vector<char> spirVBytes(fileSize);
+    file.read(spirVBytes.data(), fileSize);
+    file.close();
+
+    return spirVBytes;
+}
+
+Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D)
+    : m_device(&device)
 {
     // shaders
     std::vector<char> vertexShaderBytes = readSpirVFile("shaders/vertex.spv");
     std::vector<char> fragmentShaderBytes = readSpirVFile("shaders/fragment.spv");
 
-    auto vertexShaderModule = device->createShaderModuleUnique({ .codeSize = vertexShaderBytes.size(),
+    auto vertexShaderModule = device.createShaderModuleUnique({ .codeSize = vertexShaderBytes.size(),
         .pCode = reinterpret_cast<const uint32_t*>(vertexShaderBytes.data()) });
 
-    auto fragmentShaderModule = device->createShaderModuleUnique({ .codeSize = fragmentShaderBytes.size(),
+    auto fragmentShaderModule = device.createShaderModuleUnique({ .codeSize = fragmentShaderBytes.size(),
         .pCode = reinterpret_cast<const uint32_t*>(fragmentShaderBytes.data()) });
 
     std::vector<vk::PipelineShaderStageCreateInfo> shaderStageInfos {
@@ -43,15 +59,15 @@ Pipeline::Pipeline(const vk::Device* device, const std::string& spirVDir, const 
     vk::Viewport viewport {
         .x = 0.0f,
         .y = 0.0f,
-        .width = static_cast<float>(m_extent2D.width),
-        .height = static_cast<float>(m_extent2D.height),
+        .width = static_cast<float>(extent2D.width),
+        .height = static_cast<float>(extent2D.height),
         .minDepth = 0.0f,
         .maxDepth = 1.0f
     };
 
     vk::Rect2D scissor {
         .offset = { 0, 0 },
-        .extent = m_extent2D
+        .extent = extent2D
     };
 
     vk::PipelineViewportStateCreateInfo viewportStateInfo {
@@ -108,11 +124,11 @@ Pipeline::Pipeline(const vk::Device* device, const std::string& spirVDir, const 
     // layout
     vk::PipelineLayoutCreateInfo pipelineLayoutInfo {};
 
-    m_pipelineLayout = m_device->createPipelineLayoutUnique(pipelineLayoutInfo);
+    m_uniquePipelineLayout = m_device->createPipelineLayoutUnique(pipelineLayoutInfo);
 
     // render pass
     vk::AttachmentDescription colorAttachment {
-        .format = m_imageFormat,
+        .format = vk::Format::eB8G8R8A8Srgb,
         .samples = vk::SampleCountFlagBits::e1,
         .loadOp = vk::AttachmentLoadOp::eClear,
         .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
@@ -140,7 +156,7 @@ Pipeline::Pipeline(const vk::Device* device, const std::string& spirVDir, const 
         .pSubpasses = &subpass
     };
 
-    m_renderPass = m_device->createRenderPassUnique(renderPassInfo);
+    m_uniqueRenderPass = m_device->createRenderPassUnique(renderPassInfo);
 
     // pipeline
     vk::GraphicsPipelineCreateInfo graphicsPipelineInfo {
@@ -153,31 +169,22 @@ Pipeline::Pipeline(const vk::Device* device, const std::string& spirVDir, const 
         .pMultisampleState = &multisampleStateInfo,
         .pColorBlendState = &colorBlendStateInfo,
         .pDynamicState = &dynamicStateInfo,
-        .layout = m_pipelineLayout.get(),
-        .renderPass = m_renderPass.get(),
+        .layout = m_uniquePipelineLayout.get(),
+        .renderPass = m_uniqueRenderPass.get(),
         .subpass = 0
     };
 
-    // TODO: creating a graphics pipeline requires binding
-    auto [result, m_pipeline] = m_device->createGraphicsPipelineUnique(nullptr, graphicsPipelineInfo);
+    m_uniquePipeline = m_device->createGraphicsPipelineUnique(nullptr, graphicsPipelineInfo).value;
 }
 
-std::vector<char> Pipeline::readSpirVFile(const std::string& spirVFile)
+vk::RenderPass& Pipeline::getRenderPass()
 {
-    std::ifstream file(spirVFile, std::ios::binary | std::ios::in | std::ios::ate);
+    return m_uniqueRenderPass.get();
+}
 
-    if (!file.is_open()) {
-        printf("(VK_:ERROR) Pipeline failed to open spir-v file for reading: %s", spirVFile.c_str());
-        exit(1);
-    }
-
-    size_t fileSize = file.tellg();
-    file.seekg(std::ios::beg);
-    std::vector<char> spirVBytes(fileSize);
-    file.read(spirVBytes.data(), fileSize);
-    file.close();
-
-    return spirVBytes;
+vk::Pipeline& Pipeline::getPipeline()
+{
+    return m_uniquePipeline.get();
 }
 
 }

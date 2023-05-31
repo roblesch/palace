@@ -11,12 +11,14 @@ Vulkan::Vulkan(bool enableValidation)
     auto vkGetInstanceProcAddr = m_dynamicLoader.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
     VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
 
-    // sdl2
+    // window
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Vulkan_LoadLibrary(nullptr);
     m_window = SDL_CreateWindow(
         "palace", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, s_windowWidth, s_windowHeight, SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | SDL_WINDOW_VULKAN);
+    m_extent2D = vk::Extent2D(s_windowWidth, s_windowHeight);
 
+    // sdl2
     unsigned int extensionCount;
     SDL_Vulkan_GetInstanceExtensions(m_window, &extensionCount, nullptr);
     std::vector<const char*> extensionNames(extensionCount);
@@ -69,13 +71,11 @@ Vulkan::Vulkan(bool enableValidation)
     // device
     m_device = vk_::Device(m_uniqueInstance.get(), m_uniqueSurface.get());
 
-    // swapchain
-    m_swapchain = vk_::Swapchain(m_window, m_uniqueSurface.get(), m_device.getPhysical(), &m_device.get(), s_imageFormat);
-
     // pipeline
-    m_pipeline = vk_::Pipeline(&m_device.get(), std::string(s_spirVDir), m_swapchain.getExtent(), s_imageFormat);
+    m_pipeline = vk_::Pipeline(m_device.getDevice(), m_extent2D);
 
-    m_isInitialized = true;
+    // swapchain
+    m_swapchain = vk_::Swapchain(m_window, m_uniqueSurface.get(), m_extent2D, m_device.getDevice(), m_pipeline.getRenderPass());
 }
 
 Vulkan::~Vulkan()
@@ -84,7 +84,7 @@ Vulkan::~Vulkan()
     SDL_Quit();
 }
 
-void Vulkan::run() const
+void Vulkan::run()
 {
     if (!m_isInitialized) {
         return;
@@ -95,6 +95,13 @@ void Vulkan::run() const
             if (event.type == SDL_QUIT)
                 break;
         }
+        m_device.drawFrame(
+            m_pipeline.getRenderPass(),
+            m_swapchain.getUniqueFramebuffers(),
+            m_extent2D,
+            m_pipeline.getPipeline(),
+            m_swapchain.getSwapchain());
+        m_device.waitIdle();
     }
 }
 

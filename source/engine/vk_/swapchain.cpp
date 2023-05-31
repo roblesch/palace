@@ -2,26 +2,21 @@
 
 namespace vk_ {
 
-Swapchain::Swapchain(SDL_Window* window, const vk::SurfaceKHR& surface, const vk::PhysicalDevice& physicalDevice, const vk::Device* device, const vk::Format& imageFormat)
+Swapchain::Swapchain(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& extent2D, vk::Device& device, vk::RenderPass& renderPass)
     : m_window(window)
-    , m_physicalDevice(physicalDevice)
-    , m_device(device)
-    , m_imageFormat(imageFormat)
+    , m_device(&device)
 {
     // swapchain
-    vk::SurfaceCapabilitiesKHR surfaceCapabilities = m_physicalDevice.getSurfaceCapabilitiesKHR(surface);
-    m_extent2D = surfaceCapabilities.currentExtent;
-
     vk::SwapchainCreateInfoKHR swapChainInfo {
         .surface = surface,
         .minImageCount = 2,
-        .imageFormat = m_imageFormat,
+        .imageFormat = vk::Format::eB8G8R8A8Srgb,
         .imageColorSpace = vk::ColorSpaceKHR::eSrgbNonlinear,
-        .imageExtent = m_extent2D,
+        .imageExtent = extent2D,
         .imageArrayLayers = 1,
         .imageUsage = vk::ImageUsageFlagBits::eColorAttachment,
         .imageSharingMode = vk::SharingMode::eExclusive,
-        .preTransform = surfaceCapabilities.currentTransform,
+        .preTransform = vk::SurfaceTransformFlagBitsKHR::eIdentity,
         .compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque,
         .presentMode = vk::PresentModeKHR::eMailbox,
         .clipped = VK_TRUE
@@ -29,14 +24,14 @@ Swapchain::Swapchain(SDL_Window* window, const vk::SurfaceKHR& surface, const vk
 
     m_uniqueSwapchain = m_device->createSwapchainKHRUnique(swapChainInfo);
     m_images = m_device->getSwapchainImagesKHR(m_uniqueSwapchain.get());
-    m_uniqueImageViews.resize(m_images.size());
 
     // image views
+    m_uniqueImageViews.resize(m_images.size());
     for (size_t i = 0; i < m_images.size(); i++) {
         vk::ImageViewCreateInfo imageViewInfo {
             .image = m_images[i],
             .viewType = vk::ImageViewType::e2D,
-            .format = m_imageFormat,
+            .format = vk::Format::eB8G8R8A8Srgb,
             .subresourceRange {
                 .aspectMask = vk::ImageAspectFlagBits::eColor,
                 .baseMipLevel = 0,
@@ -46,16 +41,30 @@ Swapchain::Swapchain(SDL_Window* window, const vk::SurfaceKHR& surface, const vk
         };
         m_uniqueImageViews[i] = m_device->createImageViewUnique(imageViewInfo);
     }
+
+    // framebuffers
+    m_uniqueFramebuffers.resize(m_images.size());
+    for (size_t i = 0; i < m_images.size(); i++) {
+        vk::FramebufferCreateInfo framebufferInfo {
+            .renderPass = renderPass,
+            .attachmentCount = 1,
+            .pAttachments = &m_uniqueImageViews[i].get(),
+            .width = extent2D.width,
+            .height = extent2D.height,
+            .layers = 1
+        };
+        m_uniqueFramebuffers[i] = m_device->createFramebufferUnique(framebufferInfo);
+    }
 }
 
-vk::Extent2D Swapchain::getExtent()
+std::vector<vk::UniqueFramebuffer>& Swapchain::getUniqueFramebuffers()
 {
-    return m_extent2D;
+    return m_uniqueFramebuffers;
 }
 
-vk::Format Swapchain::getImageFormat()
+vk::SwapchainKHR& Swapchain::getSwapchain()
 {
-    return m_imageFormat;
+    return m_uniqueSwapchain.get();
 }
 
 } // namespace vk_

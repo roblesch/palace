@@ -7,22 +7,20 @@ namespace vk_ {
 
 class Pipeline {
 private:
-    const vk::Device* m_device;
-    vk::Extent2D m_extent2D;
-    vk::Format m_imageFormat;
+    vk::Device* m_device;
 
-    vk::UniqueRenderPass m_renderPass;
-    vk::UniquePipelineLayout m_pipelineLayout;
-    vk::UniquePipeline m_pipeline;
-
-    // vk::UniqueShaderModule m_vertexShaderModule;
-    // vk::UniqueShaderModule m_fragmentShaderModule;
+    vk::UniqueRenderPass m_uniqueRenderPass;
+    vk::UniquePipelineLayout m_uniquePipelineLayout;
+    vk::UniquePipeline m_uniquePipeline;
 
     std::vector<char> readSpirVFile(const std::string& spirVFile);
 
 public:
     Pipeline() = default;
-    Pipeline(const vk::Device* device, const std::string& spirVDir, const vk::Extent2D& extent2D, const vk::Format& imageFormat);
+    Pipeline(vk::Device& device, vk::Extent2D& extent2D);
+
+    vk::RenderPass& getRenderPass();
+    vk::Pipeline& getPipeline();
 };
 
 } // namespace vk_
