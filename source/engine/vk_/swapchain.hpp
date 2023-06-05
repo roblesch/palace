@@ -19,8 +19,8 @@ public:
     Swapchain() = default;
     Swapchain(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& extent2D, vk::Device& device, vk::RenderPass& renderPass);
 
-    std::vector<vk::UniqueFramebuffer>& getUniqueFramebuffers();
-    vk::SwapchainKHR& getSwapchain();
+    vk::Framebuffer& framebuffer(size_t i);
+    vk::SwapchainKHR& swapchain();
 };
 
 } // namespace vk_

@@ -2,7 +2,7 @@
 
 namespace vk_ {
 
-Device::Device(vk::Instance& instance, vk::SurfaceKHR& surface)
+Device::Device(vk::Instance& instance, vk::SurfaceKHR& surface, uint32_t concurrentFrames)
 {
     // physical device
     std::vector<vk::PhysicalDevice> devices = instance.enumeratePhysicalDevices();
@@ -69,128 +69,47 @@ Device::Device(vk::Instance& instance, vk::SurfaceKHR& surface)
     vk::CommandBufferAllocateInfo commandBufferAllocInfo {
         .commandPool = m_uniqueCommandPool.get(),
         .level = vk::CommandBufferLevel::ePrimary,
-        .commandBufferCount = 1
+        .commandBufferCount = concurrentFrames
     };
 
     m_uniqueCommandBuffers = device.allocateCommandBuffersUnique(commandBufferAllocInfo);
 
     // sync
-    m_imageAvailableUniqueSemaphore = device.createSemaphoreUnique({});
-    m_renderFinishedUniqueSemaphore = device.createSemaphoreUnique({});
-
-    vk::FenceCreateInfo fenceInfo {
-        .flags = vk::FenceCreateFlagBits::eSignaled
-    };
-
-    m_inFlightUniqueFence = device.createFenceUnique(fenceInfo);
+    for (size_t i = 0; i < concurrentFrames; i++) {
+        m_uniqueSemaphoresImageAvailable.push_back(device.createSemaphoreUnique({}));
+        m_uniqueSemaphoresRenderFinished.push_back(device.createSemaphoreUnique({}));
+        m_uniqueFencesInFlight.push_back(device.createFenceUnique({ .flags = vk::FenceCreateFlagBits::eSignaled }));
+    }
 }
 
-vk::Device& Device::getDevice()
+vk::Device& Device::device()
 {
     return m_uniqueDevice.get();
 }
 
-void Device::beginCommandBuffer(uint32_t bufferIndex)
+vk::CommandBuffer& Device::commandBuffer(size_t i)
 {
-    vk::CommandBufferBeginInfo beginInfo {};
-    m_uniqueCommandBuffers[bufferIndex].get().begin(beginInfo);
+    return m_uniqueCommandBuffers[i].get();
 }
 
-void Device::endCommandBuffer(uint32_t bufferIndex)
+vk::Semaphore& Device::semaphoreImageAvailable(size_t i)
 {
-    m_uniqueCommandBuffers[bufferIndex].get().end();
+    return m_uniqueSemaphoresImageAvailable[i].get();
 }
 
-void Device::beginRenderPass(vk::RenderPass& renderPass, vk::Framebuffer& framebuffer, vk::Extent2D extent2D, uint32_t bufferIndex)
+vk::Semaphore& Device::semaphoreRenderFinished(size_t i)
 {
-    vk::ClearValue clearColor { std::array<float, 4> { 0.0f, 0.0f, 0.0f, 1.0f } };
-    vk::RenderPassBeginInfo renderPassInfo
-    {
-        .renderPass = renderPass,
-        .framebuffer = framebuffer,
-        .renderArea = {
-            .offset = { 0, 0 },
-            .extent = extent2D
-        },
-        .clearValueCount = 1,
-        .pClearValues = &clearColor
-    };
-    m_uniqueCommandBuffers[bufferIndex].get().beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
+    return m_uniqueSemaphoresRenderFinished[i].get();
 }
 
-void Device::endRenderPass(uint32_t bufferIndex)
+vk::Fence& Device::fenceInFlight(size_t i)
 {
-    m_uniqueCommandBuffers[bufferIndex].get().endRenderPass();
+    return m_uniqueFencesInFlight[i].get();
 }
 
-void Device::beginDraw(vk::Pipeline& graphicsPipeline, vk::Extent2D extent2D, uint32_t bufferIndex)
+vk::Queue& Device::graphicsQueue()
 {
-    m_uniqueCommandBuffers[bufferIndex].get().bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline);
-
-    vk::Viewport viewport {
-        .x = 0.0f,
-        .y = 0.0f,
-        .width = static_cast<float>(extent2D.width),
-        .height = static_cast<float>(extent2D.height),
-        .minDepth = 0.0f,
-        .maxDepth = 1.0f
-    };
-
-    m_uniqueCommandBuffers[bufferIndex].get().setViewport(0, 1, &viewport);
-
-    vk::Rect2D scissor {
-        .offset = { 0, 0 },
-        .extent = extent2D
-    };
-
-    m_uniqueCommandBuffers[bufferIndex].get().setScissor(0, 1, &scissor);
-    m_uniqueCommandBuffers[bufferIndex].get().draw(3, 1, 0, 0);
-}
-
-void Device::drawFrame(vk::RenderPass& renderPass, std::vector<vk::UniqueFramebuffer>& framebuffers, vk::Extent2D extent2D, vk::Pipeline& graphicsPipeline, vk::SwapchainKHR& swapchain, uint32_t bufferIndex)
-{
-    auto device = m_uniqueDevice.get();
-    auto inFlightFence = m_inFlightUniqueFence.get();
-    auto imageAvailable = m_imageAvailableUniqueSemaphore.get();
-    auto commandBuffer = m_uniqueCommandBuffers[bufferIndex].get();
-    auto renderFinished = m_renderFinishedUniqueSemaphore.get();
-
-    while (device.waitForFences(inFlightFence, VK_TRUE, UINT64_MAX) == vk::Result::eTimeout)
-        ;
-    device.resetFences(inFlightFence);
-
-    auto [result, imageIndex] = device.acquireNextImageKHR(swapchain, UINT64_MAX, imageAvailable, VK_NULL_HANDLE);
-    commandBuffer.reset();
-
-    beginCommandBuffer();
-    beginRenderPass(renderPass, framebuffers[imageIndex].get(), extent2D);
-    beginDraw(graphicsPipeline, extent2D);
-    endRenderPass();
-    endCommandBuffer();
-
-    vk::PipelineStageFlags waitDstStageMask { vk::PipelineStageFlagBits::eColorAttachmentOutput };
-
-    vk::SubmitInfo submitInfo {
-        .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &imageAvailable,
-        .pWaitDstStageMask = &waitDstStageMask,
-        .commandBufferCount = 1,
-        .pCommandBuffers = &commandBuffer,
-        .signalSemaphoreCount = 1,
-        .pSignalSemaphores = &renderFinished
-    };
-
-    m_graphicsQueue.submit(submitInfo, inFlightFence);
-
-    vk::PresentInfoKHR presentInfo {
-        .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &renderFinished,
-        .swapchainCount = 1,
-        .pSwapchains = &swapchain,
-        .pImageIndices = &imageIndex
-    };
-
-    m_graphicsQueue.presentKHR(presentInfo);
+    return m_graphicsQueue;
 }
 
 void Device::waitIdle()

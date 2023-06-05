@@ -16,6 +16,7 @@ private:
     static constexpr int s_windowWidth = 800;
     static constexpr int s_windowHeight = 600;
     static constexpr const std::string_view s_spirVDir = "/shaders";
+    static constexpr uint32_t s_concurrentFrames = 2;
 
     bool m_isValidationEnabled;
     bool m_isInitialized;
@@ -31,10 +32,14 @@ private:
     vk_::Swapchain m_swapchain;
     vk_::Pipeline m_pipeline;
 
+    size_t m_currentFrame = 0;
+
 public:
     explicit Vulkan(bool enableValidation);
     ~Vulkan();
 
+    void recordCommandBuffer();
+    void drawFrame();
     void run();
 };
 

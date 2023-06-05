@@ -69,19 +69,119 @@ Vulkan::Vulkan(bool enableValidation)
     m_uniqueSurface = vk::UniqueSurfaceKHR(surface, deleter);
 
     // device
-    m_device = vk_::Device(m_uniqueInstance.get(), m_uniqueSurface.get());
+    m_device = vk_::Device(m_uniqueInstance.get(), m_uniqueSurface.get(), s_concurrentFrames);
 
     // pipeline
-    m_pipeline = vk_::Pipeline(m_device.getDevice(), m_extent2D);
+    m_pipeline = vk_::Pipeline(m_device.device(), m_extent2D);
 
     // swapchain
-    m_swapchain = vk_::Swapchain(m_window, m_uniqueSurface.get(), m_extent2D, m_device.getDevice(), m_pipeline.getRenderPass());
+    m_swapchain = vk_::Swapchain(m_window, m_uniqueSurface.get(), m_extent2D, m_device.device(), m_pipeline.renderPass());
 }
 
 Vulkan::~Vulkan()
 {
     SDL_DestroyWindow(m_window);
     SDL_Quit();
+}
+
+void Vulkan::recordCommandBuffer()
+{
+    vk::CommandBuffer commandBuffer = m_device.commandBuffer(m_currentFrame);
+    vk::RenderPass renderPass = m_pipeline.renderPass();
+    vk::Framebuffer framebuffer = m_swapchain.framebuffer(m_currentFrame);
+    vk::Pipeline pipeline = m_pipeline.pipeline();
+
+    // begin command buffer
+    vk::CommandBufferBeginInfo beginInfo {};
+    commandBuffer.begin(beginInfo);
+
+    // begin render pass
+    vk::ClearValue clearColor { std::array<float, 4> { 0.0f, 0.0f, 0.0f, 1.0f } };
+    vk::RenderPassBeginInfo renderPassInfo {
+        .renderPass = renderPass,
+        .framebuffer = framebuffer,
+        .renderArea = {
+            .offset = { 0, 0 },
+            .extent = m_extent2D },
+        .clearValueCount = 1,
+        .pClearValues = &clearColor
+    };
+    commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
+
+    // bind pipeline
+    commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline);
+
+    // draw
+    vk::Viewport viewport {
+        .x = 0.0f,
+        .y = 0.0f,
+        .width = static_cast<float>(m_extent2D.width),
+        .height = static_cast<float>(m_extent2D.height),
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f
+    };
+
+    commandBuffer.setViewport(0, 1, &viewport);
+
+    vk::Rect2D scissor {
+        .offset = { 0, 0 },
+        .extent = m_extent2D
+    };
+
+    commandBuffer.setScissor(0, 1, &scissor);
+    commandBuffer.draw(3, 1, 0, 0);
+
+    // end render pass
+    commandBuffer.endRenderPass();
+
+    // end command buffer
+    commandBuffer.end();
+}
+
+void Vulkan::drawFrame()
+{
+    vk::Device device = m_device.device();
+    vk::Fence frameInFlight = m_device.fenceInFlight(m_currentFrame);
+    vk::Semaphore imageAvailable = m_device.semaphoreImageAvailable(m_currentFrame);
+    vk::Semaphore renderFinished = m_device.semaphoreRenderFinished(m_currentFrame);
+    vk::SwapchainKHR swapchain = m_swapchain.swapchain();
+    vk::CommandBuffer commandBuffer = m_device.commandBuffer(m_currentFrame);
+    vk::Queue graphicsQueue = m_device.graphicsQueue();
+
+    while (device.waitForFences(frameInFlight, VK_TRUE, UINT64_MAX) == vk::Result::eTimeout)
+        ;
+    device.resetFences(frameInFlight);
+
+    auto [result, imageIndex] = device.acquireNextImageKHR(swapchain, UINT64_MAX, imageAvailable, VK_NULL_HANDLE);
+    commandBuffer.reset();
+
+    recordCommandBuffer();
+
+    vk::PipelineStageFlags waitDstStageMask { vk::PipelineStageFlagBits::eColorAttachmentOutput };
+
+    vk::SubmitInfo submitInfo {
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = &imageAvailable,
+        .pWaitDstStageMask = &waitDstStageMask,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &commandBuffer,
+        .signalSemaphoreCount = 1,
+        .pSignalSemaphores = &renderFinished
+    };
+
+    graphicsQueue.submit(submitInfo, frameInFlight);
+
+    vk::PresentInfoKHR presentInfo {
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = &renderFinished,
+        .swapchainCount = 1,
+        .pSwapchains = &swapchain,
+        .pImageIndices = &imageIndex
+    };
+
+    graphicsQueue.presentKHR(presentInfo);
+
+    m_currentFrame = (m_currentFrame + 1) % s_concurrentFrames;
 }
 
 void Vulkan::run()
@@ -95,14 +195,9 @@ void Vulkan::run()
             if (event.type == SDL_QUIT)
                 break;
         }
-        m_device.drawFrame(
-            m_pipeline.getRenderPass(),
-            m_swapchain.getUniqueFramebuffers(),
-            m_extent2D,
-            m_pipeline.getPipeline(),
-            m_swapchain.getSwapchain());
-        m_device.waitIdle();
+        drawFrame();
     }
+    m_device.waitIdle();
 }
 
 } // namespace engine

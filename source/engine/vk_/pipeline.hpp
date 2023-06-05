@@ -19,8 +19,8 @@ public:
     Pipeline() = default;
     Pipeline(vk::Device& device, vk::Extent2D& extent2D);
 
-    vk::RenderPass& getRenderPass();
-    vk::Pipeline& getPipeline();
+    vk::RenderPass& renderPass();
+    vk::Pipeline& pipeline();
 };
 
 } // namespace vk_

@@ -57,12 +57,12 @@ Swapchain::Swapchain(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& 
     }
 }
 
-std::vector<vk::UniqueFramebuffer>& Swapchain::getUniqueFramebuffers()
+vk::Framebuffer& Swapchain::framebuffer(size_t i)
 {
-    return m_uniqueFramebuffers;
+    return m_uniqueFramebuffers[i].get();
 }
 
-vk::SwapchainKHR& Swapchain::getSwapchain()
+vk::SwapchainKHR& Swapchain::swapchain()
 {
     return m_uniqueSwapchain.get();
 }

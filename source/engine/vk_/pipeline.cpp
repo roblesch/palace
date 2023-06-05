@@ -177,12 +177,12 @@ Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D)
     m_uniquePipeline = m_device->createGraphicsPipelineUnique(nullptr, graphicsPipelineInfo).value;
 }
 
-vk::RenderPass& Pipeline::getRenderPass()
+vk::RenderPass& Pipeline::renderPass()
 {
     return m_uniqueRenderPass.get();
 }
 
-vk::Pipeline& Pipeline::getPipeline()
+vk::Pipeline& Pipeline::pipeline()
 {
     return m_uniquePipeline.get();
 }

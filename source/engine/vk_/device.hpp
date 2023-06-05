@@ -18,22 +18,21 @@ private:
     vk::UniqueCommandPool m_uniqueCommandPool;
     std::vector<vk::UniqueCommandBuffer> m_uniqueCommandBuffers;
 
-    vk::UniqueSemaphore m_imageAvailableUniqueSemaphore;
-    vk::UniqueSemaphore m_renderFinishedUniqueSemaphore;
-    vk::UniqueFence m_inFlightUniqueFence;
+    std::vector<vk::UniqueSemaphore> m_uniqueSemaphoresImageAvailable;
+    std::vector<vk::UniqueSemaphore> m_uniqueSemaphoresRenderFinished;
+    std::vector<vk::UniqueFence> m_uniqueFencesInFlight;
 
 public:
     Device() = default;
-    Device(vk::Instance& instance, vk::SurfaceKHR& surface);
+    Device(vk::Instance& instance, vk::SurfaceKHR& surface, uint32_t concurrentFrames);
 
-    vk::Device& getDevice();
+    vk::Device& device();
+    vk::CommandBuffer& commandBuffer(size_t i);
+    vk::Semaphore& semaphoreImageAvailable(size_t i);
+    vk::Semaphore& semaphoreRenderFinished(size_t i);
+    vk::Fence& fenceInFlight(size_t i);
+    vk::Queue& graphicsQueue();
 
-    void beginCommandBuffer(uint32_t bufferIndex = 0);
-    void endCommandBuffer(uint32_t bufferIndex = 0);
-    void beginRenderPass(vk::RenderPass& renderPass, vk::Framebuffer& framebuffer, vk::Extent2D extent2D, uint32_t bufferIndex = 0);
-    void endRenderPass(uint32_t bufferIndex = 0);
-    void beginDraw(vk::Pipeline& graphicsPipeline, vk::Extent2D extent2D, uint32_t bufferIndex = 0);
-    void drawFrame(vk::RenderPass& renderPass, std::vector<vk::UniqueFramebuffer>& framebuffers, vk::Extent2D extent2D, vk::Pipeline& graphicsPipeline, vk::SwapchainKHR& swapchain, uint32_t bufferIndex = 0);
     void waitIdle();
 };
 
