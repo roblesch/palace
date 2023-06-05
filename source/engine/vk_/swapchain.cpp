@@ -12,7 +12,10 @@ void Swapchain::create(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D
         .minImageCount = 2,
         .imageFormat = vk::Format::eB8G8R8A8Srgb,
         .imageColorSpace = vk::ColorSpaceKHR::eSrgbNonlinear,
-        .imageExtent = extent2D,
+        .imageExtent = {
+            std::clamp(extent2D.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
+            std::clamp(extent2D.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
+        },
         .imageArrayLayers = 1,
         .imageUsage = vk::ImageUsageFlagBits::eColorAttachment,
         .imageSharingMode = vk::SharingMode::eExclusive,

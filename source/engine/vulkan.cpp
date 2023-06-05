@@ -88,7 +88,7 @@ void Vulkan::recreateSwapchain()
     // wait for gpu idle
     m_device.waitIdle();
 
-    // get window extends
+    // get window extents
     int w, h;
     SDL_GetWindowSize(m_window, &w, &h);
     m_extent2D = vk::Extent2D(w, h);
@@ -172,7 +172,6 @@ void Vulkan::drawFrame()
         imageIndex = device.acquireNextImageKHR(swapchain, UINT64_MAX, imageAvailable, VK_NULL_HANDLE).value;
     } catch (...) {
         recreateSwapchain();
-        return;
     }
 
     device.resetFences(frameInFlight);
@@ -191,7 +190,7 @@ void Vulkan::drawFrame()
         .pSignalSemaphores = &renderFinished
     };
 
-    graphicsQueue.submit(submitInfo, frameInFlight);
+    graphicsQueue.submit(submitInfo, frameInFlight); 
 
     vk::PresentInfoKHR presentInfo {
         .waitSemaphoreCount = 1,
@@ -220,13 +219,15 @@ void Vulkan::run()
         if (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT)
                 break;
-            else if (event.type == SDL_WINDOWEVENT) {
+            if (SDL_GetWindowFlags(m_window) & SDL_WINDOW_MINIMIZED)
+                continue;
+            if (event.type == SDL_WINDOWEVENT) {
                 if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
                     m_isResized = true;
                 }
             }
+            drawFrame();
         }
-        drawFrame();
     }
     m_device.waitIdle();
 }

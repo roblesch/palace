@@ -9,8 +9,10 @@ SDL_Window* createWindow(int width, int height)
 {
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Vulkan_LoadLibrary(nullptr);
-    return SDL_CreateWindow("palace", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+    SDL_Window* window = SDL_CreateWindow("palace", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         width, height, SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | SDL_WINDOW_VULKAN);
+    SDL_SetWindowMinimumSize(window, 400, 300);
+    return window;
 }
 
 std::vector<const char*> getInstanceExtensions(SDL_Window* window)
