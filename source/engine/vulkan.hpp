@@ -33,12 +33,14 @@ private:
     vk_::Pipeline m_pipeline;
 
     size_t m_currentFrame = 0;
+    bool m_isResized = false;
 
 public:
     explicit Vulkan(bool enableValidation);
     ~Vulkan();
 
-    void recordCommandBuffer();
+    void recreateSwapchain();
+    void recordCommandBuffer(vk::CommandBuffer& commandBuffer, uint32_t imageIndex);
     void drawFrame();
     void run();
 };

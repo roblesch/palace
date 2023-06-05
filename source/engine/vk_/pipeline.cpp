@@ -25,7 +25,6 @@ std::vector<char> Pipeline::readSpirVFile(const std::string& spirVFile)
 }
 
 Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D)
-    : m_device(&device)
 {
     // shaders
     std::vector<char> vertexShaderBytes = readSpirVFile("shaders/vertex.spv");
@@ -124,7 +123,7 @@ Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D)
     // layout
     vk::PipelineLayoutCreateInfo pipelineLayoutInfo {};
 
-    m_uniquePipelineLayout = m_device->createPipelineLayoutUnique(pipelineLayoutInfo);
+    m_uniquePipelineLayout = device.createPipelineLayoutUnique(pipelineLayoutInfo);
 
     // render pass
     vk::AttachmentDescription colorAttachment {
@@ -156,7 +155,7 @@ Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D)
         .pSubpasses = &subpass
     };
 
-    m_uniqueRenderPass = m_device->createRenderPassUnique(renderPassInfo);
+    m_uniqueRenderPass = device.createRenderPassUnique(renderPassInfo);
 
     // pipeline
     vk::GraphicsPipelineCreateInfo graphicsPipelineInfo {
@@ -174,7 +173,7 @@ Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D)
         .subpass = 0
     };
 
-    m_uniquePipeline = m_device->createGraphicsPipelineUnique(nullptr, graphicsPipelineInfo).value;
+    m_uniquePipeline = device.createGraphicsPipelineUnique(nullptr, graphicsPipelineInfo).value;
 }
 
 vk::RenderPass& Pipeline::renderPass()

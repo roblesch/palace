@@ -1,4 +1,5 @@
 #include "vulkan.hpp"
+#include "vk_/sdl2.hpp"
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
@@ -12,10 +13,7 @@ Vulkan::Vulkan(bool enableValidation)
     VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
 
     // window
-    SDL_Init(SDL_INIT_VIDEO);
-    SDL_Vulkan_LoadLibrary(nullptr);
-    m_window = SDL_CreateWindow(
-        "palace", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, s_windowWidth, s_windowHeight, SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | SDL_WINDOW_VULKAN);
+    m_window = sdl2::createWindow(s_windowWidth, s_windowHeight);
     m_extent2D = vk::Extent2D(s_windowWidth, s_windowHeight);
 
     // sdl2
@@ -75,7 +73,8 @@ Vulkan::Vulkan(bool enableValidation)
     m_pipeline = vk_::Pipeline(m_device.device(), m_extent2D);
 
     // swapchain
-    m_swapchain = vk_::Swapchain(m_window, m_uniqueSurface.get(), m_extent2D, m_device.device(), m_pipeline.renderPass());
+    m_swapchain = vk_::Swapchain(m_window, m_uniqueSurface.get(), m_extent2D,
+        m_device.physicalDevice(), m_device.device(), m_pipeline.renderPass());
 }
 
 Vulkan::~Vulkan()
@@ -84,11 +83,28 @@ Vulkan::~Vulkan()
     SDL_Quit();
 }
 
-void Vulkan::recordCommandBuffer()
+void Vulkan::recreateSwapchain()
 {
-    vk::CommandBuffer commandBuffer = m_device.commandBuffer(m_currentFrame);
+    // wait for gpu idle
+    m_device.waitIdle();
+
+    // get window extends
+    int w, h;
+    SDL_GetWindowSize(m_window, &w, &h);
+    m_extent2D = vk::Extent2D(w, h);
+
+    // recreate swapchain
+    m_swapchain.recreate(m_window, m_uniqueSurface.get(), m_extent2D,
+        m_device.physicalDevice(), m_device.device(), m_pipeline.renderPass());
+    
+    // done resizing
+    m_isResized = false;
+}
+
+void Vulkan::recordCommandBuffer(vk::CommandBuffer& commandBuffer, uint32_t imageIndex)
+{
     vk::RenderPass renderPass = m_pipeline.renderPass();
-    vk::Framebuffer framebuffer = m_swapchain.framebuffer(m_currentFrame);
+    vk::Framebuffer framebuffer = m_swapchain.framebuffer(imageIndex);
     vk::Pipeline pipeline = m_pipeline.pipeline();
 
     // begin command buffer
@@ -150,12 +166,18 @@ void Vulkan::drawFrame()
 
     while (device.waitForFences(frameInFlight, VK_TRUE, UINT64_MAX) == vk::Result::eTimeout)
         ;
+
+    uint32_t imageIndex;
+    try {
+        imageIndex = device.acquireNextImageKHR(swapchain, UINT64_MAX, imageAvailable, VK_NULL_HANDLE).value;
+    } catch (...) {
+        recreateSwapchain();
+        return;
+    }
+
     device.resetFences(frameInFlight);
-
-    auto [result, imageIndex] = device.acquireNextImageKHR(swapchain, UINT64_MAX, imageAvailable, VK_NULL_HANDLE);
     commandBuffer.reset();
-
-    recordCommandBuffer();
+    recordCommandBuffer(commandBuffer, imageIndex);
 
     vk::PipelineStageFlags waitDstStageMask { vk::PipelineStageFlagBits::eColorAttachmentOutput };
 
@@ -179,7 +201,11 @@ void Vulkan::drawFrame()
         .pImageIndices = &imageIndex
     };
 
-    graphicsQueue.presentKHR(presentInfo);
+    try {
+        graphicsQueue.presentKHR(presentInfo);
+    } catch (...) {
+        recreateSwapchain();
+    }
 
     m_currentFrame = (m_currentFrame + 1) % s_concurrentFrames;
 }
@@ -194,6 +220,11 @@ void Vulkan::run()
         if (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT)
                 break;
+            else if (event.type == SDL_WINDOWEVENT) {
+                if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
+                    m_isResized = true;
+                }
+            }
         }
         drawFrame();
     }

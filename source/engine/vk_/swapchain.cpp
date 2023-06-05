@@ -2,11 +2,11 @@
 
 namespace vk_ {
 
-Swapchain::Swapchain(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& extent2D, vk::Device& device, vk::RenderPass& renderPass)
-    : m_window(window)
-    , m_device(&device)
+void Swapchain::create(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& extent2D, vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::RenderPass& renderPass)
 {
     // swapchain
+    vk::SurfaceCapabilitiesKHR capabilities = physicalDevice.getSurfaceCapabilitiesKHR(surface);
+
     vk::SwapchainCreateInfoKHR swapChainInfo {
         .surface = surface,
         .minImageCount = 2,
@@ -22,8 +22,8 @@ Swapchain::Swapchain(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& 
         .clipped = VK_TRUE
     };
 
-    m_uniqueSwapchain = m_device->createSwapchainKHRUnique(swapChainInfo);
-    m_images = m_device->getSwapchainImagesKHR(m_uniqueSwapchain.get());
+    m_uniqueSwapchain = device.createSwapchainKHRUnique(swapChainInfo);
+    m_images = device.getSwapchainImagesKHR(m_uniqueSwapchain.get());
 
     // image views
     m_uniqueImageViews.resize(m_images.size());
@@ -39,7 +39,7 @@ Swapchain::Swapchain(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& 
                 .baseArrayLayer = 0,
                 .layerCount = 1 }
         };
-        m_uniqueImageViews[i] = m_device->createImageViewUnique(imageViewInfo);
+        m_uniqueImageViews[i] = device.createImageViewUnique(imageViewInfo);
     }
 
     // framebuffers
@@ -53,8 +53,13 @@ Swapchain::Swapchain(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& 
             .height = extent2D.height,
             .layers = 1
         };
-        m_uniqueFramebuffers[i] = m_device->createFramebufferUnique(framebufferInfo);
+        m_uniqueFramebuffers[i] = device.createFramebufferUnique(framebufferInfo);
     }
+}
+
+Swapchain::Swapchain(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& extent2D, vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::RenderPass& renderPass)
+{
+    create(window, surface, extent2D, physicalDevice, device, renderPass);
 }
 
 vk::Framebuffer& Swapchain::framebuffer(size_t i)
@@ -65,6 +70,14 @@ vk::Framebuffer& Swapchain::framebuffer(size_t i)
 vk::SwapchainKHR& Swapchain::swapchain()
 {
     return m_uniqueSwapchain.get();
+}
+
+void Swapchain::recreate(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& extent2D, vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::RenderPass& renderPass)
+{
+    m_uniqueFramebuffers.clear();
+    m_uniqueImageViews.clear();
+    m_uniqueSwapchain.reset();
+    create(window, surface, extent2D, physicalDevice, device, renderPass);
 }
 
 } // namespace vk_

@@ -6,6 +6,7 @@ add_library(vk_
         "include.hpp"
         "pipeline.cpp"
         "pipeline.hpp"
+        "sdl2.hpp"
         "swapchain.cpp"
         "swapchain.hpp")
 

@@ -26,6 +26,7 @@ public:
     Device() = default;
     Device(vk::Instance& instance, vk::SurfaceKHR& surface, uint32_t concurrentFrames);
 
+    vk::PhysicalDevice& physicalDevice();
     vk::Device& device();
     vk::CommandBuffer& commandBuffer(size_t i);
     vk::Semaphore& semaphoreImageAvailable(size_t i);

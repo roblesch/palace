@@ -7,20 +7,21 @@ namespace vk_ {
 
 class Swapchain {
 private:
-    SDL_Window* m_window;
-    vk::Device* m_device;
-
     vk::UniqueSwapchainKHR m_uniqueSwapchain;
     std::vector<vk::Image> m_images;
     std::vector<vk::UniqueImageView> m_uniqueImageViews;
     std::vector<vk::UniqueFramebuffer> m_uniqueFramebuffers;
 
+    void create(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& extent2D, vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::RenderPass& renderPass);
+
 public:
     Swapchain() = default;
-    Swapchain(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& extent2D, vk::Device& device, vk::RenderPass& renderPass);
+    Swapchain(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& extent2D, vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::RenderPass& renderPass);
 
     vk::Framebuffer& framebuffer(size_t i);
     vk::SwapchainKHR& swapchain();
+
+    void recreate(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& extent2D, vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::RenderPass& renderPass);
 };
 
 } // namespace vk_

@@ -7,8 +7,6 @@ namespace vk_ {
 
 class Pipeline {
 private:
-    vk::Device* m_device;
-
     vk::UniqueRenderPass m_uniqueRenderPass;
     vk::UniquePipelineLayout m_uniquePipelineLayout;
     vk::UniquePipeline m_uniquePipeline;

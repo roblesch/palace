@@ -82,6 +82,11 @@ Device::Device(vk::Instance& instance, vk::SurfaceKHR& surface, uint32_t concurr
     }
 }
 
+vk::PhysicalDevice& Device::physicalDevice()
+{
+    return m_physicalDevice;
+}
+
 vk::Device& Device::device()
 {
     return m_uniqueDevice.get();
