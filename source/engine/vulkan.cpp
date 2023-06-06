@@ -86,10 +86,11 @@ Vulkan::~Vulkan()
     SDL_Quit();
 }
 
-void Vulkan::bindVertexBuffer(std::vector<vk_::Vertex>& vertices)
+void Vulkan::bindVertexBuffer(std::vector<vk_::Vertex>& vertices, std::vector<uint16_t>& indices)
 {
-    m_buffer = vk_::Buffer(m_device.physicalDevice(), m_device.device(), m_device.commandPool(), m_device.graphicsQueue(), vertices);
     m_vertexCount = vertices.size();
+    m_indexCount = indices.size();
+    m_buffer = vk_::Buffer(m_device.physicalDevice(), m_device.device(), m_device.commandPool(), m_device.graphicsQueue(), vertices, indices);
     m_isVerticesBound = true;
 }
 
@@ -147,7 +148,8 @@ void Vulkan::recordCommandBuffer(vk::CommandBuffer& commandBuffer, uint32_t imag
         commandBuffer.setScissor(0, 1, &scissor);
 
         commandBuffer.bindVertexBuffers(0, m_buffer.vertexBuffer(), { 0 });
-        commandBuffer.draw(m_vertexCount, 1, 0, 0);
+        commandBuffer.bindIndexBuffer(m_buffer.indexBuffer(), 0, vk::IndexType::eUint16);
+        commandBuffer.drawIndexed(m_indexCount, 1, 0, 0, 0);
     }
     commandBuffer.endRenderPass();
     commandBuffer.end();

@@ -38,12 +38,13 @@ private:
     vk::Extent2D m_extent2D;
     size_t m_currentFrame = 0;
     size_t m_vertexCount = 0;
+    size_t m_indexCount = 0;
 
 public:
     explicit Vulkan(bool enableValidation = true);
     ~Vulkan();
 
-    void bindVertexBuffer(std::vector<vk_::Vertex>& vertices);
+    void bindVertexBuffer(std::vector<vk_::Vertex>& vertices, std::vector<uint16_t>& indices);
     void recreateSwapchain();
     void recordCommandBuffer(vk::CommandBuffer& commandBuffer, uint32_t imageIndex);
     void drawFrame();
