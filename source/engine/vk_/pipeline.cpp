@@ -1,9 +1,9 @@
 #include "pipeline.hpp"
 
-//#include "vulkan/vulkan.h"
+// #include "vulkan/vulkan.h"
 
-#include <fstream>
 #include "primitive.hpp"
+#include <fstream>
 
 namespace vk_ {
 
@@ -25,8 +25,23 @@ std::vector<char> Pipeline::readSpirVFile(const std::string& spirVFile)
     return spirVBytes;
 }
 
-Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D)
+Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D, uint32_t concurrentFrames)
 {
+    // descriptor set layout
+    vk::DescriptorSetLayoutBinding uboLayoutBinding {
+        .binding = 0,
+        .descriptorType = vk::DescriptorType::eUniformBuffer,
+        .descriptorCount = 1,
+        .stageFlags = vk::ShaderStageFlagBits::eVertex
+    };
+
+    vk::DescriptorSetLayoutCreateInfo descriptorLayoutInfo {
+        .bindingCount = 1,
+        .pBindings = &uboLayoutBinding
+    };
+
+    m_uniqueDescriptorSetLayout = device.createDescriptorSetLayoutUnique(descriptorLayoutInfo);
+
     // shaders
     std::vector<char> vertexShaderBytes = readSpirVFile("shaders/vertex.spv");
     std::vector<char> fragmentShaderBytes = readSpirVFile("shaders/fragment.spv");
@@ -46,25 +61,24 @@ Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D)
             .pName = "main" }
     };
 
-    // vertex
+    // vertex input
     auto bindingDescription = vk_::Vertex::bindingDescription();
     auto attributeDescriptions = vk_::Vertex::attributeDescriptions();
 
-    vk::PipelineVertexInputStateCreateInfo vertexStateInfo
-    {
-        .vertexBindingDescriptionCount= 1,
+    vk::PipelineVertexInputStateCreateInfo vertexStateInfo {
+        .vertexBindingDescriptionCount = 1,
         .pVertexBindingDescriptions = &bindingDescription,
         .vertexAttributeDescriptionCount = attributeDescriptions.size(),
         .pVertexAttributeDescriptions = attributeDescriptions.data()
     };
 
-    // assembly
+    // input assembly
     vk::PipelineInputAssemblyStateCreateInfo assemblyStateInfo {
         .topology = vk::PrimitiveTopology::eTriangleList,
         .primitiveRestartEnable = VK_FALSE
     };
 
-    // viewport
+    // viewport state
     vk::Viewport viewport {
         .x = 0.0f,
         .y = 0.0f,
@@ -86,25 +100,25 @@ Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D)
         .pScissors = &scissor
     };
 
-    // raster
+    // rasterization state
     // TODO: debugging toggle mode
     vk::PipelineRasterizationStateCreateInfo rasterStateInfo {
         .depthClampEnable = VK_FALSE,
         .rasterizerDiscardEnable = VK_FALSE,
         .polygonMode = vk::PolygonMode::eFill,
         .cullMode = vk::CullModeFlagBits::eBack,
-        .frontFace = vk::FrontFace::eClockwise,
+        .frontFace = vk::FrontFace::eCounterClockwise,
         .depthBiasEnable = VK_FALSE,
         .lineWidth = 1.0f
     };
 
-    // multisampling
+    // multisample state
     vk::PipelineMultisampleStateCreateInfo multisampleStateInfo {
         .rasterizationSamples = vk::SampleCountFlagBits::e1,
         .sampleShadingEnable = VK_FALSE
     };
 
-    // color blending
+    // color blend state
     vk::PipelineColorBlendAttachmentState colorBlendAttachment {
         .blendEnable = VK_TRUE,
         .srcColorBlendFactor = vk::BlendFactor::eSrcAlpha,
@@ -119,7 +133,7 @@ Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D)
         .pAttachments = &colorBlendAttachment
     };
 
-    // dynamic
+    // dynamic state
     std::vector<vk::DynamicState> dynamicStates {
         vk::DynamicState::eViewport,
         vk::DynamicState::eScissor
@@ -130,9 +144,11 @@ Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D)
         .pDynamicStates = dynamicStates.data()
     };
 
-    // layout
-    vk::PipelineLayoutCreateInfo pipelineLayoutInfo {};
-
+    // pipeline layout
+    vk::PipelineLayoutCreateInfo pipelineLayoutInfo {
+        .setLayoutCount = 1,
+        .pSetLayouts = &(*m_uniqueDescriptorSetLayout)
+    };
     m_uniquePipelineLayout = device.createPipelineLayoutUnique(pipelineLayoutInfo);
 
     // render pass
@@ -178,8 +194,8 @@ Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D)
         .pMultisampleState = &multisampleStateInfo,
         .pColorBlendState = &colorBlendStateInfo,
         .pDynamicState = &dynamicStateInfo,
-        .layout = pipelineLayout(),
-        .renderPass = renderPass(),
+        .layout = *m_uniquePipelineLayout,
+        .renderPass = *m_uniqueRenderPass,
         .subpass = 0
     };
 
@@ -199,6 +215,11 @@ vk::Pipeline& Pipeline::pipeline()
 vk::PipelineLayout& Pipeline::pipelineLayout()
 {
     return *m_uniquePipelineLayout;
+}
+
+vk::DescriptorSetLayout& Pipeline::descriptorSetLayout()
+{
+    return *m_uniqueDescriptorSetLayout;
 }
 
 }

@@ -71,7 +71,7 @@ Vulkan::Vulkan(bool enableValidation)
     m_device = vk_::Device(*m_uniqueInstance, *m_uniqueSurface, s_concurrentFrames);
 
     // pipeline
-    m_pipeline = vk_::Pipeline(m_device.device(), m_extent2D);
+    m_pipeline = vk_::Pipeline(m_device.device(), m_extent2D, s_concurrentFrames);
 
     // swapchain
     m_swapchain = vk_::Swapchain(m_window, *m_uniqueSurface, m_extent2D,
@@ -90,25 +90,21 @@ void Vulkan::bindVertexBuffer(std::vector<vk_::Vertex>& vertices, std::vector<ui
 {
     m_vertexCount = vertices.size();
     m_indexCount = indices.size();
-    m_buffer = vk_::Buffer(m_device.physicalDevice(), m_device.device(), m_device.commandPool(), m_device.graphicsQueue(), vertices, indices);
+    m_buffer = vk_::Buffer(m_device.physicalDevice(), m_device.device(), m_device.commandPool(),
+        m_device.graphicsQueue(), m_pipeline.descriptorSetLayout(), vertices, indices, s_concurrentFrames);
     m_isVerticesBound = true;
 }
 
 void Vulkan::recreateSwapchain()
 {
-    // wait for gpu idle
     m_device.waitIdle();
-
-    // get window extents
     int w, h;
     SDL_GetWindowSize(m_window, &w, &h);
     m_extent2D = vk::Extent2D(w, h);
 
-    // recreate swapchain
     m_swapchain.recreate(m_window, *m_uniqueSurface, m_extent2D,
         m_device.physicalDevice(), m_device.device(), m_pipeline.renderPass());
 
-    // done resizing
     m_isResized = false;
 }
 
@@ -149,6 +145,7 @@ void Vulkan::recordCommandBuffer(vk::CommandBuffer& commandBuffer, uint32_t imag
 
         commandBuffer.bindVertexBuffers(0, m_buffer.vertexBuffer(), { 0 });
         commandBuffer.bindIndexBuffer(m_buffer.indexBuffer(), 0, vk::IndexType::eUint16);
+        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipeline.pipelineLayout(), 0, 1, &m_buffer.descriptorSet(m_currentFrame), 0, nullptr);
         commandBuffer.drawIndexed(m_indexCount, 1, 0, 0, 0);
     }
     commandBuffer.endRenderPass();
@@ -174,6 +171,8 @@ void Vulkan::drawFrame()
     } catch (...) {
         recreateSwapchain();
     }
+
+    m_buffer.updateUniformBuffer(m_currentFrame, m_extent2D);
 
     device.resetFences(frameInFlight);
     commandBuffer.reset();
@@ -220,21 +219,25 @@ void Vulkan::run()
         vk_::LOG_ERROR("Failed to run: no vertices bound.");        
         return;
     }
+
     while (true) {
         SDL_Event event;
         if (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT)
                 break;
-            if (SDL_GetWindowFlags(m_window) & SDL_WINDOW_MINIMIZED)
-                continue;
             if (event.type == SDL_WINDOWEVENT) {
                 if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
                     m_isResized = true;
                 }
             }
-            drawFrame();
         }
+
+        if (SDL_GetWindowFlags(m_window) & SDL_WINDOW_MINIMIZED)
+            continue;
+
+        drawFrame();
     }
+
     m_device.waitIdle();
 }
 

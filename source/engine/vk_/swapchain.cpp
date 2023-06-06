@@ -9,7 +9,7 @@ void Swapchain::create(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D
 
     vk::SwapchainCreateInfoKHR swapChainInfo {
         .surface = surface,
-        .minImageCount = 2,
+        .minImageCount = capabilities.minImageCount + 1,
         .imageFormat = vk::Format::eB8G8R8A8Srgb,
         .imageColorSpace = vk::ColorSpaceKHR::eSrgbNonlinear,
         .imageExtent = {

@@ -2,7 +2,6 @@
 #define PALACE_ENGINE_PRIMITIVE_HPP
 
 #include "include.hpp"
-#include <glm/glm.hpp>
 
 namespace vk_ {
 
@@ -29,9 +28,14 @@ struct Vertex {
                 .binding = 0,
                 .format = vk::Format::eR32G32B32Sfloat,
                 .offset = offsetof(Vertex, color)
-
             } } };
     }
+};
+
+struct UniformBufferObject {
+    alignas(16) glm::mat4 model;
+    alignas(16) glm::mat4 view;
+    alignas(16) glm::mat4 proj;
 };
 
 }
