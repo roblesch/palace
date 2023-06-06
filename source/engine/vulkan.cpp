@@ -59,22 +59,22 @@ Vulkan::Vulkan(bool enableValidation)
         .ppEnabledExtensionNames = extensionNames.data()
     };
     m_uniqueInstance = vk::createInstanceUnique(instanceInfo, nullptr);
-    VULKAN_HPP_DEFAULT_DISPATCHER.init(m_uniqueInstance.get());
+    VULKAN_HPP_DEFAULT_DISPATCHER.init(*m_uniqueInstance);
 
     // surface
     VkSurfaceKHR surface;
-    SDL_Vulkan_CreateSurface(m_window, m_uniqueInstance.get(), &surface);
-    vk::ObjectDestroy<vk::Instance, VULKAN_HPP_DEFAULT_DISPATCHER_TYPE> deleter(m_uniqueInstance.get());
+    SDL_Vulkan_CreateSurface(m_window, *m_uniqueInstance, &surface);
+    vk::ObjectDestroy<vk::Instance, VULKAN_HPP_DEFAULT_DISPATCHER_TYPE> deleter(*m_uniqueInstance);
     m_uniqueSurface = vk::UniqueSurfaceKHR(surface, deleter);
 
     // device
-    m_device = vk_::Device(m_uniqueInstance.get(), m_uniqueSurface.get(), s_concurrentFrames);
+    m_device = vk_::Device(*m_uniqueInstance, *m_uniqueSurface, s_concurrentFrames);
 
     // pipeline
     m_pipeline = vk_::Pipeline(m_device.device(), m_extent2D);
 
     // swapchain
-    m_swapchain = vk_::Swapchain(m_window, m_uniqueSurface.get(), m_extent2D,
+    m_swapchain = vk_::Swapchain(m_window, *m_uniqueSurface, m_extent2D,
         m_device.physicalDevice(), m_device.device(), m_pipeline.renderPass());
 
     m_isInitialized = true;
@@ -88,7 +88,7 @@ Vulkan::~Vulkan()
 
 void Vulkan::bindVertexBuffer(std::vector<vk_::Vertex>& vertices)
 {
-    m_buffer = vk_::Buffer(m_device.physicalDevice(), m_device.device(), vertices);
+    m_buffer = vk_::Buffer(m_device.physicalDevice(), m_device.device(), m_device.commandPool(), m_device.graphicsQueue(), vertices);
     m_vertexCount = vertices.size();
     m_isVerticesBound = true;
 }
@@ -104,7 +104,7 @@ void Vulkan::recreateSwapchain()
     m_extent2D = vk::Extent2D(w, h);
 
     // recreate swapchain
-    m_swapchain.recreate(m_window, m_uniqueSurface.get(), m_extent2D,
+    m_swapchain.recreate(m_window, *m_uniqueSurface, m_extent2D,
         m_device.physicalDevice(), m_device.device(), m_pipeline.renderPass());
 
     // done resizing
@@ -113,15 +113,11 @@ void Vulkan::recreateSwapchain()
 
 void Vulkan::recordCommandBuffer(vk::CommandBuffer& commandBuffer, uint32_t imageIndex)
 {
-    auto renderPass = m_pipeline.renderPass();
-    auto framebuffer = m_swapchain.framebuffer(imageIndex);
-    auto pipeline = m_pipeline.pipeline();
-
     vk::CommandBufferBeginInfo commandBufferInfo {};
     vk::ClearValue clearColor { std::array<float, 4> { 0.0f, 0.0f, 0.0f, 1.0f } };
     vk::RenderPassBeginInfo renderPassInfo {
-        .renderPass = renderPass,
-        .framebuffer = framebuffer,
+        .renderPass = m_pipeline.renderPass(),
+        .framebuffer = m_swapchain.framebuffer(imageIndex),
         .renderArea = {
             .offset = { 0, 0 },
             .extent = m_extent2D },
@@ -132,7 +128,7 @@ void Vulkan::recordCommandBuffer(vk::CommandBuffer& commandBuffer, uint32_t imag
     commandBuffer.begin(commandBufferInfo);
     commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
     {
-        commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline);
+        commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, m_pipeline.pipeline());
 
         vk::Viewport viewport {
             .x = 0.0f,

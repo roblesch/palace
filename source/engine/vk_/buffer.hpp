@@ -15,7 +15,7 @@ private:
 
 public:
     Buffer() = default;
-    Buffer(vk::PhysicalDevice& physicalDevice, vk::Device& device, std::vector<vk_::Vertex>& vertices);
+    Buffer(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::CommandPool& commandPool, vk::Queue& graphicsQueue, std::vector<vk_::Vertex>& vertices);
 
     vk::Buffer& vertexBuffer();
     vk::DeviceMemory& vertexMemory();

@@ -66,17 +66,17 @@ Swapchain::Swapchain(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& 
 
 vk::Framebuffer& Swapchain::framebuffer(size_t i)
 {
-    return m_uniqueFramebuffers[i].get();
+    return *m_uniqueFramebuffers[i];
 }
 
 vk::ImageView& Swapchain::imageView(size_t i)
 {
-    return m_uniqueImageViews[i].get();
+    return *m_uniqueImageViews[i];
 }
 
 vk::SwapchainKHR& Swapchain::swapchain()
 {
-    return m_uniqueSwapchain.get();
+    return *m_uniqueSwapchain;
 }
 
 void Swapchain::recreate(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& extent2D, vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::RenderPass& renderPass)

@@ -88,32 +88,32 @@ vk::PhysicalDevice& Device::physicalDevice()
 
 vk::Device& Device::device()
 {
-    return m_uniqueDevice.get();
+    return *m_uniqueDevice;
 }
 
 vk::CommandPool& Device::commandPool()
 {
-    return m_uniqueCommandPool.get();
+    return *m_uniqueCommandPool;
 }
 
 vk::CommandBuffer& Device::commandBuffer(size_t i)
 {
-    return m_uniqueCommandBuffers[i].get();
+    return *m_uniqueCommandBuffers[i];
 }
 
 vk::Semaphore& Device::semaphoreImageAvailable(size_t i)
 {
-    return m_uniqueSemaphoresImageAvailable[i].get();
+    return *m_uniqueSemaphoresImageAvailable[i];
 }
 
 vk::Semaphore& Device::semaphoreRenderFinished(size_t i)
 {
-    return m_uniqueSemaphoresRenderFinished[i].get();
+    return *m_uniqueSemaphoresRenderFinished[i];
 }
 
 vk::Fence& Device::fenceInFlight(size_t i)
 {
-    return m_uniqueFencesInFlight[i].get();
+    return *m_uniqueFencesInFlight[i];
 }
 
 vk::Queue& Device::graphicsQueue()
@@ -123,7 +123,7 @@ vk::Queue& Device::graphicsQueue()
 
 void Device::waitIdle()
 {
-    m_uniqueDevice.get().waitIdle();
+    m_uniqueDevice->waitIdle();
 }
 
 } // namespace vk_

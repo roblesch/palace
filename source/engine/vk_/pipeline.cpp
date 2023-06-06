@@ -39,10 +39,10 @@ Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D)
 
     std::vector<vk::PipelineShaderStageCreateInfo> shaderStageInfos {
         { .stage = vk::ShaderStageFlagBits::eVertex,
-            .module = vertexShaderModule.get(),
+            .module = *vertexShaderModule,
             .pName = "main" },
         { .stage = vk::ShaderStageFlagBits::eFragment,
-            .module = fragmentShaderModule.get(),
+            .module = *fragmentShaderModule,
             .pName = "main" }
     };
 
@@ -188,17 +188,17 @@ Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D)
 
 vk::RenderPass& Pipeline::renderPass()
 {
-    return m_uniqueRenderPass.get();
+    return *m_uniqueRenderPass;
 }
 
 vk::Pipeline& Pipeline::pipeline()
 {
-    return m_uniquePipeline.get();
+    return *m_uniquePipeline;
 }
 
 vk::PipelineLayout& Pipeline::pipelineLayout()
 {
-    return m_uniquePipelineLayout.get();
+    return *m_uniquePipelineLayout;
 }
 
 }
