@@ -1,8 +1,9 @@
 #include "pipeline.hpp"
 
-#include "vulkan/vulkan.h"
+//#include "vulkan/vulkan.h"
 
 #include <fstream>
+#include "primitive.hpp"
 
 namespace vk_ {
 
@@ -46,7 +47,16 @@ Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D)
     };
 
     // vertex
-    vk::PipelineVertexInputStateCreateInfo vertexStateInfo {};
+    auto bindingDescription = vk_::Vertex::bindingDescription();
+    auto attributeDescriptions = vk_::Vertex::attributeDescriptions();
+
+    vk::PipelineVertexInputStateCreateInfo vertexStateInfo
+    {
+        .vertexBindingDescriptionCount= 1,
+        .pVertexBindingDescriptions = &bindingDescription,
+        .vertexAttributeDescriptionCount = attributeDescriptions.size(),
+        .pVertexAttributeDescriptions = attributeDescriptions.data()
+    };
 
     // assembly
     vk::PipelineInputAssemblyStateCreateInfo assemblyStateInfo {
@@ -168,8 +178,8 @@ Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D)
         .pMultisampleState = &multisampleStateInfo,
         .pColorBlendState = &colorBlendStateInfo,
         .pDynamicState = &dynamicStateInfo,
-        .layout = m_uniquePipelineLayout.get(),
-        .renderPass = m_uniqueRenderPass.get(),
+        .layout = pipelineLayout(),
+        .renderPass = renderPass(),
         .subpass = 0
     };
 
@@ -184,6 +194,11 @@ vk::RenderPass& Pipeline::renderPass()
 vk::Pipeline& Pipeline::pipeline()
 {
     return m_uniquePipeline.get();
+}
+
+vk::PipelineLayout& Pipeline::pipelineLayout()
+{
+    return m_uniquePipelineLayout.get();
 }
 
 }

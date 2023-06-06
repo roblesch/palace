@@ -19,6 +19,7 @@ public:
 
     vk::RenderPass& renderPass();
     vk::Pipeline& pipeline();
+    vk::PipelineLayout& pipelineLayout();
 };
 
 } // namespace vk_

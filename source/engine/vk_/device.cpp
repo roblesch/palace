@@ -52,10 +52,9 @@ Device::Device(vk::Instance& instance, vk::SurfaceKHR& surface, uint32_t concurr
     };
 
     m_uniqueDevice = m_physicalDevice.createDeviceUnique(deviceInfo);
-    auto device = m_uniqueDevice.get();
 
     // graphics queue
-    m_graphicsQueue = device.getQueue(m_queueFamilyIndices.graphics, 0);
+    m_graphicsQueue = device().getQueue(m_queueFamilyIndices.graphics, 0);
 
     // command pool
     vk::CommandPoolCreateInfo commandPoolInfo {
@@ -63,22 +62,22 @@ Device::Device(vk::Instance& instance, vk::SurfaceKHR& surface, uint32_t concurr
         .queueFamilyIndex = m_queueFamilyIndices.graphics
     };
 
-    m_uniqueCommandPool = device.createCommandPoolUnique(commandPoolInfo);
+    m_uniqueCommandPool = device().createCommandPoolUnique(commandPoolInfo);
 
     // command buffers
     vk::CommandBufferAllocateInfo commandBufferAllocInfo {
-        .commandPool = m_uniqueCommandPool.get(),
+        .commandPool = commandPool(),
         .level = vk::CommandBufferLevel::ePrimary,
         .commandBufferCount = concurrentFrames
     };
 
-    m_uniqueCommandBuffers = device.allocateCommandBuffersUnique(commandBufferAllocInfo);
+    m_uniqueCommandBuffers = device().allocateCommandBuffersUnique(commandBufferAllocInfo);
 
     // sync
     for (size_t i = 0; i < concurrentFrames; i++) {
-        m_uniqueSemaphoresImageAvailable.push_back(device.createSemaphoreUnique({}));
-        m_uniqueSemaphoresRenderFinished.push_back(device.createSemaphoreUnique({}));
-        m_uniqueFencesInFlight.push_back(device.createFenceUnique({ .flags = vk::FenceCreateFlagBits::eSignaled }));
+        m_uniqueSemaphoresImageAvailable.push_back(device().createSemaphoreUnique({}));
+        m_uniqueSemaphoresRenderFinished.push_back(device().createSemaphoreUnique({}));
+        m_uniqueFencesInFlight.push_back(device().createFenceUnique({ .flags = vk::FenceCreateFlagBits::eSignaled }));
     }
 }
 
@@ -90,6 +89,11 @@ vk::PhysicalDevice& Device::physicalDevice()
 vk::Device& Device::device()
 {
     return m_uniqueDevice.get();
+}
+
+vk::CommandPool& Device::commandPool()
+{
+    return m_uniqueCommandPool.get();
 }
 
 vk::CommandBuffer& Device::commandBuffer(size_t i)

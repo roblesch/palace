@@ -1,5 +1,6 @@
 #include "vulkan.hpp"
 #include "vk_/sdl2.hpp"
+#include "vk_/log.hpp"
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
@@ -75,12 +76,21 @@ Vulkan::Vulkan(bool enableValidation)
     // swapchain
     m_swapchain = vk_::Swapchain(m_window, m_uniqueSurface.get(), m_extent2D,
         m_device.physicalDevice(), m_device.device(), m_pipeline.renderPass());
+
+    m_isInitialized = true;
 }
 
 Vulkan::~Vulkan()
 {
     SDL_DestroyWindow(m_window);
     SDL_Quit();
+}
+
+void Vulkan::bindVertexBuffer(std::vector<vk_::Vertex>& vertices)
+{
+    m_buffer = vk_::Buffer(m_device.physicalDevice(), m_device.device(), vertices);
+    m_vertexCount = vertices.size();
+    m_isVerticesBound = true;
 }
 
 void Vulkan::recreateSwapchain()
@@ -96,22 +106,18 @@ void Vulkan::recreateSwapchain()
     // recreate swapchain
     m_swapchain.recreate(m_window, m_uniqueSurface.get(), m_extent2D,
         m_device.physicalDevice(), m_device.device(), m_pipeline.renderPass());
-    
+
     // done resizing
     m_isResized = false;
 }
 
 void Vulkan::recordCommandBuffer(vk::CommandBuffer& commandBuffer, uint32_t imageIndex)
 {
-    vk::RenderPass renderPass = m_pipeline.renderPass();
-    vk::Framebuffer framebuffer = m_swapchain.framebuffer(imageIndex);
-    vk::Pipeline pipeline = m_pipeline.pipeline();
+    auto renderPass = m_pipeline.renderPass();
+    auto framebuffer = m_swapchain.framebuffer(imageIndex);
+    auto pipeline = m_pipeline.pipeline();
 
-    // begin command buffer
-    vk::CommandBufferBeginInfo beginInfo {};
-    commandBuffer.begin(beginInfo);
-
-    // begin render pass
+    vk::CommandBufferBeginInfo commandBufferInfo {};
     vk::ClearValue clearColor { std::array<float, 4> { 0.0f, 0.0f, 0.0f, 1.0f } };
     vk::RenderPassBeginInfo renderPassInfo {
         .renderPass = renderPass,
@@ -122,47 +128,44 @@ void Vulkan::recordCommandBuffer(vk::CommandBuffer& commandBuffer, uint32_t imag
         .clearValueCount = 1,
         .pClearValues = &clearColor
     };
+
+    commandBuffer.begin(commandBufferInfo);
     commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
+    {
+        commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline);
 
-    // bind pipeline
-    commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline);
+        vk::Viewport viewport {
+            .x = 0.0f,
+            .y = 0.0f,
+            .width = static_cast<float>(m_extent2D.width),
+            .height = static_cast<float>(m_extent2D.height),
+            .minDepth = 0.0f,
+            .maxDepth = 1.0f
+        };
+        commandBuffer.setViewport(0, 1, &viewport);
 
-    // draw
-    vk::Viewport viewport {
-        .x = 0.0f,
-        .y = 0.0f,
-        .width = static_cast<float>(m_extent2D.width),
-        .height = static_cast<float>(m_extent2D.height),
-        .minDepth = 0.0f,
-        .maxDepth = 1.0f
-    };
+        vk::Rect2D scissor {
+            .offset = { 0, 0 },
+            .extent = m_extent2D
+        };
+        commandBuffer.setScissor(0, 1, &scissor);
 
-    commandBuffer.setViewport(0, 1, &viewport);
-
-    vk::Rect2D scissor {
-        .offset = { 0, 0 },
-        .extent = m_extent2D
-    };
-
-    commandBuffer.setScissor(0, 1, &scissor);
-    commandBuffer.draw(3, 1, 0, 0);
-
-    // end render pass
+        commandBuffer.bindVertexBuffers(0, m_buffer.vertexBuffer(), { 0 });
+        commandBuffer.draw(m_vertexCount, 1, 0, 0);
+    }
     commandBuffer.endRenderPass();
-
-    // end command buffer
     commandBuffer.end();
 }
 
 void Vulkan::drawFrame()
 {
-    vk::Device device = m_device.device();
-    vk::Fence frameInFlight = m_device.fenceInFlight(m_currentFrame);
-    vk::Semaphore imageAvailable = m_device.semaphoreImageAvailable(m_currentFrame);
-    vk::Semaphore renderFinished = m_device.semaphoreRenderFinished(m_currentFrame);
-    vk::SwapchainKHR swapchain = m_swapchain.swapchain();
-    vk::CommandBuffer commandBuffer = m_device.commandBuffer(m_currentFrame);
-    vk::Queue graphicsQueue = m_device.graphicsQueue();
+    auto device = m_device.device();
+    auto frameInFlight = m_device.fenceInFlight(m_currentFrame);
+    auto imageAvailable = m_device.semaphoreImageAvailable(m_currentFrame);
+    auto renderFinished = m_device.semaphoreRenderFinished(m_currentFrame);
+    auto swapchain = m_swapchain.swapchain();
+    auto commandBuffer = m_device.commandBuffer(m_currentFrame);
+    auto graphicsQueue = m_device.graphicsQueue();
 
     while (device.waitForFences(frameInFlight, VK_TRUE, UINT64_MAX) == vk::Result::eTimeout)
         ;
@@ -190,7 +193,7 @@ void Vulkan::drawFrame()
         .pSignalSemaphores = &renderFinished
     };
 
-    graphicsQueue.submit(submitInfo, frameInFlight); 
+    graphicsQueue.submit(submitInfo, frameInFlight);
 
     vk::PresentInfoKHR presentInfo {
         .waitSemaphoreCount = 1,
@@ -212,6 +215,11 @@ void Vulkan::drawFrame()
 void Vulkan::run()
 {
     if (!m_isInitialized) {
+        vk_::LOG_ERROR("Failed to run: Vulkan not initialized.");
+        return;
+    }
+    if (!m_isVerticesBound) {
+        vk_::LOG_ERROR("Failed to run: no vertices bound.");        
         return;
     }
     while (true) {

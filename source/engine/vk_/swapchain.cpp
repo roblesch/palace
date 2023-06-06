@@ -14,8 +14,7 @@ void Swapchain::create(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D
         .imageColorSpace = vk::ColorSpaceKHR::eSrgbNonlinear,
         .imageExtent = {
             std::clamp(extent2D.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
-            std::clamp(extent2D.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
-        },
+            std::clamp(extent2D.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height) },
         .imageArrayLayers = 1,
         .imageUsage = vk::ImageUsageFlagBits::eColorAttachment,
         .imageSharingMode = vk::SharingMode::eExclusive,
@@ -26,7 +25,7 @@ void Swapchain::create(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D
     };
 
     m_uniqueSwapchain = device.createSwapchainKHRUnique(swapChainInfo);
-    m_images = device.getSwapchainImagesKHR(m_uniqueSwapchain.get());
+    m_images = device.getSwapchainImagesKHR(swapchain());
 
     // image views
     m_uniqueImageViews.resize(m_images.size());
@@ -51,7 +50,7 @@ void Swapchain::create(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D
         vk::FramebufferCreateInfo framebufferInfo {
             .renderPass = renderPass,
             .attachmentCount = 1,
-            .pAttachments = &m_uniqueImageViews[i].get(),
+            .pAttachments = &imageView(i),
             .width = extent2D.width,
             .height = extent2D.height,
             .layers = 1
@@ -68,6 +67,11 @@ Swapchain::Swapchain(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& 
 vk::Framebuffer& Swapchain::framebuffer(size_t i)
 {
     return m_uniqueFramebuffers[i].get();
+}
+
+vk::ImageView& Swapchain::imageView(size_t i)
+{
+    return m_uniqueImageViews[i].get();
 }
 
 vk::SwapchainKHR& Swapchain::swapchain()

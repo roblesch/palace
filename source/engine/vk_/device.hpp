@@ -28,6 +28,7 @@ public:
 
     vk::PhysicalDevice& physicalDevice();
     vk::Device& device();
+    vk::CommandPool& commandPool();
     vk::CommandBuffer& commandBuffer(size_t i);
     vk::Semaphore& semaphoreImageAvailable(size_t i);
     vk::Semaphore& semaphoreRenderFinished(size_t i);
