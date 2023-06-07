@@ -154,4 +154,9 @@ void Device::waitIdle()
     m_uniqueDevice->waitIdle();
 }
 
+void Device::recreateImageAvailableSemaphore(size_t i)
+{
+    m_uniqueSemaphoresImageAvailable[i] = m_uniqueDevice->createSemaphoreUnique({});
+}
+
 } // namespace vk_

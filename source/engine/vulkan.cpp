@@ -118,10 +118,7 @@ void Vulkan::recreateSwapchain()
         .height = static_cast<uint32_t>(height)
     };
 
-    m_swapchain.recreate(m_window, *m_uniqueSurface, m_extent2D,
-        m_device.physicalDevice(), m_device.device(), m_pipeline.renderPass());
-
-    m_isResized = false;
+    m_swapchain.recreate(m_window, *m_uniqueSurface, m_extent2D, m_device.physicalDevice(), m_device.device(), m_pipeline.renderPass());
 }
 
 void Vulkan::recordCommandBuffer(vk::CommandBuffer& commandBuffer, uint32_t imageIndex)
@@ -178,15 +175,26 @@ void Vulkan::drawFrame()
     auto commandBuffer = m_device.commandBuffer(m_currentFrame);
     auto graphicsQueue = m_device.graphicsQueue();
 
-    while (device.waitForFences(frameInFlight, VK_TRUE, UINT64_MAX) == vk::Result::eTimeout)
-        ;
+    device.waitForFences(frameInFlight, true, UINT64_MAX);
 
     uint32_t imageIndex;
-    try {
-        imageIndex = device.acquireNextImageKHR(swapchain, UINT64_MAX, imageAvailable, VK_NULL_HANDLE).value;
-    } catch (...) {
-        recreateSwapchain();
-    }
+//    try {
+        auto [result, idx] = device.acquireNextImageKHR(swapchain, UINT64_MAX, imageAvailable, VK_NULL_HANDLE);
+        if (result == vk::Result::eErrorOutOfDateKHR) {
+            recreateSwapchain();
+            return;
+        } else if (result == vk::Result::eSuboptimalKHR) {
+            m_device.recreateImageAvailableSemaphore(m_currentFrame);
+            recreateSwapchain();
+            return;
+        } else if (result != vk::Result::eSuccess) {
+            vk_::LOG_ERROR("Failed to acquire image (result not out of date or suboptimal)");
+            exit(1);
+        }
+        imageIndex = idx;
+//    } catch (...) {
+//        recreateSwapchain();
+//    }
 
     m_buffer.updateUniformBuffer(m_currentFrame, m_extent2D);
 
@@ -217,11 +225,15 @@ void Vulkan::drawFrame()
         .pImageIndices = &imageIndex
     };
 
-    try {
-        auto result = graphicsQueue.presentKHR(presentInfo);
-    } catch (...) {
-        recreateSwapchain();
-    }
+//    try {
+        result = graphicsQueue.presentKHR(presentInfo);
+        if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR || m_isResized) {
+            recreateSwapchain();
+            m_isResized = false;
+        }
+//    } catch (...) {
+//        recreateSwapchain();
+//    }
 
     m_currentFrame = (m_currentFrame + 1) % s_concurrentFrames;
 }

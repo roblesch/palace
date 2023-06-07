@@ -38,6 +38,8 @@ public:
     vk::Fence& fenceInFlight(size_t i);
     vk::Queue& graphicsQueue();
 
+    void recreateImageAvailableSemaphore(size_t i);
+
     void waitIdle();
 };
 

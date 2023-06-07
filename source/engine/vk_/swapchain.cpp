@@ -19,7 +19,7 @@ vk::UniqueImageView Swapchain::createImageViewUnique(vk::Device& device, vk::Ima
     return device.createImageViewUnique(imageViewInfo);
 }
 
-void Swapchain::create(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& extent2D, vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::RenderPass& renderPass)
+void Swapchain::create(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& extent2D, vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::RenderPass& renderPass, vk::SwapchainKHR oldSwapchain)
 {
     // swapchain
     vk::SurfaceCapabilitiesKHR capabilities = physicalDevice.getSurfaceCapabilitiesKHR(surface);
@@ -38,7 +38,8 @@ void Swapchain::create(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D
         .preTransform = vk::SurfaceTransformFlagBitsKHR::eIdentity,
         .compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque,
         .presentMode = vk::PresentModeKHR::eMailbox,
-        .clipped = VK_TRUE
+        .clipped = VK_TRUE,
+        .oldSwapchain = oldSwapchain
     };
 
     m_uniqueSwapchain = device.createSwapchainKHRUnique(swapChainInfo);
@@ -87,10 +88,7 @@ vk::SwapchainKHR& Swapchain::swapchain()
 
 void Swapchain::recreate(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& extent2D, vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::RenderPass& renderPass)
 {
-    m_uniqueFramebuffers.clear();
-    m_uniqueImageViews.clear();
-    m_uniqueSwapchain.reset();
-    create(window, surface, extent2D, physicalDevice, device, renderPass);
+    create(window, surface, extent2D, physicalDevice, device, renderPass, *m_uniqueSwapchain);
 }
 
 } // namespace vk_
