@@ -16,7 +16,10 @@ Vulkan::Vulkan(bool enableValidation)
 
     // window
     m_window = sdl2::createWindow(s_windowWidth, s_windowHeight);
-    m_extent2D = vk::Extent2D(s_windowWidth, s_windowHeight);
+    m_extent2D = vk::Extent2D {
+        .width = s_windowWidth,
+        .height = s_windowHeight
+    };
 
     // sdl2
     unsigned int extensionCount;
@@ -108,9 +111,12 @@ void Vulkan::bindVertexBuffer(std::vector<vk_::Vertex>& vertices, std::vector<ui
 void Vulkan::recreateSwapchain()
 {
     m_device.waitIdle();
-    int w, h;
-    SDL_GetWindowSize(m_window, &w, &h);
-    m_extent2D = vk::Extent2D(w, h);
+    int width, height;
+    SDL_GetWindowSize(m_window, &width, &height);
+    m_extent2D = vk::Extent2D {
+        .width = static_cast<uint32_t>(width),
+        .height = static_cast<uint32_t>(height)
+    };
 
     m_swapchain.recreate(m_window, *m_uniqueSurface, m_extent2D,
         m_device.physicalDevice(), m_device.device(), m_pipeline.renderPass());
@@ -212,7 +218,7 @@ void Vulkan::drawFrame()
     };
 
     try {
-        graphicsQueue.presentKHR(presentInfo);
+        auto result = graphicsQueue.presentKHR(presentInfo);
     } catch (...) {
         recreateSwapchain();
     }
