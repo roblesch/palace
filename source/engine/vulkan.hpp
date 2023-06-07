@@ -44,6 +44,7 @@ public:
     explicit Vulkan(bool enableValidation = true);
     ~Vulkan();
 
+    void loadTextureImage();
     void bindVertexBuffer(std::vector<vk_::Vertex>& vertices, std::vector<uint16_t>& indices);
     void recreateSwapchain();
     void recordCommandBuffer(vk::CommandBuffer& commandBuffer, uint32_t imageIndex);

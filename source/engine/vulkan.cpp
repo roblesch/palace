@@ -1,4 +1,5 @@
 #include "vulkan.hpp"
+
 #include "vk_/sdl2.hpp"
 #include "vk_/log.hpp"
 
@@ -84,6 +85,11 @@ Vulkan::~Vulkan()
 {
     SDL_DestroyWindow(m_window);
     SDL_Quit();
+}
+
+void Vulkan::loadTextureImage()
+{
+
 }
 
 void Vulkan::bindVertexBuffer(std::vector<vk_::Vertex>& vertices, std::vector<uint16_t>& indices)

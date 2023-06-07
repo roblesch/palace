@@ -12,6 +12,8 @@ add_library(vk_
         "primitive.hpp"
         "sdl2.hpp"
         "swapchain.cpp"
-        "swapchain.hpp")
+        "swapchain.hpp"
+        "texture.hpp"
+        "texture.cpp")
 
 target_link_libraries(vk_ Vulkan::Vulkan SDL2::SDL2)

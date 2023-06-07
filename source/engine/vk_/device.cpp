@@ -2,6 +2,30 @@
 
 namespace vk_ {
 
+vk::UniqueCommandBuffer Device::beginSingleUseCommandBuffer(vk::Device& device, vk::CommandPool& commandPool)
+{
+    vk::CommandBufferAllocateInfo bufferInfo {
+        .commandPool = commandPool,
+        .level = vk::CommandBufferLevel::ePrimary,
+        .commandBufferCount = 1
+    };
+
+    vk::UniqueCommandBuffer commandBuffer { std::move(device.allocateCommandBuffersUnique(bufferInfo)[0]) };
+    commandBuffer->begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+
+    return commandBuffer;
+}
+
+void Device::endSingleUseCommandBuffer(vk::CommandBuffer& commandBuffer, vk::Queue& graphicsQueue)
+{
+    commandBuffer.end();
+
+    vk::SubmitInfo {
+        .commandBufferCount = 1,
+        .pCommandBuffers = &commandBuffer
+    };
+}
+
 Device::Device(vk::Instance& instance, vk::SurfaceKHR& surface, uint32_t concurrentFrames)
 {
     // physical device

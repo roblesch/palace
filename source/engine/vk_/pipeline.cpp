@@ -1,9 +1,7 @@
 #include "pipeline.hpp"
 
-// #include "vulkan/vulkan.h"
-
-#include "primitive.hpp"
 #include <fstream>
+#include "primitive.hpp"
 
 namespace vk_ {
 

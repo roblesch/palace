@@ -20,11 +20,13 @@ private:
     vk::UniqueDescriptorPool m_uniqueDescriptorPool;
     std::vector<vk::UniqueDescriptorSet> m_uniqueDescriptorSets;
 
-    static uint32_t findMemoryType(vk::PhysicalDeviceMemoryProperties& memProperties, uint32_t typeFilter, const vk::MemoryPropertyFlags& properties);
-    static void createBuffer(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::DeviceSize& size, const vk::BufferUsageFlags& bufferFlags, const vk::MemoryPropertyFlags& memoryFlags, vk::UniqueBuffer& dstBuffer, vk::UniqueDeviceMemory& dstMemory);
-    static void copyBuffer(vk::Device& device, vk::CommandPool& commandPool, vk::Queue& graphicsQueue, vk::Buffer src, vk::Buffer dst, vk::DeviceSize size);
-
 public:
+    static uint32_t findMemoryType(vk::PhysicalDevice& physicalDevice, uint32_t typeFilter, const vk::MemoryPropertyFlags memPropertyFlags);
+    static vk::UniqueBuffer createBufferUnique(vk::Device& device, vk::DeviceSize& size, const vk::BufferUsageFlags usage);
+    static vk::UniqueBuffer createStagingBufferUnique(vk::Device& device, vk::DeviceSize& size);
+    static vk::UniqueDeviceMemory createDeviceMemoryUnique(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::Buffer& buffer, vk::DeviceSize& size, const vk::MemoryPropertyFlags memoryFlags);
+    static vk::UniqueDeviceMemory createStagingMemoryUnique(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::Buffer& buffer, vk::DeviceSize& size);
+
     Buffer() = default;
     Buffer(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::CommandPool& commandPool, vk::Queue& graphicsQueue, vk::DescriptorSetLayout& descriptorLayout, std::vector<vk_::Vertex>& vertices, std::vector<uint16_t>& indices, uint32_t concurrentFrames);
 
@@ -34,7 +36,7 @@ public:
     vk::DeviceMemory& indexMemory();
     vk::DescriptorSet& descriptorSet(size_t i);
 
-    void updateUniformBuffer(uint32_t currentImage, vk::Extent2D extent);
+    void updateUniformBuffer(size_t i, vk::Extent2D extent);
 };
 
 }

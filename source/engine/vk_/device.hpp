@@ -23,6 +23,9 @@ private:
     std::vector<vk::UniqueFence> m_uniqueFencesInFlight;
 
 public:
+    static vk::UniqueCommandBuffer beginSingleUseCommandBuffer(vk::Device& device, vk::CommandPool& commandPool);
+    static void endSingleUseCommandBuffer(vk::CommandBuffer& commandBuffer, vk::Queue& graphicsQueue);
+
     Device() = default;
     Device(vk::Instance& instance, vk::SurfaceKHR& surface, uint32_t concurrentFrames);
 

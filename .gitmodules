@@ -2,3 +2,6 @@
 	path = ext/SDL
 	url = git@github.com:libsdl-org/SDL.git
 	branch = release-2.26.x
+[submodule "ext/stb"]
+	path = ext/stb
+	url = git@github.com:nothings/stb.git
