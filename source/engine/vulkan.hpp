@@ -10,6 +10,7 @@
 #include "vk_/pipeline.hpp"
 #include "vk_/primitive.hpp"
 #include "vk_/swapchain.hpp"
+#include "vk_/texture.hpp"
 
 namespace engine {
 
@@ -29,11 +30,13 @@ private:
     vk_::Pipeline m_pipeline;
     vk_::Swapchain m_swapchain;
     vk_::Buffer m_buffer;
+    vk_::Texture m_texture;
 
     bool m_isValidationEnabled = true;
+    bool m_isInitialized = false;
+    bool m_isTextureLoaded = false;
     bool m_isVerticesBound = false;
     bool m_isResized = false;
-    bool m_isInitialized = false;
 
     vk::Extent2D m_extent2D;
     size_t m_currentFrame = 0;
@@ -44,7 +47,7 @@ public:
     explicit Vulkan(bool enableValidation = true);
     ~Vulkan();
 
-    void loadTextureImage();
+    void loadTextureImage(const char* path);
     void bindVertexBuffer(std::vector<vk_::Vertex>& vertices, std::vector<uint16_t>& indices);
     void recreateSwapchain();
     void recordCommandBuffer(vk::CommandBuffer& commandBuffer, uint32_t imageIndex);

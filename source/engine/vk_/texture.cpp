@@ -1,8 +1,9 @@
 #include "texture.hpp"
 
-#define STB_IMAGE_IMPLEMENTATION
 #include "buffer.hpp"
 #include "device.hpp"
+#include "swapchain.hpp"
+#define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
 namespace vk_ {
@@ -49,6 +50,7 @@ void transitionImageLayout(vk::Device& device, vk::CommandPool& commandPool, vk:
 
 Texture::Texture(const char* path, vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::CommandPool& commandPool, vk::Queue& graphicsQueue)
 {
+    // load bytes
     int w, h, c;
     stbi_uc* px = stbi_load(path, &w, &h, &c, STBI_rgb_alpha);
     vk::DeviceSize imageSize = w * h * 4;
@@ -65,6 +67,7 @@ Texture::Texture(const char* path, vk::PhysicalDevice& physicalDevice, vk::Devic
 
     stbi_image_free(px);
 
+    // image
     vk::ImageCreateInfo imageInfo {
         .imageType = vk::ImageType::e2D,
         .format = vk::Format::eR8G8B8A8Srgb,
@@ -103,12 +106,9 @@ Texture::Texture(const char* path, vk::PhysicalDevice& physicalDevice, vk::Devic
             .aspectMask = vk::ImageAspectFlagBits::eColor,
             .mipLevel = 0,
             .baseArrayLayer = 0,
-            .layerCount = 1
-        },
-        .imageOffset = {0, 0, 0},
-        .imageExtent = {
-            width, height, 1
-}
+            .layerCount = 1 },
+        .imageOffset = { 0, 0, 0 },
+        .imageExtent = { width, height, 1 }
     };
 
     vk::UniqueCommandBuffer commandBuffer = Device::beginSingleUseCommandBuffer(device, commandPool);
@@ -116,6 +116,40 @@ Texture::Texture(const char* path, vk::PhysicalDevice& physicalDevice, vk::Devic
     Device::endSingleUseCommandBuffer(*commandBuffer, graphicsQueue);
 
     transitionImageLayout(device, commandPool, graphicsQueue, *m_uniqueImage, vk::Format::eR8G8B8A8Srgb, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+
+    // image view
+    m_uniqueImageView = Swapchain::createImageViewUnique(device, *m_uniqueImage, vk::Format::eR8G8B8A8Srgb);
+
+    // sampler
+    vk::SamplerCreateInfo samplerInfo {
+        .magFilter = vk::Filter::eLinear,
+        .minFilter = vk::Filter::eLinear,
+        .mipmapMode = vk::SamplerMipmapMode::eLinear,
+        .addressModeU = vk::SamplerAddressMode::eRepeat,
+        .addressModeV = vk::SamplerAddressMode::eRepeat,
+        .addressModeW = vk::SamplerAddressMode::eRepeat,
+        .mipLodBias = 0.0f,
+        .anisotropyEnable = VK_TRUE,
+        .maxAnisotropy = physicalDevice.getProperties().limits.maxSamplerAnisotropy,
+        .compareEnable = VK_FALSE,
+        .compareOp = vk::CompareOp::eAlways,
+        .minLod = 0.0f,
+        .maxLod = 0.0f,
+        .borderColor = vk::BorderColor::eIntOpaqueBlack,
+        .unnormalizedCoordinates = VK_FALSE
+    };
+
+    m_uniqueSampler = device.createSamplerUnique(samplerInfo);
+}
+
+vk::ImageView& Texture::imageView()
+{
+    return *m_uniqueImageView;
+}
+
+vk::Sampler& Texture::sampler()
+{
+    return *m_uniqueSampler;
 }
 
 }

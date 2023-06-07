@@ -2,6 +2,23 @@
 
 namespace vk_ {
 
+vk::UniqueImageView Swapchain::createImageViewUnique(vk::Device& device, vk::Image& image, const vk::Format format)
+{
+    vk::ImageViewCreateInfo imageViewInfo {
+        .image = image,
+        .viewType = vk::ImageViewType::e2D,
+        .format = format,
+        .subresourceRange {
+            .aspectMask = vk::ImageAspectFlagBits::eColor,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1 }
+    };
+
+    return device.createImageViewUnique(imageViewInfo);
+}
+
 void Swapchain::create(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& extent2D, vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::RenderPass& renderPass)
 {
     // swapchain
@@ -30,18 +47,7 @@ void Swapchain::create(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D
     // image views
     m_uniqueImageViews.resize(m_images.size());
     for (size_t i = 0; i < m_images.size(); i++) {
-        vk::ImageViewCreateInfo imageViewInfo {
-            .image = m_images[i],
-            .viewType = vk::ImageViewType::e2D,
-            .format = vk::Format::eB8G8R8A8Srgb,
-            .subresourceRange {
-                .aspectMask = vk::ImageAspectFlagBits::eColor,
-                .baseMipLevel = 0,
-                .levelCount = 1,
-                .baseArrayLayer = 0,
-                .layerCount = 1 }
-        };
-        m_uniqueImageViews[i] = device.createImageViewUnique(imageViewInfo);
+        m_uniqueImageViews[i] = createImageViewUnique(device, m_images[i], vk::Format::eB8G8R8A8Srgb);
     }
 
     // framebuffers

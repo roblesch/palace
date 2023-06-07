@@ -20,10 +20,13 @@ void Device::endSingleUseCommandBuffer(vk::CommandBuffer& commandBuffer, vk::Que
 {
     commandBuffer.end();
 
-    vk::SubmitInfo {
+    vk::SubmitInfo submitInfo {
         .commandBufferCount = 1,
         .pCommandBuffers = &commandBuffer
     };
+
+    graphicsQueue.submit(submitInfo);
+    graphicsQueue.waitIdle();
 }
 
 Device::Device(vk::Instance& instance, vk::SurfaceKHR& surface, uint32_t concurrentFrames)
@@ -32,6 +35,7 @@ Device::Device(vk::Instance& instance, vk::SurfaceKHR& surface, uint32_t concurr
     std::vector<vk::PhysicalDevice> devices = instance.enumeratePhysicalDevices();
     for (auto& device : devices) {
         vk::PhysicalDeviceProperties deviceProperties = device.getProperties();
+        vk::PhysicalDeviceFeatures deviceFeatures = device.getFeatures();
         if (deviceProperties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu) {
             m_physicalDevice = device;
             break;
@@ -59,7 +63,7 @@ Device::Device(vk::Instance& instance, vk::SurfaceKHR& surface, uint32_t concurr
     };
 
     // device
-    vk::PhysicalDeviceFeatures deviceFeatures {};
+    vk::PhysicalDeviceFeatures deviceFeatures { .samplerAnisotropy = VK_TRUE };
     std::vector<const char*> extensionNames = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 #ifdef __APPLE__
@@ -72,7 +76,7 @@ Device::Device(vk::Instance& instance, vk::SurfaceKHR& surface, uint32_t concurr
         .pQueueCreateInfos = queueInfos.data(),
         .enabledExtensionCount = static_cast<uint32_t>(extensionNames.size()),
         .ppEnabledExtensionNames = extensionNames.data(),
-        .pEnabledFeatures = {}
+        .pEnabledFeatures = &deviceFeatures
     };
 
     m_uniqueDevice = m_physicalDevice.createDeviceUnique(deviceInfo);

@@ -1,7 +1,7 @@
 #include "pipeline.hpp"
 
-#include <fstream>
 #include "primitive.hpp"
+#include <fstream>
 
 namespace vk_ {
 
@@ -25,7 +25,7 @@ std::vector<char> Pipeline::readSpirVFile(const std::string& spirVFile)
 
 Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D, uint32_t concurrentFrames)
 {
-    // descriptor set layout
+    // uniform modelview transforms
     vk::DescriptorSetLayoutBinding uboLayoutBinding {
         .binding = 0,
         .descriptorType = vk::DescriptorType::eUniformBuffer,
@@ -33,9 +33,19 @@ Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D, uint32_t concurre
         .stageFlags = vk::ShaderStageFlagBits::eVertex
     };
 
+    // image sampler
+    vk::DescriptorSetLayoutBinding samplerLayoutBinding {
+        .binding = 1,
+        .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+        .descriptorCount = 1,
+        .stageFlags = vk::ShaderStageFlagBits::eFragment
+    };
+
+    // layout
+    std::array<vk::DescriptorSetLayoutBinding, 2> bindings { uboLayoutBinding, samplerLayoutBinding };
     vk::DescriptorSetLayoutCreateInfo descriptorLayoutInfo {
-        .bindingCount = 1,
-        .pBindings = &uboLayoutBinding
+        .bindingCount = 2,
+        .pBindings = bindings.data()
     };
 
     m_uniqueDescriptorSetLayout = device.createDescriptorSetLayoutUnique(descriptorLayoutInfo);

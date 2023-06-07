@@ -2,10 +2,10 @@
 #include "engine/vulkan.hpp"
 
 std::vector<vk_::Vertex> vertices = {
-    { { -0.5f, -0.5f }, { 1.0f, 0.0f, 0.0f } },
-    { { 0.5f, -0.5f }, { 0.0f, 1.0f, 0.0f } },
-    { { 0.5f, 0.5f }, { 0.0f, 0.0f, 1.0f } },
-    { { -0.5f, 0.5f }, { 1.0f, 1.0f, 1.0f } }
+    { { -0.5f, -0.5f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 0.0f } },
+    { { 0.5f, -0.5f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 0.0f } },
+    { { 0.5f, 0.5f }, { 0.0f, 0.0f, 1.0f }, { 0.0f, 1.0f } },
+    { { -0.5f, 0.5f }, { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f } }
 };
 
 std::vector<uint16_t> indices = {
@@ -19,6 +19,7 @@ int main(const int argc, const char* argv[])
 #else
     engine::Vulkan vulkan;
 #endif
+    vulkan.loadTextureImage("textures/texture.jpg");
     vulkan.bindVertexBuffer(vertices, indices);
     vulkan.run();
 

@@ -15,6 +15,8 @@ private:
     void create(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& extent2D, vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::RenderPass& renderPass);
 
 public:
+    static vk::UniqueImageView createImageViewUnique(vk::Device& device, vk::Image& image, const vk::Format format);
+
     Swapchain() = default;
     Swapchain(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& extent2D, vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::RenderPass& renderPass);
 

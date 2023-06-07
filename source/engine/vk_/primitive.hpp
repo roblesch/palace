@@ -8,6 +8,7 @@ namespace vk_ {
 struct Vertex {
     glm::vec2 pos;
     glm::vec3 color;
+    glm::vec2 uv;
 
     static vk::VertexInputBindingDescription bindingDescription()
     {
@@ -18,7 +19,7 @@ struct Vertex {
         };
     }
 
-    static std::array<vk::VertexInputAttributeDescription, 2> attributeDescriptions()
+    static std::array<vk::VertexInputAttributeDescription, 3> attributeDescriptions()
     {
         return { { { .location = 0,
                        .binding = 0,
@@ -27,7 +28,12 @@ struct Vertex {
             { .location = 1,
                 .binding = 0,
                 .format = vk::Format::eR32G32B32Sfloat,
-                .offset = offsetof(Vertex, color)
+                .offset = offsetof(Vertex, color) },
+            {
+                .location = 2,
+                .binding = 0,
+                .format = vk::Format::eR32G32Sfloat,
+                .offset = offsetof(Vertex, uv)
             } } };
     }
 };

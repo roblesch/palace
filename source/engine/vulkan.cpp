@@ -1,7 +1,7 @@
 #include "vulkan.hpp"
 
-#include "vk_/sdl2.hpp"
 #include "vk_/log.hpp"
+#include "vk_/sdl2.hpp"
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
@@ -87,17 +87,21 @@ Vulkan::~Vulkan()
     SDL_Quit();
 }
 
-void Vulkan::loadTextureImage()
+void Vulkan::loadTextureImage(const char* path)
 {
-
+    m_texture = vk_::Texture(path, m_device.physicalDevice(), m_device.device(), m_device.commandPool(), m_device.graphicsQueue());
+    m_isTextureLoaded = true;
 }
 
 void Vulkan::bindVertexBuffer(std::vector<vk_::Vertex>& vertices, std::vector<uint16_t>& indices)
 {
+    if (!m_isTextureLoaded) {
+        vk_::LOG_ERROR("Failed to bind vertex buffer: no texture loaded.");
+        return;
+    }
     m_vertexCount = vertices.size();
     m_indexCount = indices.size();
-    m_buffer = vk_::Buffer(m_device.physicalDevice(), m_device.device(), m_device.commandPool(),
-        m_device.graphicsQueue(), m_pipeline.descriptorSetLayout(), vertices, indices, s_concurrentFrames);
+    m_buffer = vk_::Buffer(m_device.physicalDevice(), m_device.device(), m_device.commandPool(), m_device.graphicsQueue(), m_pipeline.descriptorSetLayout(), m_texture.imageView(), m_texture.sampler(), vertices, indices, s_concurrentFrames);
     m_isVerticesBound = true;
 }
 
@@ -181,6 +185,7 @@ void Vulkan::drawFrame()
     m_buffer.updateUniformBuffer(m_currentFrame, m_extent2D);
 
     device.resetFences(frameInFlight);
+
     commandBuffer.reset();
     recordCommandBuffer(commandBuffer, imageIndex);
 
@@ -221,8 +226,12 @@ void Vulkan::run()
         vk_::LOG_ERROR("Failed to run: Vulkan not initialized.");
         return;
     }
+    if (!m_isTextureLoaded) {
+        vk_::LOG_ERROR("Failed to run: no texture loaded.");
+        return;
+    }
     if (!m_isVerticesBound) {
-        vk_::LOG_ERROR("Failed to run: no vertices bound.");        
+        vk_::LOG_ERROR("Failed to run: no vertices bound.");
         return;
     }
 
