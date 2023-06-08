@@ -50,6 +50,39 @@ Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D, uint32_t concurre
 
     m_descriptorSetLayout = device.createDescriptorSetLayoutUnique(descriptorLayoutInfo);
 
+    // descriptor pools
+    vk::DescriptorPoolSize uboSize {
+        .type = vk::DescriptorType::eUniformBuffer,
+        .descriptorCount = concurrentFrames
+    };
+
+    vk::DescriptorPoolSize samplerSize {
+        .type = vk::DescriptorType::eCombinedImageSampler,
+        .descriptorCount = concurrentFrames
+    };
+
+    std::array<vk::DescriptorPoolSize, 2> poolSizes { uboSize, samplerSize };
+
+    vk::DescriptorPoolCreateInfo descriptorPoolInfo {
+        .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+        .maxSets = concurrentFrames,
+        .poolSizeCount = 2,
+        .pPoolSizes = poolSizes.data()
+    };
+
+    m_descriptorPool = device.createDescriptorPoolUnique(descriptorPoolInfo);
+
+    // descriptor sets
+    std::vector<vk::DescriptorSetLayout> layouts(concurrentFrames, *m_descriptorSetLayout);
+
+    vk::DescriptorSetAllocateInfo descriptorSetInfo {
+        .descriptorPool = *m_descriptorPool,
+        .descriptorSetCount = concurrentFrames,
+        .pSetLayouts = layouts.data()
+    };
+
+    m_descriptorSets = device.allocateDescriptorSetsUnique(descriptorSetInfo);
+
     // shaders
     std::vector<char> vertexShaderBytes = readSpirVFile("shaders/vertex.spv");
     std::vector<char> fragmentShaderBytes = readSpirVFile("shaders/fragment.spv");
@@ -228,6 +261,51 @@ vk::PipelineLayout& Pipeline::pipelineLayout()
 vk::DescriptorSetLayout& Pipeline::descriptorSetLayout()
 {
     return *m_descriptorSetLayout;
+}
+
+vk::DescriptorSet& Pipeline::descriptorSet(size_t frame)
+{
+    return *m_descriptorSets[frame];
+}
+
+void Pipeline::setDescriptorSets(vk::Device& device, std::vector<vk::UniqueBuffer>& uniformBuffers, vk::Sampler& sampler, vk::ImageView& imageView, uint32_t concurrentFrames)
+{
+    m_descriptorSets.resize(concurrentFrames);
+
+    for (size_t i = 0; i < concurrentFrames; i++) {
+        vk::DescriptorBufferInfo uboInfo {
+            .buffer = *uniformBuffers[i],
+            .offset = 0,
+            .range = sizeof(UniformBufferObject)
+        };
+
+        vk::DescriptorImageInfo samplerInfo {
+            .sampler = sampler,
+            .imageView = imageView,
+            .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
+        };
+
+        vk::WriteDescriptorSet uboWriteDescriptor {
+            .dstSet = *m_descriptorSets[i],
+            .dstBinding = 0,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = vk::DescriptorType::eUniformBuffer,
+            .pBufferInfo = &uboInfo
+        };
+
+        vk::WriteDescriptorSet samplerWriteDescriptor {
+            .dstSet = *m_descriptorSets[i],
+            .dstBinding = 1,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+            .pImageInfo = &samplerInfo
+        };
+
+        std::array<vk::WriteDescriptorSet, 2> writeDescriptors { uboWriteDescriptor, samplerWriteDescriptor };
+        device.updateDescriptorSets(writeDescriptors.size(), writeDescriptors.data(), 0, nullptr);
+    }
 }
 
 }

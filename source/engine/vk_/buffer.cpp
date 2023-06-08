@@ -62,7 +62,7 @@ vk::UniqueDeviceMemory Buffer::createStagingMemoryUnique(vk::PhysicalDevice& phy
     return createDeviceMemoryUnique(physicalDevice, device, buffer, size, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 }
 
-Buffer::Buffer(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::CommandPool& commandPool, vk::Queue& graphicsQueue, vk::DescriptorSetLayout& descriptorLayout, vk::ImageView& imageView, vk::Sampler& sampler, const std::vector<vk_::Vertex>& vertices, const std::vector<uint16_t>& indices, uint32_t concurrentFrames)
+Buffer::Buffer(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::CommandPool& commandPool, vk::Queue& graphicsQueue, const std::vector<vk_::Vertex>& vertices, const std::vector<uint16_t>& indices, uint32_t concurrentFrames)
 {
     // vertex buffer
     vk::DeviceSize vertexBufferSize = sizeof(vertices[0]) * vertices.size();
@@ -108,73 +108,6 @@ Buffer::Buffer(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::Comma
         m_uniformPtrs[i] = device.mapMemory(*m_uniformMemorys[i], 0, uniformBufferSize);
     }
 
-    // descriptor pools
-    vk::DescriptorPoolSize uboSize {
-        .type = vk::DescriptorType::eUniformBuffer,
-        .descriptorCount = concurrentFrames
-    };
-
-    vk::DescriptorPoolSize samplerSize {
-        .type = vk::DescriptorType::eCombinedImageSampler,
-        .descriptorCount = concurrentFrames
-    };
-
-    std::array<vk::DescriptorPoolSize, 2> poolSizes { uboSize, samplerSize };
-
-    vk::DescriptorPoolCreateInfo descriptorPoolInfo {
-        .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-        .maxSets = concurrentFrames,
-        .poolSizeCount = 2,
-        .pPoolSizes = poolSizes.data()
-    };
-
-    m_descriptorPool = device.createDescriptorPoolUnique(descriptorPoolInfo);
-
-    // descriptor sets
-    std::vector<vk::DescriptorSetLayout> layouts(concurrentFrames, descriptorLayout);
-
-    vk::DescriptorSetAllocateInfo descriptorSetInfo {
-        .descriptorPool = *m_descriptorPool,
-        .descriptorSetCount = concurrentFrames,
-        .pSetLayouts = layouts.data()
-    };
-
-    m_descriptorSets = device.allocateDescriptorSetsUnique(descriptorSetInfo);
-
-    for (size_t i = 0; i < concurrentFrames; i++) {
-        vk::DescriptorBufferInfo uboInfo {
-            .buffer = *m_uniformBuffers[i],
-            .offset = 0,
-            .range = sizeof(UniformBufferObject)
-        };
-
-        vk::DescriptorImageInfo samplerInfo {
-            .sampler = sampler,
-            .imageView = imageView,
-            .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
-        };
-
-        vk::WriteDescriptorSet uboWriteDescriptor {
-            .dstSet = *m_descriptorSets[i],
-            .dstBinding = 0,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = vk::DescriptorType::eUniformBuffer,
-            .pBufferInfo = &uboInfo
-        };
-
-        vk::WriteDescriptorSet samplerWriteDescriptor {
-            .dstSet = *m_descriptorSets[i],
-            .dstBinding = 1,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = vk::DescriptorType::eCombinedImageSampler,
-            .pImageInfo = &samplerInfo
-        };
-
-        std::array<vk::WriteDescriptorSet, 2> writeDescriptors { uboWriteDescriptor, samplerWriteDescriptor };
-        device.updateDescriptorSets(writeDescriptors.size(), writeDescriptors.data(), 0, nullptr);
-    }
 }
 
 vk::Buffer& Buffer::vertexBuffer()
@@ -187,6 +120,11 @@ vk::Buffer& Buffer::indexBuffer()
     return *m_indexBuffer;
 }
 
+std::vector<vk::UniqueBuffer>& Buffer::uniformBuffers()
+{
+    return m_uniformBuffers;
+}
+
 vk::DeviceMemory& Buffer::vertexMemory()
 {
     return *m_vertexMemory;
@@ -195,11 +133,6 @@ vk::DeviceMemory& Buffer::vertexMemory()
 vk::DeviceMemory& Buffer::indexMemory()
 {
     return *m_indexMemory;
-}
-
-vk::DescriptorSet& Buffer::descriptorSet(size_t frame)
-{
-    return *m_descriptorSets[frame];
 }
 
 void Buffer::updateUniformBuffer(size_t frame, UniformBufferObject& ubo)

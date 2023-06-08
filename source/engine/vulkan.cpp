@@ -93,22 +93,23 @@ Vulkan::~Vulkan()
     SDL_Quit();
 }
 
-void Vulkan::loadTextureImage(const char* path)
-{
-    m_texture = vk_::Texture(path, m_device.physicalDevice(), m_device.device(), m_device.commandPool(), m_device.graphicsQueue());
-    m_isTextureLoaded = true;
-}
-
 void Vulkan::bindVertexBuffer(const std::vector<vk_::Vertex>& vertices, const std::vector<uint16_t>& indices)
 {
-    if (!m_isTextureLoaded) {
-        vk_::LOG_ERROR("Failed to bind vertex buffer: no texture loaded.");
-        return;
-    }
     m_vertexCount = vertices.size();
     m_indexCount = indices.size();
-    m_buffer = vk_::Buffer(m_device.physicalDevice(), m_device.device(), m_device.commandPool(), m_device.graphicsQueue(), m_pipeline.descriptorSetLayout(), m_texture.imageView(), m_texture.sampler(), vertices, indices, s_concurrentFrames);
+    m_buffer = vk_::Buffer(m_device.physicalDevice(), m_device.device(), m_device.commandPool(), m_device.graphicsQueue(), vertices, indices, s_concurrentFrames);
     m_isVerticesBound = true;
+}
+
+void Vulkan::loadTextureImage(const char* path)
+{
+    if (!m_isVerticesBound) {
+        vk_::LOG_ERROR("Failed to load texture: no vertices bound");
+        return;
+    }
+    m_texture = vk_::Texture(path, m_device.physicalDevice(), m_device.device(), m_device.commandPool(), m_device.graphicsQueue());
+    m_pipeline.setDescriptorSets(m_device.device(), m_buffer.uniformBuffers(), m_texture.sampler(), m_texture.imageView(), s_concurrentFrames);
+    m_isTextureLoaded = true;
 }
 
 void Vulkan::recreateSwapchain()
@@ -161,7 +162,7 @@ void Vulkan::recordCommandBuffer(vk::CommandBuffer& commandBuffer, uint32_t imag
 
         commandBuffer.bindVertexBuffers(0, m_buffer.vertexBuffer(), { 0 });
         commandBuffer.bindIndexBuffer(m_buffer.indexBuffer(), 0, vk::IndexType::eUint16);
-        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipeline.pipelineLayout(), 0, 1, &m_buffer.descriptorSet(m_currentFrame), 0, nullptr);
+        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipeline.pipelineLayout(), 0, 1, &m_pipeline.descriptorSet(m_currentFrame), 0, nullptr);
         commandBuffer.drawIndexed(m_indexCount, 1, 0, 0, 0);
     }
     commandBuffer.endRenderPass();

@@ -25,8 +25,8 @@ int main(const int argc, const char* argv[])
 #else
     engine::Vulkan vulkan;
 #endif
-    vulkan.loadTextureImage("textures/texture.jpg");
     vulkan.bindVertexBuffer(vertices, indices);
+    vulkan.loadTextureImage("textures/texture.jpg");
     vulkan.run();
 
     return 0;
