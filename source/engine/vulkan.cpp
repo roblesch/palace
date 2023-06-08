@@ -175,26 +175,20 @@ void Vulkan::drawFrame()
     auto commandBuffer = m_device.commandBuffer(m_currentFrame);
     auto graphicsQueue = m_device.graphicsQueue();
 
-    device.waitForFences(frameInFlight, true, UINT64_MAX);
-
+    auto result = device.waitForFences(frameInFlight, true, UINT64_MAX);
     uint32_t imageIndex;
-//    try {
-        auto [result, idx] = device.acquireNextImageKHR(swapchain, UINT64_MAX, imageAvailable, VK_NULL_HANDLE);
-        if (result == vk::Result::eErrorOutOfDateKHR) {
+
+    try {
+        std::tie(result, imageIndex) = device.acquireNextImageKHR(swapchain, UINT64_MAX, imageAvailable, VK_NULL_HANDLE);
+        if (result == vk::Result::eSuboptimalKHR) {
             recreateSwapchain();
-            return;
-        } else if (result == vk::Result::eSuboptimalKHR) {
             m_device.recreateImageAvailableSemaphore(m_currentFrame);
-            recreateSwapchain();
             return;
-        } else if (result != vk::Result::eSuccess) {
-            vk_::LOG_ERROR("Failed to acquire image (result not out of date or suboptimal)");
-            exit(1);
         }
-        imageIndex = idx;
-//    } catch (...) {
-//        recreateSwapchain();
-//    }
+    } catch (vk::OutOfDateKHRError) {
+        recreateSwapchain();
+        return;
+    }
 
     m_buffer.updateUniformBuffer(m_currentFrame, m_extent2D);
 
@@ -225,15 +219,16 @@ void Vulkan::drawFrame()
         .pImageIndices = &imageIndex
     };
 
-//    try {
+    try {
         result = graphicsQueue.presentKHR(presentInfo);
-        if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR || m_isResized) {
+        if (result == vk::Result::eSuboptimalKHR || m_isResized) {
             recreateSwapchain();
             m_isResized = false;
         }
-//    } catch (...) {
-//        recreateSwapchain();
-//    }
+    } catch (vk::OutOfDateKHRError) {
+        recreateSwapchain();
+        m_isResized = false;
+    }
 
     m_currentFrame = (m_currentFrame + 1) % s_concurrentFrames;
 }
