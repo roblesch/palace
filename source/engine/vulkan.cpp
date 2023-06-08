@@ -1,10 +1,10 @@
 #include "vulkan.hpp"
 
-#include <chrono>
-#include <glm/gtc/matrix_transform.hpp>
 #include "vk_/log.hpp"
 #include "vk_/primitive.hpp"
 #include "vk_/sdl2.hpp"
+#include <chrono>
+#include <glm/gtc/matrix_transform.hpp>
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
@@ -99,7 +99,7 @@ void Vulkan::loadTextureImage(const char* path)
     m_isTextureLoaded = true;
 }
 
-void Vulkan::bindVertexBuffer(std::vector<vk_::Vertex>& vertices, std::vector<uint16_t>& indices)
+void Vulkan::bindVertexBuffer(const std::vector<vk_::Vertex>& vertices, const std::vector<uint16_t>& indices)
 {
     if (!m_isTextureLoaded) {
         vk_::LOG_ERROR("Failed to bind vertex buffer: no texture loaded.");
@@ -171,15 +171,15 @@ void Vulkan::recordCommandBuffer(vk::CommandBuffer& commandBuffer, uint32_t imag
 void Vulkan::drawFrame()
 {
     auto device = m_device.device();
-    auto frameInFlight = m_device.fenceInFlight(m_currentFrame);
-    auto imageAvailable = m_device.semaphoreImageAvailable(m_currentFrame);
-    auto renderFinished = m_device.semaphoreRenderFinished(m_currentFrame);
+    auto inFlight = m_device.inFlightFence(m_currentFrame);
+    auto imageAvailable = m_device.imageAvailableSemaphore(m_currentFrame);
+    auto renderFinished = m_device.renderFinishedSemaphore(m_currentFrame);
     auto swapchain = m_swapchain.swapchain();
     auto commandBuffer = m_device.commandBuffer(m_currentFrame);
     auto graphicsQueue = m_device.graphicsQueue();
 
-    auto result = device.waitForFences(frameInFlight, true, UINT64_MAX);
-    
+    auto result = device.waitForFences(inFlight, true, UINT64_MAX);
+
     uint32_t imageIndex;
 
     try {
@@ -194,7 +194,7 @@ void Vulkan::drawFrame()
         return;
     }
 
-    device.resetFences(frameInFlight);
+    device.resetFences(inFlight);
 
     commandBuffer.reset();
     recordCommandBuffer(commandBuffer, imageIndex);
@@ -211,7 +211,7 @@ void Vulkan::drawFrame()
         .pSignalSemaphores = &renderFinished
     };
 
-    graphicsQueue.submit(submitInfo, frameInFlight);
+    graphicsQueue.submit(submitInfo, inFlight);
 
     vk::PresentInfoKHR presentInfo {
         .waitSemaphoreCount = 1,
@@ -289,4 +289,4 @@ void Vulkan::run()
     m_device.waitIdle();
 }
 
-} // namespace engine
+}

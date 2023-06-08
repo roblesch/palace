@@ -1,5 +1,4 @@
-#ifndef PALACE_ENGINE_VK_LOG_HPP
-#define PALACE_ENGINE_VK_LOG_HPP
+#pragma once
 
 namespace vk_ {
 
@@ -23,5 +22,3 @@ void LOG_ERROR(const char* message, const char* type = "GENERAL")
 }
 
 }
-
-#endif

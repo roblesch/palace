@@ -1,5 +1,4 @@
-#ifndef PALACE_GRAPHICS_VULKANCONFIG_HPP
-#define PALACE_GRAPHICS_VULKANCONFIG_HPP
+#pragma once
 
 #include <algorithm>
 
@@ -21,5 +20,3 @@ private:
 
 extern CommandLineParser commandLineOptions;
 extern void parse(int argc, const char* argv[]);
-
-#endif

@@ -42,17 +42,17 @@ void Swapchain::create(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D
         .oldSwapchain = oldSwapchain
     };
 
-    m_uniqueSwapchain = device.createSwapchainKHRUnique(swapChainInfo);
+    m_swapchain = device.createSwapchainKHRUnique(swapChainInfo);
     m_images = device.getSwapchainImagesKHR(swapchain());
 
     // image views
-    m_uniqueImageViews.resize(m_images.size());
+    m_imageViews.resize(m_images.size());
     for (size_t i = 0; i < m_images.size(); i++) {
-        m_uniqueImageViews[i] = createImageViewUnique(device, m_images[i], vk::Format::eB8G8R8A8Srgb);
+        m_imageViews[i] = createImageViewUnique(device, m_images[i], vk::Format::eB8G8R8A8Srgb);
     }
 
     // framebuffers
-    m_uniqueFramebuffers.resize(m_images.size());
+    m_framebuffers.resize(m_images.size());
     for (size_t i = 0; i < m_images.size(); i++) {
         vk::FramebufferCreateInfo framebufferInfo {
             .renderPass = renderPass,
@@ -62,7 +62,7 @@ void Swapchain::create(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D
             .height = extent2D.height,
             .layers = 1
         };
-        m_uniqueFramebuffers[i] = device.createFramebufferUnique(framebufferInfo);
+        m_framebuffers[i] = device.createFramebufferUnique(framebufferInfo);
     }
 }
 
@@ -73,22 +73,22 @@ Swapchain::Swapchain(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& 
 
 vk::Framebuffer& Swapchain::framebuffer(size_t frame)
 {
-    return *m_uniqueFramebuffers[frame];
+    return *m_framebuffers[frame];
 }
 
 vk::ImageView& Swapchain::imageView(size_t frame)
 {
-    return *m_uniqueImageViews[frame];
+    return *m_imageViews[frame];
 }
 
 vk::SwapchainKHR& Swapchain::swapchain()
 {
-    return *m_uniqueSwapchain;
+    return *m_swapchain;
 }
 
 void Swapchain::recreate(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& extent2D, vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::RenderPass& renderPass)
 {
-    create(window, surface, extent2D, physicalDevice, device, renderPass, *m_uniqueSwapchain);
+    create(window, surface, extent2D, physicalDevice, device, renderPass, *m_swapchain);
 }
 
-} // namespace vk_
+}

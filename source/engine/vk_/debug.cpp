@@ -40,4 +40,4 @@ VkBool32 debug::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeve
     return VK_FALSE;
 }
 
-} // namespace vk_
+}

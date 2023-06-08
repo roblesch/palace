@@ -84,19 +84,19 @@ Texture::Texture(const char* path, vk::PhysicalDevice& physicalDevice, vk::Devic
         .initialLayout = vk::ImageLayout::eUndefined,
     };
 
-    m_uniqueImage = device.createImageUnique(imageInfo);
+    m_image = device.createImageUnique(imageInfo);
 
-    vk::MemoryRequirements memoryRequirements = device.getImageMemoryRequirements(*m_uniqueImage);
+    vk::MemoryRequirements memoryRequirements = device.getImageMemoryRequirements(*m_image);
 
     vk::MemoryAllocateInfo memoryInfo {
         .allocationSize = memoryRequirements.size,
         .memoryTypeIndex = Buffer::findMemoryType(physicalDevice, memoryRequirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal)
     };
 
-    m_uniqueImageMemory = device.allocateMemoryUnique(memoryInfo);
-    device.bindImageMemory(*m_uniqueImage, *m_uniqueImageMemory, 0);
+    m_imageMemory = device.allocateMemoryUnique(memoryInfo);
+    device.bindImageMemory(*m_image, *m_imageMemory, 0);
 
-    transitionImageLayout(device, commandPool, graphicsQueue, *m_uniqueImage, vk::Format::eR8G8B8A8Srgb, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+    transitionImageLayout(device, commandPool, graphicsQueue, *m_image, vk::Format::eR8G8B8A8Srgb, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
 
     vk::BufferImageCopy region {
         .bufferOffset = 0,
@@ -112,13 +112,13 @@ Texture::Texture(const char* path, vk::PhysicalDevice& physicalDevice, vk::Devic
     };
 
     vk::UniqueCommandBuffer commandBuffer = Device::beginSingleUseCommandBuffer(device, commandPool);
-    commandBuffer->copyBufferToImage(*stagingBuffer, *m_uniqueImage, vk::ImageLayout::eTransferDstOptimal, region);
+    commandBuffer->copyBufferToImage(*stagingBuffer, *m_image, vk::ImageLayout::eTransferDstOptimal, region);
     Device::endSingleUseCommandBuffer(*commandBuffer, graphicsQueue);
 
-    transitionImageLayout(device, commandPool, graphicsQueue, *m_uniqueImage, vk::Format::eR8G8B8A8Srgb, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+    transitionImageLayout(device, commandPool, graphicsQueue, *m_image, vk::Format::eR8G8B8A8Srgb, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
 
     // image view
-    m_uniqueImageView = Swapchain::createImageViewUnique(device, *m_uniqueImage, vk::Format::eR8G8B8A8Srgb);
+    m_imageView = Swapchain::createImageViewUnique(device, *m_image, vk::Format::eR8G8B8A8Srgb);
 
     // sampler
     vk::SamplerCreateInfo samplerInfo {
@@ -139,17 +139,17 @@ Texture::Texture(const char* path, vk::PhysicalDevice& physicalDevice, vk::Devic
         .unnormalizedCoordinates = VK_FALSE
     };
 
-    m_uniqueSampler = device.createSamplerUnique(samplerInfo);
+    m_imageSampler = device.createSamplerUnique(samplerInfo);
 }
 
 vk::ImageView& Texture::imageView()
 {
-    return *m_uniqueImageView;
+    return *m_imageView;
 }
 
 vk::Sampler& Texture::sampler()
 {
-    return *m_uniqueSampler;
+    return *m_imageSampler;
 }
 
 }

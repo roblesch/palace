@@ -1,5 +1,4 @@
-#ifndef PALACE_ENGINE_VK_INCLUDE_HPP
-#define PALACE_ENGINE_VK_INCLUDE_HPP
+#pragma once
 
 #define VK_ENABLE_BETA_EXTENSIONS
 #define VULKAN_HPP_NO_CONSTRUCTORS
@@ -11,7 +10,6 @@
 #include <SDL.h>
 #include <SDL_vulkan.h>
 #define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
 #include <glm/glm.hpp>
-
-#endif

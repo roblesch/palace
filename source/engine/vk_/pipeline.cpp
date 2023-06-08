@@ -48,7 +48,7 @@ Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D, uint32_t concurre
         .pBindings = bindings.data()
     };
 
-    m_uniqueDescriptorSetLayout = device.createDescriptorSetLayoutUnique(descriptorLayoutInfo);
+    m_descriptorSetLayout = device.createDescriptorSetLayoutUnique(descriptorLayoutInfo);
 
     // shaders
     std::vector<char> vertexShaderBytes = readSpirVFile("shaders/vertex.spv");
@@ -155,9 +155,9 @@ Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D, uint32_t concurre
     // pipeline layout
     vk::PipelineLayoutCreateInfo pipelineLayoutInfo {
         .setLayoutCount = 1,
-        .pSetLayouts = &(*m_uniqueDescriptorSetLayout)
+        .pSetLayouts = &(*m_descriptorSetLayout)
     };
-    m_uniquePipelineLayout = device.createPipelineLayoutUnique(pipelineLayoutInfo);
+    m_pipelineLayout = device.createPipelineLayoutUnique(pipelineLayoutInfo);
 
     // render pass
     vk::AttachmentDescription colorAttachment {
@@ -189,7 +189,7 @@ Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D, uint32_t concurre
         .pSubpasses = &subpass
     };
 
-    m_uniqueRenderPass = device.createRenderPassUnique(renderPassInfo);
+    m_renderPass = device.createRenderPassUnique(renderPassInfo);
 
     // pipeline
     vk::GraphicsPipelineCreateInfo graphicsPipelineInfo {
@@ -202,32 +202,32 @@ Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D, uint32_t concurre
         .pMultisampleState = &multisampleStateInfo,
         .pColorBlendState = &colorBlendStateInfo,
         .pDynamicState = &dynamicStateInfo,
-        .layout = *m_uniquePipelineLayout,
-        .renderPass = *m_uniqueRenderPass,
+        .layout = *m_pipelineLayout,
+        .renderPass = *m_renderPass,
         .subpass = 0
     };
 
-    m_uniquePipeline = device.createGraphicsPipelineUnique(nullptr, graphicsPipelineInfo).value;
+    m_pipeline = device.createGraphicsPipelineUnique(nullptr, graphicsPipelineInfo).value;
 }
 
 vk::RenderPass& Pipeline::renderPass()
 {
-    return *m_uniqueRenderPass;
+    return *m_renderPass;
 }
 
 vk::Pipeline& Pipeline::pipeline()
 {
-    return *m_uniquePipeline;
+    return *m_pipeline;
 }
 
 vk::PipelineLayout& Pipeline::pipelineLayout()
 {
-    return *m_uniquePipelineLayout;
+    return *m_pipelineLayout;
 }
 
 vk::DescriptorSetLayout& Pipeline::descriptorSetLayout()
 {
-    return *m_uniqueDescriptorSetLayout;
+    return *m_descriptorSetLayout;
 }
 
 }

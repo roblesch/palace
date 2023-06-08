@@ -1,5 +1,4 @@
-#ifndef PALACE_ENGINE_VK_TEXTURE_HPP
-#define PALACE_ENGINE_VK_TEXTURE_HPP
+#pragma once
 
 #include "include.hpp"
 
@@ -7,10 +6,10 @@ namespace vk_ {
 
 class Texture {
 private:
-    vk::UniqueImage m_uniqueImage;
-    vk::UniqueDeviceMemory m_uniqueImageMemory;
-    vk::UniqueImageView m_uniqueImageView;
-    vk::UniqueSampler m_uniqueSampler;
+    vk::UniqueImage m_image;
+    vk::UniqueDeviceMemory m_imageMemory;
+    vk::UniqueImageView m_imageView;
+    vk::UniqueSampler m_imageSampler;
 
 public:
     Texture() = default;
@@ -21,5 +20,3 @@ public:
 };
 
 }
-
-#endif

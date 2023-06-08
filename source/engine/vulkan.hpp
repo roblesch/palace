@@ -1,5 +1,4 @@
-#ifndef PALACE_ENGINE_VULKAN_HPP
-#define PALACE_ENGINE_VULKAN_HPP
+#pragma once
 
 #include <string>
 
@@ -48,7 +47,7 @@ public:
     ~Vulkan();
 
     void loadTextureImage(const char* path);
-    void bindVertexBuffer(std::vector<vk_::Vertex>& vertices, std::vector<uint16_t>& indices);
+    void bindVertexBuffer(const std::vector<vk_::Vertex>& vertices, const std::vector<uint16_t>& indices);
 
     void recreateSwapchain();
     void recordCommandBuffer(vk::CommandBuffer& commandBuffer, uint32_t imageIndex);
@@ -57,6 +56,4 @@ public:
     void run();
 };
 
-} // namespace engine
-
-#endif
+}

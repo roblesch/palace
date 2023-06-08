@@ -1,5 +1,4 @@
-#ifndef PALACE_ENGINE_VK_PIPELINE_HPP
-#define PALACE_ENGINE_VK_PIPELINE_HPP
+#pragma once
 
 #include "include.hpp"
 
@@ -7,10 +6,10 @@ namespace vk_ {
 
 class Pipeline {
 private:
-    vk::UniqueDescriptorSetLayout m_uniqueDescriptorSetLayout;
-    vk::UniqueRenderPass m_uniqueRenderPass;
-    vk::UniquePipelineLayout m_uniquePipelineLayout;
-    vk::UniquePipeline m_uniquePipeline;
+    vk::UniqueDescriptorSetLayout m_descriptorSetLayout;
+    vk::UniqueRenderPass m_renderPass;
+    vk::UniquePipelineLayout m_pipelineLayout;
+    vk::UniquePipeline m_pipeline;
 
     std::vector<char> readSpirVFile(const std::string& spirVFile);
 
@@ -24,6 +23,4 @@ public:
     vk::DescriptorSetLayout& descriptorSetLayout();
 };
 
-} // namespace vk_
-
-#endif
+}

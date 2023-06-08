@@ -79,7 +79,7 @@ Device::Device(vk::Instance& instance, vk::SurfaceKHR& surface, uint32_t concurr
         .pEnabledFeatures = &deviceFeatures
     };
 
-    m_uniqueDevice = m_physicalDevice.createDeviceUnique(deviceInfo);
+    m_device = m_physicalDevice.createDeviceUnique(deviceInfo);
 
     // graphics queue
     m_graphicsQueue = device().getQueue(m_queueFamilyIndices.graphics, 0);
@@ -90,7 +90,7 @@ Device::Device(vk::Instance& instance, vk::SurfaceKHR& surface, uint32_t concurr
         .queueFamilyIndex = m_queueFamilyIndices.graphics
     };
 
-    m_uniqueCommandPool = device().createCommandPoolUnique(commandPoolInfo);
+    m_commandPool = device().createCommandPoolUnique(commandPoolInfo);
 
     // command buffers
     vk::CommandBufferAllocateInfo commandBufferAllocInfo {
@@ -99,13 +99,13 @@ Device::Device(vk::Instance& instance, vk::SurfaceKHR& surface, uint32_t concurr
         .commandBufferCount = concurrentFrames
     };
 
-    m_uniqueCommandBuffers = device().allocateCommandBuffersUnique(commandBufferAllocInfo);
+    m_commandBuffer = device().allocateCommandBuffersUnique(commandBufferAllocInfo);
 
     // sync
     for (size_t i = 0; i < concurrentFrames; i++) {
-        m_uniqueSemaphoresImageAvailable.push_back(device().createSemaphoreUnique({}));
-        m_uniqueSemaphoresRenderFinished.push_back(device().createSemaphoreUnique({}));
-        m_uniqueFencesInFlight.push_back(device().createFenceUnique({ .flags = vk::FenceCreateFlagBits::eSignaled }));
+        m_imageAvailableSemaphores.push_back(device().createSemaphoreUnique({}));
+        m_renderFinishedSemaphores.push_back(device().createSemaphoreUnique({}));
+        m_inFlightFences.push_back(device().createFenceUnique({ .flags = vk::FenceCreateFlagBits::eSignaled }));
     }
 }
 
@@ -116,32 +116,32 @@ vk::PhysicalDevice& Device::physicalDevice()
 
 vk::Device& Device::device()
 {
-    return *m_uniqueDevice;
+    return *m_device;
 }
 
 vk::CommandPool& Device::commandPool()
 {
-    return *m_uniqueCommandPool;
+    return *m_commandPool;
 }
 
 vk::CommandBuffer& Device::commandBuffer(size_t frame)
 {
-    return *m_uniqueCommandBuffers[frame];
+    return *m_commandBuffer[frame];
 }
 
-vk::Semaphore& Device::semaphoreImageAvailable(size_t frame)
+vk::Semaphore& Device::imageAvailableSemaphore(size_t frame)
 {
-    return *m_uniqueSemaphoresImageAvailable[frame];
+    return *m_imageAvailableSemaphores[frame];
 }
 
-vk::Semaphore& Device::semaphoreRenderFinished(size_t frame)
+vk::Semaphore& Device::renderFinishedSemaphore(size_t frame)
 {
-    return *m_uniqueSemaphoresRenderFinished[frame];
+    return *m_renderFinishedSemaphores[frame];
 }
 
-vk::Fence& Device::fenceInFlight(size_t frame)
+vk::Fence& Device::inFlightFence(size_t frame)
 {
-    return *m_uniqueFencesInFlight[frame];
+    return *m_inFlightFences[frame];
 }
 
 vk::Queue& Device::graphicsQueue()
@@ -151,12 +151,12 @@ vk::Queue& Device::graphicsQueue()
 
 void Device::waitIdle()
 {
-    m_uniqueDevice->waitIdle();
+    m_device->waitIdle();
 }
 
 void Device::recreateImageAvailableSemaphore(size_t frame)
 {
-    m_uniqueSemaphoresImageAvailable[frame] = m_uniqueDevice->createSemaphoreUnique({});
+    m_imageAvailableSemaphores[frame] = m_device->createSemaphoreUnique({});
 }
 
-} // namespace vk_
+}

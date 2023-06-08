@@ -1,5 +1,4 @@
-#ifndef PALACE_ENGINE_VK_DEVICE_HPP
-#define PALACE_ENGINE_VK_DEVICE_HPP
+#pragma once
 
 #include "include.hpp"
 
@@ -8,19 +7,19 @@ namespace vk_ {
 class Device {
 private:
     vk::PhysicalDevice m_physicalDevice;
-    vk::UniqueDevice m_uniqueDevice;
+    vk::UniqueDevice m_device;
 
     struct {
         uint32_t graphics;
     } m_queueFamilyIndices;
 
     vk::Queue m_graphicsQueue;
-    vk::UniqueCommandPool m_uniqueCommandPool;
-    std::vector<vk::UniqueCommandBuffer> m_uniqueCommandBuffers;
+    vk::UniqueCommandPool m_commandPool;
+    std::vector<vk::UniqueCommandBuffer> m_commandBuffer;
 
-    std::vector<vk::UniqueSemaphore> m_uniqueSemaphoresImageAvailable;
-    std::vector<vk::UniqueSemaphore> m_uniqueSemaphoresRenderFinished;
-    std::vector<vk::UniqueFence> m_uniqueFencesInFlight;
+    std::vector<vk::UniqueSemaphore> m_imageAvailableSemaphores;
+    std::vector<vk::UniqueSemaphore> m_renderFinishedSemaphores;
+    std::vector<vk::UniqueFence> m_inFlightFences;
 
 public:
     static vk::UniqueCommandBuffer beginSingleUseCommandBuffer(vk::Device& device, vk::CommandPool& commandPool);
@@ -33,9 +32,9 @@ public:
     vk::Device& device();
     vk::CommandPool& commandPool();
     vk::CommandBuffer& commandBuffer(size_t frame);
-    vk::Semaphore& semaphoreImageAvailable(size_t frame);
-    vk::Semaphore& semaphoreRenderFinished(size_t frame);
-    vk::Fence& fenceInFlight(size_t frame);
+    vk::Semaphore& imageAvailableSemaphore(size_t frame);
+    vk::Semaphore& renderFinishedSemaphore(size_t frame);
+    vk::Fence& inFlightFence(size_t frame);
     vk::Queue& graphicsQueue();
 
     void recreateImageAvailableSemaphore(size_t frame);
@@ -43,6 +42,4 @@ public:
     void waitIdle();
 };
 
-} // namespace vk_
-
-#endif
+}

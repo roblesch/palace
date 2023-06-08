@@ -1,5 +1,4 @@
-#ifndef PALACE_ENGINE_SDL2_HPP
-#define PALACE_ENGINE_SDL2_HPP
+#pragma once
 
 #include "include.hpp"
 
@@ -25,5 +24,3 @@ std::vector<const char*> getInstanceExtensions(SDL_Window* window)
 }
 
 }
-
-#endif

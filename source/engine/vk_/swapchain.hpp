@@ -1,5 +1,4 @@
-#ifndef PALACE_ENGINE_VK_SWAPCHAIN_HPP
-#define PALACE_ENGINE_VK_SWAPCHAIN_HPP
+#pragma once
 
 #include "include.hpp"
 
@@ -7,10 +6,15 @@ namespace vk_ {
 
 class Swapchain {
 private:
-    vk::UniqueSwapchainKHR m_uniqueSwapchain;
+    vk::UniqueSwapchainKHR m_swapchain;
+
     std::vector<vk::Image> m_images;
-    std::vector<vk::UniqueImageView> m_uniqueImageViews;
-    std::vector<vk::UniqueFramebuffer> m_uniqueFramebuffers;
+    std::vector<vk::UniqueImageView> m_imageViews;
+    std::vector<vk::UniqueFramebuffer> m_framebuffers;
+
+    vk::UniqueImage m_depthImage;
+    vk::UniqueDeviceMemory m_depthMemory;
+    vk::UniqueImageView m_depthView;
 
     void create(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& extent2D, vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::RenderPass& renderPass, vk::SwapchainKHR oldSwapchain = VK_NULL_HANDLE);
 
@@ -27,6 +31,4 @@ public:
     void recreate(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& extent2D, vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::RenderPass& renderPass);
 };
 
-} // namespace vk_
-
-#endif
+}
