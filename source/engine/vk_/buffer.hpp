@@ -34,9 +34,9 @@ public:
     vk::Buffer& indexBuffer();
     vk::DeviceMemory& vertexMemory();
     vk::DeviceMemory& indexMemory();
-    vk::DescriptorSet& descriptorSet(size_t i);
+    vk::DescriptorSet& descriptorSet(size_t frame);
 
-    void updateUniformBuffer(size_t i, vk::Extent2D extent);
+    void updateUniformBuffer(size_t frame, UniformBufferObject& ubo);
 };
 
 }

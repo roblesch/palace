@@ -1,6 +1,9 @@
 #include "vulkan.hpp"
 
+#include <chrono>
+#include <glm/gtc/matrix_transform.hpp>
 #include "vk_/log.hpp"
+#include "vk_/primitive.hpp"
 #include "vk_/sdl2.hpp"
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
@@ -176,21 +179,20 @@ void Vulkan::drawFrame()
     auto graphicsQueue = m_device.graphicsQueue();
 
     auto result = device.waitForFences(frameInFlight, true, UINT64_MAX);
+    
     uint32_t imageIndex;
 
     try {
         std::tie(result, imageIndex) = device.acquireNextImageKHR(swapchain, UINT64_MAX, imageAvailable, VK_NULL_HANDLE);
-        if (result == vk::Result::eSuboptimalKHR) {
-            recreateSwapchain();
+        if (result == vk::Result::eSuboptimalKHR || result == vk::Result::eErrorOutOfDateKHR) {
             m_device.recreateImageAvailableSemaphore(m_currentFrame);
+            recreateSwapchain();
             return;
         }
-    } catch (vk::OutOfDateKHRError) {
+    } catch (vk::OutOfDateKHRError&) {
         recreateSwapchain();
         return;
     }
-
-    m_buffer.updateUniformBuffer(m_currentFrame, m_extent2D);
 
     device.resetFences(frameInFlight);
 
@@ -221,16 +223,33 @@ void Vulkan::drawFrame()
 
     try {
         result = graphicsQueue.presentKHR(presentInfo);
-        if (result == vk::Result::eSuboptimalKHR || m_isResized) {
+        if (result == vk::Result::eSuboptimalKHR || result == vk::Result::eErrorOutOfDateKHR || m_isResized) {
             recreateSwapchain();
             m_isResized = false;
         }
-    } catch (vk::OutOfDateKHRError) {
+    } catch (vk::OutOfDateKHRError&) {
         recreateSwapchain();
         m_isResized = false;
     }
 
     m_currentFrame = (m_currentFrame + 1) % s_concurrentFrames;
+}
+
+void Vulkan::modelViewProj()
+{
+    static auto startTime = std::chrono::high_resolution_clock::now();
+
+    auto currentTime = std::chrono::high_resolution_clock::now();
+    float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+    vk_::UniformBufferObject ubo {
+        .model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
+        .view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
+        .proj = glm::perspective(glm::radians(45.0f), m_extent2D.width / (float)m_extent2D.height, 0.1f, 10.0f)
+    };
+    ubo.proj[1][1] *= -1;
+
+    m_buffer.updateUniformBuffer(m_currentFrame, ubo);
 }
 
 void Vulkan::run()
@@ -263,6 +282,7 @@ void Vulkan::run()
         if (SDL_GetWindowFlags(m_window) & SDL_WINDOW_MINIMIZED)
             continue;
 
+        modelViewProj();
         drawFrame();
     }
 

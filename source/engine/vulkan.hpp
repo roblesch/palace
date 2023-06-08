@@ -49,9 +49,11 @@ public:
 
     void loadTextureImage(const char* path);
     void bindVertexBuffer(std::vector<vk_::Vertex>& vertices, std::vector<uint16_t>& indices);
+
     void recreateSwapchain();
     void recordCommandBuffer(vk::CommandBuffer& commandBuffer, uint32_t imageIndex);
     void drawFrame();
+    void modelViewProj();
     void run();
 };
 

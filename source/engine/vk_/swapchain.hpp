@@ -20,8 +20,8 @@ public:
     Swapchain() = default;
     Swapchain(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& extent2D, vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::RenderPass& renderPass);
 
-    vk::Framebuffer& framebuffer(size_t i);
-    vk::ImageView& imageView(size_t i);
+    vk::Framebuffer& framebuffer(size_t frame);
+    vk::ImageView& imageView(size_t frame);
     vk::SwapchainKHR& swapchain();
 
     void recreate(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& extent2D, vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::RenderPass& renderPass);

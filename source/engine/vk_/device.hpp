@@ -32,13 +32,13 @@ public:
     vk::PhysicalDevice& physicalDevice();
     vk::Device& device();
     vk::CommandPool& commandPool();
-    vk::CommandBuffer& commandBuffer(size_t i);
-    vk::Semaphore& semaphoreImageAvailable(size_t i);
-    vk::Semaphore& semaphoreRenderFinished(size_t i);
-    vk::Fence& fenceInFlight(size_t i);
+    vk::CommandBuffer& commandBuffer(size_t frame);
+    vk::Semaphore& semaphoreImageAvailable(size_t frame);
+    vk::Semaphore& semaphoreRenderFinished(size_t frame);
+    vk::Fence& fenceInFlight(size_t frame);
     vk::Queue& graphicsQueue();
 
-    void recreateImageAvailableSemaphore(size_t i);
+    void recreateImageAvailableSemaphore(size_t frame);
 
     void waitIdle();
 };
