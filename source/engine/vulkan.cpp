@@ -128,15 +128,18 @@ void Vulkan::recreateSwapchain()
 void Vulkan::recordCommandBuffer(vk::CommandBuffer& commandBuffer, uint32_t imageIndex)
 {
     vk::CommandBufferBeginInfo commandBufferInfo {};
-    vk::ClearValue clearColor { std::array<float, 4> { 0.0f, 0.0f, 0.0f, 1.0f } };
+    vk::ClearValue clearColor { .color = std::array<float, 4> { 0.0f, 0.0f, 0.0f, 1.0f } };
+    vk::ClearValue clearDepthValue { .depthStencil = vk::ClearDepthStencilValue { 1.0f } };
+    std::array<vk::ClearValue, 2> clearValues { clearColor, clearDepthValue };
+
     vk::RenderPassBeginInfo renderPassInfo {
         .renderPass = m_pipeline.renderPass(),
         .framebuffer = m_swapchain.framebuffer(imageIndex),
         .renderArea = {
             .offset = { 0, 0 },
             .extent = m_extent2D },
-        .clearValueCount = 1,
-        .pClearValues = &clearColor
+        .clearValueCount = static_cast<uint32_t>(clearValues.size()),
+        .pClearValues = clearValues.data()
     };
 
     commandBuffer.begin(commandBufferInfo);

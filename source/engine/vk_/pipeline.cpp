@@ -174,6 +174,15 @@ Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D, uint32_t concurre
         .pAttachments = &colorBlendAttachment
     };
 
+    // depth state
+    vk::PipelineDepthStencilStateCreateInfo depthStateInfo {
+        .depthTestEnable = VK_TRUE,
+        .depthWriteEnable = VK_TRUE,
+        .depthCompareOp = vk::CompareOp::eLess,
+        .depthBoundsTestEnable = VK_FALSE,
+        .stencilTestEnable = VK_FALSE
+    };
+
     // dynamic state
     std::vector<vk::DynamicState> dynamicStates {
         vk::DynamicState::eViewport,
@@ -192,7 +201,7 @@ Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D, uint32_t concurre
     };
     m_pipelineLayout = device.createPipelineLayoutUnique(pipelineLayoutInfo);
 
-    // render pass
+    // attachments
     vk::AttachmentDescription colorAttachment {
         .format = vk::Format::eB8G8R8A8Srgb,
         .samples = vk::SampleCountFlagBits::e1,
@@ -208,18 +217,48 @@ Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D, uint32_t concurre
         .layout = vk::ImageLayout::eColorAttachmentOptimal
     };
 
+    vk::AttachmentDescription depthAttachment {
+        .format = vk::Format::eD32Sfloat,
+        .samples = vk::SampleCountFlagBits::e1,
+        .loadOp = vk::AttachmentLoadOp::eClear,
+        .storeOp = vk::AttachmentStoreOp::eDontCare,
+        .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
+        .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
+        .initialLayout = vk::ImageLayout::eUndefined,
+        .finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal
+    };
+
+    vk::AttachmentReference depthAttachmentRef {
+        .attachment = 1,
+        .layout = vk::ImageLayout::eDepthStencilAttachmentOptimal
+    };
+
     // subpass
     vk::SubpassDescription subpass {
         .pipelineBindPoint = vk::PipelineBindPoint::eGraphics,
         .colorAttachmentCount = 1,
-        .pColorAttachments = &colorAttachmentRef
+        .pColorAttachments = &colorAttachmentRef,
+        .pDepthStencilAttachment = &depthAttachmentRef
     };
 
+    vk::SubpassDependency dependency {
+        .srcSubpass = VK_SUBPASS_EXTERNAL,
+        .dstSubpass = 0,
+        .srcStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput | vk::PipelineStageFlagBits::eEarlyFragmentTests,
+        .dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput | vk::PipelineStageFlagBits::eEarlyFragmentTests,
+        .dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite | vk::AccessFlagBits::eDepthStencilAttachmentWrite
+    };
+
+    // renderpass
+    std::array<vk::AttachmentDescription, 2> attachments = { colorAttachment, depthAttachment };
+
     vk::RenderPassCreateInfo renderPassInfo {
-        .attachmentCount = 1,
-        .pAttachments = &colorAttachment,
+        .attachmentCount = static_cast<uint32_t>(attachments.size()),
+        .pAttachments = attachments.data(),
         .subpassCount = 1,
-        .pSubpasses = &subpass
+        .pSubpasses = &subpass,
+        .dependencyCount = 1,
+        .pDependencies = &dependency
     };
 
     m_renderPass = device.createRenderPassUnique(renderPassInfo);
@@ -233,6 +272,7 @@ Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D, uint32_t concurre
         .pViewportState = &viewportStateInfo,
         .pRasterizationState = &rasterStateInfo,
         .pMultisampleState = &multisampleStateInfo,
+        .pDepthStencilState = &depthStateInfo,
         .pColorBlendState = &colorBlendStateInfo,
         .pDynamicState = &dynamicStateInfo,
         .layout = *m_pipelineLayout,

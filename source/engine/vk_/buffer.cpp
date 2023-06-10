@@ -45,13 +45,11 @@ vk::UniqueBuffer Buffer::createStagingBufferUnique(vk::Device& device, vk::Devic
     return createBufferUnique(device, size, vk::BufferUsageFlagBits::eTransferSrc);
 }
 
-vk::UniqueDeviceMemory Buffer::createDeviceMemoryUnique(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::Buffer& buffer, vk::DeviceSize& size, const vk::MemoryPropertyFlags memoryFlags)
+vk::UniqueDeviceMemory Buffer::createDeviceMemoryUnique(vk::PhysicalDevice& physicalDevice, vk::Device& device, const vk::MemoryRequirements requirements, const vk::MemoryPropertyFlags memoryFlags)
 {
-    vk::MemoryRequirements memoryRequirements = device.getBufferMemoryRequirements(buffer);
-
     vk::MemoryAllocateInfo memoryInfo {
-        .allocationSize = memoryRequirements.size,
-        .memoryTypeIndex = Buffer::findMemoryType(physicalDevice, memoryRequirements.memoryTypeBits, memoryFlags)
+        .allocationSize = requirements.size,
+        .memoryTypeIndex = Buffer::findMemoryType(physicalDevice, requirements.memoryTypeBits, memoryFlags)
     };
 
     return device.allocateMemoryUnique(memoryInfo);
@@ -59,7 +57,7 @@ vk::UniqueDeviceMemory Buffer::createDeviceMemoryUnique(vk::PhysicalDevice& phys
 
 vk::UniqueDeviceMemory Buffer::createStagingMemoryUnique(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::Buffer& buffer, vk::DeviceSize& size)
 {
-    return createDeviceMemoryUnique(physicalDevice, device, buffer, size, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+    return createDeviceMemoryUnique(physicalDevice, device, device.getBufferMemoryRequirements(buffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 }
 
 Buffer::Buffer(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::CommandPool& commandPool, vk::Queue& graphicsQueue, const std::vector<vk_::Vertex>& vertices, const std::vector<uint16_t>& indices, uint32_t concurrentFrames)
@@ -75,7 +73,7 @@ Buffer::Buffer(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::Comma
     device.unmapMemory(*vertexStagingMemory);
 
     m_vertexBuffer = createBufferUnique(device, vertexBufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer);
-    m_vertexMemory = createDeviceMemoryUnique(physicalDevice, device, *m_vertexBuffer, vertexBufferSize, vk::MemoryPropertyFlagBits::eDeviceLocal);
+    m_vertexMemory = createDeviceMemoryUnique(physicalDevice, device, device.getBufferMemoryRequirements(*m_vertexBuffer), vk::MemoryPropertyFlagBits::eDeviceLocal);
     device.bindBufferMemory(*m_vertexBuffer, *m_vertexMemory, 0);
     copyBuffer(device, commandPool, graphicsQueue, *vertexStagingBuffer, *m_vertexBuffer, vertexBufferSize);
 
@@ -90,7 +88,7 @@ Buffer::Buffer(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::Comma
     device.unmapMemory(*indexStagingMemory);
 
     m_indexBuffer = createBufferUnique(device, indexBufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer);
-    m_indexMemory = createDeviceMemoryUnique(physicalDevice, device, *m_indexBuffer, indexBufferSize, vk::MemoryPropertyFlagBits::eDeviceLocal);
+    m_indexMemory = createDeviceMemoryUnique(physicalDevice, device, device.getBufferMemoryRequirements(*m_indexBuffer), vk::MemoryPropertyFlagBits::eDeviceLocal);
     device.bindBufferMemory(*m_indexBuffer, *m_indexMemory, 0);
     copyBuffer(device, commandPool, graphicsQueue, *indexStagingBuffer, *m_indexBuffer, indexBufferSize);
 
@@ -103,7 +101,7 @@ Buffer::Buffer(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::Comma
 
     for (size_t i = 0; i < concurrentFrames; i++) {
         m_uniformBuffers[i] = createBufferUnique(device, uniformBufferSize, vk::BufferUsageFlagBits::eUniformBuffer);
-        m_uniformMemorys[i] = createDeviceMemoryUnique(physicalDevice, device, *m_uniformBuffers[i], uniformBufferSize, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+        m_uniformMemorys[i] = createDeviceMemoryUnique(physicalDevice, device, device.getBufferMemoryRequirements(*m_uniformBuffers[i]), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
         device.bindBufferMemory(*m_uniformBuffers[i], *m_uniformMemorys[i], 0);
         m_uniformPtrs[i] = device.mapMemory(*m_uniformMemorys[i], 0, uniformBufferSize);
     }

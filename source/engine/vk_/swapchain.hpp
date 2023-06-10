@@ -19,7 +19,9 @@ private:
     void create(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& extent2D, vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::RenderPass& renderPass, vk::SwapchainKHR oldSwapchain = VK_NULL_HANDLE);
 
 public:
-    static vk::UniqueImageView createImageViewUnique(vk::Device& device, vk::Image& image, const vk::Format format);
+    static void transitionImageLayout(vk::Device& device, vk::CommandPool& commandPool, vk::Queue& graphicsQueue, vk::Image& image, const vk::Format format, const vk::ImageLayout oldLayout, const vk::ImageLayout newLayout);
+    static vk::UniqueImage createImageUnique(vk::Device& device, vk::Extent2D& extent, const vk::Format format, const vk::ImageTiling tiling, const vk::ImageUsageFlags usage);
+    static vk::UniqueImageView createImageViewUnique(vk::Device& device, vk::Image& image, const vk::Format format, vk::ImageAspectFlagBits aspectMask);
 
     Swapchain() = default;
     Swapchain(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D& extent2D, vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::RenderPass& renderPass);

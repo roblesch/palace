@@ -21,7 +21,7 @@ public:
     static uint32_t findMemoryType(vk::PhysicalDevice& physicalDevice, uint32_t typeFilter, const vk::MemoryPropertyFlags memPropertyFlags);
     static vk::UniqueBuffer createBufferUnique(vk::Device& device, vk::DeviceSize& size, const vk::BufferUsageFlags usage);
     static vk::UniqueBuffer createStagingBufferUnique(vk::Device& device, vk::DeviceSize& size);
-    static vk::UniqueDeviceMemory createDeviceMemoryUnique(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::Buffer& buffer, vk::DeviceSize& size, const vk::MemoryPropertyFlags memoryFlags);
+    static vk::UniqueDeviceMemory createDeviceMemoryUnique(vk::PhysicalDevice& physicalDevice, vk::Device& device, const vk::MemoryRequirements requirements, const vk::MemoryPropertyFlags memoryFlags);
     static vk::UniqueDeviceMemory createStagingMemoryUnique(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::Buffer& buffer, vk::DeviceSize& size);
 
     Buffer() = default;
