@@ -1,8 +1,9 @@
 #include "vulkan.hpp"
 
 #include "vk_/log.hpp"
-#include "vk_/vertex.hpp"
+#include "vk_/scene.hpp"
 #include "vk_/sdl2.hpp"
+#include "vk_/vertex.hpp"
 #include <chrono>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -104,11 +105,17 @@ void Vulkan::bindVertexBuffer(const std::vector<vk_::Vertex>& vertices, const st
 void Vulkan::loadTextureImage(const char* path)
 {
     if (!m_isVerticesBound) {
-        vk_::LOG_ERROR("Failed to load texture: no vertices bound");
+        vk_::LOG_ERROR("Failed to load texture: no vertices bound", "GFX");
         return;
     }
-    m_texture = vk_::Texture(path, m_device.physicalDevice(), m_device.device(), m_device.commandPool(), m_device.graphicsQueue());
+
+    vk::Extent2D extent;
+    unsigned char* px = vk_::stbLoadTexture(path, &extent.width, &extent.height);
+
+    m_texture = vk_::Texture(m_device.physicalDevice(), m_device.device(), m_device.commandPool(), m_device.graphicsQueue(), px, extent);
     m_pipeline.setDescriptorSets(m_device.device(), m_buffer.uniformBuffers(), m_texture.sampler(), m_texture.imageView(), s_concurrentFrames);
+
+    vk_::stbFreeTexture(px);
     m_isTextureLoaded = true;
 }
 
@@ -259,15 +266,15 @@ void Vulkan::modelViewProj()
 void Vulkan::run()
 {
     if (!m_isInitialized) {
-        vk_::LOG_ERROR("Failed to run: Vulkan not initialized.");
+        vk_::LOG_ERROR("Failed to run: Vulkan not initialized.", "GFX");
         return;
     }
     if (!m_isTextureLoaded) {
-        vk_::LOG_ERROR("Failed to run: no texture loaded.");
+        vk_::LOG_ERROR("Failed to run: no texture loaded.", "GFX");
         return;
     }
     if (!m_isVerticesBound) {
-        vk_::LOG_ERROR("Failed to run: no vertices bound.");
+        vk_::LOG_ERROR("Failed to run: no vertices bound.", "GFX");
         return;
     }
 

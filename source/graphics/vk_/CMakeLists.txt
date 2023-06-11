@@ -21,4 +21,5 @@ add_library(vk_
 target_link_libraries(vk_
         Vulkan::Vulkan
         SDL2::SDL2
-        tinyobjloader)
+        tinyobjloader
+        tinygltf)

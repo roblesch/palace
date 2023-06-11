@@ -1,10 +1,30 @@
 #include "scene.hpp"
 
+#include "log.hpp"
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
-#include "log.hpp"
+#define TINYGLTF_IMPLEMENTATION
+#define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "tiny_gltf.h"
 
 namespace vk_ {
+
+unsigned char* stbLoadTexture(const char* path, uint32_t* width, uint32_t* height)
+{
+    int w, h, c;
+    stbi_uc* px = stbi_load(path, &w, &h, &c, STBI_rgb_alpha);
+
+    *width = static_cast<uint32_t>(w);
+    *height = static_cast<uint32_t>(h);
+
+    return px;
+}
+
+void stbFreeTexture(unsigned char* px)
+{
+    stbi_image_free(px);
+}
 
 Scene::Scene()
     : vertices(std::vector<Vertex>())
@@ -22,8 +42,8 @@ Scene Scene::fromObj(const char* path)
     std::string warn, err;
 
     if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path)) {
-        LOG_ERROR("Failed to load obj file: %s", path);
-        exit(1);
+        LOG_ERROR("Failed to load obj file: %s", "OBJ");
+        return scene;
     }
 
     for (const auto& shape : shapes) {
@@ -46,6 +66,33 @@ Scene Scene::fromObj(const char* path)
             scene.vertices.push_back(vertex);
             scene.indices.push_back(scene.indices.size());
         }
+    }
+
+    return scene;
+}
+
+Scene Scene::fromGltf(const char* path)
+{
+    Scene scene;
+
+    tinygltf::Model model;
+    tinygltf::TinyGLTF loader;
+    std::string warn, err;
+
+    bool ret = loader.LoadBinaryFromFile(&model, &err, &warn, path);
+
+    if (!warn.empty()) {
+        LOG_WARN(warn.c_str(), "GLTF");
+    }
+
+    if (!err.empty()) {
+        LOG_ERROR(err.c_str(), "GLTF");
+        return scene;
+    }
+
+    if (!ret) {
+        LOG_ERROR("Failed to parse gltf file", "GLTF");
+        return scene;
     }
 
     return scene;

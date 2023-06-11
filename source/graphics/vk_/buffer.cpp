@@ -105,7 +105,6 @@ Buffer::Buffer(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::Comma
         device.bindBufferMemory(*m_uniformBuffers[i], *m_uniformMemorys[i], 0);
         m_uniformPtrs[i] = device.mapMemory(*m_uniformMemorys[i], 0, uniformBufferSize);
     }
-
 }
 
 vk::Buffer& Buffer::vertexBuffer()

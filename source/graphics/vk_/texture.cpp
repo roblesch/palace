@@ -3,22 +3,12 @@
 #include "buffer.hpp"
 #include "device.hpp"
 #include "swapchain.hpp"
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
 
 namespace vk_ {
 
-
-
-Texture::Texture(const char* path, vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::CommandPool& commandPool, vk::Queue& graphicsQueue)
+Texture::Texture(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::CommandPool& commandPool, vk::Queue& graphicsQueue, unsigned char* px, vk::Extent2D extent)
 {
-    // load bytes
-    int w, h, c;
-    stbi_uc* px = stbi_load(path, &w, &h, &c, STBI_rgb_alpha);
-    vk::DeviceSize imageSize = w * h * 4;
-    uint32_t width = static_cast<uint32_t>(w);
-    uint32_t height = static_cast<uint32_t>(h);
-
+    vk::DeviceSize imageSize = extent.width * extent.height * 4;
     vk::UniqueBuffer stagingBuffer = Buffer::createStagingBufferUnique(device, imageSize);
     vk::UniqueDeviceMemory stagingMemory = Buffer::createStagingMemoryUnique(physicalDevice, device, *stagingBuffer, imageSize);
     device.bindBufferMemory(*stagingBuffer, *stagingMemory, 0);
@@ -27,11 +17,8 @@ Texture::Texture(const char* path, vk::PhysicalDevice& physicalDevice, vk::Devic
     memcpy(ptr, px, imageSize);
     device.unmapMemory(*stagingMemory);
 
-    stbi_image_free(px);
-
     // image
     auto imageFormat = vk::Format::eR8G8B8A8Srgb;
-    vk::Extent2D extent { .width = width, .height = height };
 
     m_image = Swapchain::createImageUnique(device, extent, imageFormat, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled);
     m_imageMemory = Buffer::createDeviceMemoryUnique(physicalDevice, device, device.getImageMemoryRequirements(*m_image), vk::MemoryPropertyFlagBits::eDeviceLocal);
@@ -49,7 +36,7 @@ Texture::Texture(const char* path, vk::PhysicalDevice& physicalDevice, vk::Devic
             .baseArrayLayer = 0,
             .layerCount = 1 },
         .imageOffset = { 0, 0, 0 },
-        .imageExtent = { width, height, 1 }
+        .imageExtent = { extent.width, extent.height, 1 }
     };
 
     vk::UniqueCommandBuffer commandBuffer = Device::beginSingleUseCommandBuffer(device, commandPool);

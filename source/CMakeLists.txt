@@ -33,8 +33,5 @@ endforeach(GLSL)
 add_custom_target(shaders DEPENDS ${SPIRV_BINARY_FILES})
 add_dependencies(palace shaders)
 
-# copy textures
-file(COPY "${PROJECT_SOURCE_DIR}/textures" DESTINATION ${PROJECT_BINARY_DIR})
-
 # copy models
 file(COPY "${PROJECT_SOURCE_DIR}/models" DESTINATION ${PROJECT_BINARY_DIR})
