@@ -1,14 +1,14 @@
 #include "vulkan.hpp"
 
 #include "vk_/log.hpp"
-#include "vk_/primitive.hpp"
+#include "vk_/vertex.hpp"
 #include "vk_/sdl2.hpp"
 #include <chrono>
 #include <glm/gtc/matrix_transform.hpp>
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
-namespace engine {
+namespace gfx {
 
 Vulkan::Vulkan(bool enableValidation)
     : m_isValidationEnabled(enableValidation)
@@ -93,7 +93,7 @@ Vulkan::~Vulkan()
     SDL_Quit();
 }
 
-void Vulkan::bindVertexBuffer(const std::vector<vk_::Vertex>& vertices, const std::vector<uint16_t>& indices)
+void Vulkan::bindVertexBuffer(const std::vector<vk_::Vertex>& vertices, const std::vector<uint32_t>& indices)
 {
     m_vertexCount = vertices.size();
     m_indexCount = indices.size();
@@ -164,7 +164,7 @@ void Vulkan::recordCommandBuffer(vk::CommandBuffer& commandBuffer, uint32_t imag
         commandBuffer.setScissor(0, 1, &scissor);
 
         commandBuffer.bindVertexBuffers(0, m_buffer.vertexBuffer(), { 0 });
-        commandBuffer.bindIndexBuffer(m_buffer.indexBuffer(), 0, vk::IndexType::eUint16);
+        commandBuffer.bindIndexBuffer(m_buffer.indexBuffer(), 0, vk::IndexType::eUint32);
         commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipeline.pipelineLayout(), 0, 1, &m_pipeline.descriptorSet(m_currentFrame), 0, nullptr);
         commandBuffer.drawIndexed(m_indexCount, 1, 0, 0, 0);
     }

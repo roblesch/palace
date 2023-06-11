@@ -1,9 +1,15 @@
 #pragma once
 
 #include "include.hpp"
-#include "primitive.hpp"
+#include "vertex.hpp"
 
 namespace vk_ {
+
+struct UniformBufferObject {
+    alignas(16) glm::mat4 model;
+    alignas(16) glm::mat4 view;
+    alignas(16) glm::mat4 proj;
+};
 
 class Buffer {
 private:
@@ -25,7 +31,7 @@ public:
     static vk::UniqueDeviceMemory createStagingMemoryUnique(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::Buffer& buffer, vk::DeviceSize& size);
 
     Buffer() = default;
-    Buffer(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::CommandPool& commandPool, vk::Queue& graphicsQueue, const std::vector<vk_::Vertex>& vertices, const std::vector<uint16_t>& indices, uint32_t concurrentFrames);
+    Buffer(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::CommandPool& commandPool, vk::Queue& graphicsQueue, const std::vector<vk_::Vertex>& vertices, const std::vector<uint32_t>& indices, uint32_t concurrentFrames);
 
     vk::Buffer& vertexBuffer();
     vk::Buffer& indexBuffer();

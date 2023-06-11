@@ -1,7 +1,8 @@
 #include "pipeline.hpp"
 
-#include "primitive.hpp"
 #include <fstream>
+#include "buffer.hpp"
+#include "vertex.hpp"
 
 namespace vk_ {
 

@@ -1,11 +1,11 @@
-add_subdirectory(engine)
+add_subdirectory(graphics)
 
 add_executable(palace "palace.cpp")
 set_target_properties(palace PROPERTIES
 		RUNTIME_OUTPUT_DIRECTORY_DEBUG ${PROJECT_BINARY_DIR}
 		RUNTIME_OUTPUT_DIRECTORY_RELEASE ${PROJECT_BINARY_DIR})
 target_link_libraries(palace
-		engine
+		graphics
 		Vulkan::Vulkan
 		SDL2::SDL2)
 
@@ -35,3 +35,6 @@ add_dependencies(palace shaders)
 
 # copy textures
 file(COPY "${PROJECT_SOURCE_DIR}/textures" DESTINATION ${PROJECT_BINARY_DIR})
+
+# copy models
+file(COPY "${PROJECT_SOURCE_DIR}/models" DESTINATION ${PROJECT_BINARY_DIR})

@@ -1,32 +1,22 @@
-#include "engine/vk_/primitive.hpp"
-#include "engine/vulkan.hpp"
+#include <string>
+#include "graphics/vk_/scene.hpp"
+#include "graphics/vulkan.hpp"
 
-const std::vector<vk_::Vertex> vertices = {
-    { { -0.5f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
-    { { 0.5f, -0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f }, { 1.0f, 0.0f } },
-    { { 0.5f, 0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 1.0f } },
-    { { -0.5f, 0.5f, 0.0f }, { 1.0f, 1.0f, 1.0f }, { 0.0f, 1.0f } },
-
-    { { -0.5f, -0.5f, -0.5f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
-    { { 0.5f, -0.5f, -0.5f }, { 0.0f, 1.0f, 0.0f }, { 1.0f, 0.0f } },
-    { { 0.5f, 0.5f, -0.5f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 1.0f } },
-    { { -0.5f, 0.5f, -0.5f }, { 1.0f, 1.0f, 1.0f }, { 0.0f, 1.0f } }
-};
-
-const std::vector<uint16_t> indices = {
-    0, 1, 2, 2, 3, 0,
-    4, 5, 6, 6, 7, 4
-};
+const char* model_path = "models/viking_room.obj";
+const char* texture_path = "models/textures/viking_room.png";
 
 int main(const int argc, const char* argv[])
 {
+    vk_::Scene scene = vk_::Scene::fromObj(model_path);
+
 #ifdef NDEBUG
-    engine::Vulkan vulkan(false);
+    gfx::Vulkan vulkan(false);
 #else
-    engine::Vulkan vulkan;
+    gfx::Vulkan vulkan;
 #endif
-    vulkan.bindVertexBuffer(vertices, indices);
-    vulkan.loadTextureImage("textures/texture.jpg");
+
+    vulkan.bindVertexBuffer(scene.vertices, scene.indices);
+    vulkan.loadTextureImage(texture_path);
     vulkan.run();
 
     return 0;

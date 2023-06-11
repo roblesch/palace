@@ -7,14 +7,18 @@ add_library(vk_
         "device.hpp"
         "include.hpp"
         "log.hpp"
+        "log.cpp"
         "pipeline.cpp"
         "pipeline.hpp"
-        "primitive.hpp"
+        "scene.hpp"
+        "scene.cpp"
         "sdl2.hpp"
         "swapchain.cpp"
         "swapchain.hpp"
         "texture.hpp"
-        "texture.cpp")
+        "texture.cpp"
+        "vertex.hpp")
 target_link_libraries(vk_
         Vulkan::Vulkan
-        SDL2::SDL2)
+        SDL2::SDL2
+        tinyobjloader)

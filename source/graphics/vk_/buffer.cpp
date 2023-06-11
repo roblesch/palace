@@ -60,7 +60,7 @@ vk::UniqueDeviceMemory Buffer::createStagingMemoryUnique(vk::PhysicalDevice& phy
     return createDeviceMemoryUnique(physicalDevice, device, device.getBufferMemoryRequirements(buffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 }
 
-Buffer::Buffer(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::CommandPool& commandPool, vk::Queue& graphicsQueue, const std::vector<vk_::Vertex>& vertices, const std::vector<uint16_t>& indices, uint32_t concurrentFrames)
+Buffer::Buffer(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::CommandPool& commandPool, vk::Queue& graphicsQueue, const std::vector<vk_::Vertex>& vertices, const std::vector<uint32_t>& indices, uint32_t concurrentFrames)
 {
     // vertex buffer
     vk::DeviceSize vertexBufferSize = sizeof(vertices[0]) * vertices.size();

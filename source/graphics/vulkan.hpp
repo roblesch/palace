@@ -7,11 +7,11 @@
 #include "vk_/device.hpp"
 #include "vk_/include.hpp"
 #include "vk_/pipeline.hpp"
-#include "vk_/primitive.hpp"
+#include "vk_/vertex.hpp"
 #include "vk_/swapchain.hpp"
 #include "vk_/texture.hpp"
 
-namespace engine {
+namespace gfx {
 
 class Vulkan {
 private:
@@ -47,7 +47,7 @@ public:
     ~Vulkan();
 
     void loadTextureImage(const char* path);
-    void bindVertexBuffer(const std::vector<vk_::Vertex>& vertices, const std::vector<uint16_t>& indices);
+    void bindVertexBuffer(const std::vector<vk_::Vertex>& vertices, const std::vector<uint32_t>& indices);
 
     void recreateSwapchain();
     void recordCommandBuffer(vk::CommandBuffer& commandBuffer, uint32_t imageIndex);
