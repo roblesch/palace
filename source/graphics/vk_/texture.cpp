@@ -6,7 +6,7 @@
 
 namespace vk_ {
 
-Texture::Texture(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::CommandPool& commandPool, vk::Queue& graphicsQueue, unsigned char* px, vk::Extent2D extent)
+Texture::Texture(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::CommandPool& commandPool, vk::Queue& graphicsQueue, const unsigned char* px, vk::Extent2D extent)
 {
     vk::DeviceSize imageSize = extent.width * extent.height * 4;
     vk::UniqueBuffer stagingBuffer = Buffer::createStagingBufferUnique(device, imageSize);

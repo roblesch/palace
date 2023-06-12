@@ -1,12 +1,13 @@
 #include "scene.hpp"
 
 #include "log.hpp"
-#define TINYOBJLOADER_IMPLEMENTATION
-#include <tiny_obj_loader.h>
+#include <glm/gtc/type_ptr.hpp>
 #define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "tiny_gltf.h"
+#define TINYOBJLOADER_IMPLEMENTATION
+#include <tiny_obj_loader.h>
 
 namespace vk_ {
 
@@ -27,8 +28,7 @@ void stbFreeTexture(unsigned char* px)
 }
 
 Scene::Scene()
-    : vertices(std::vector<Vertex>())
-    , indices(std::vector<uint32_t>())
+    : meshes(std::vector<Mesh>())
 {
 }
 
@@ -47,6 +47,9 @@ Scene Scene::fromObj(const char* path)
     }
 
     for (const auto& shape : shapes) {
+        std::vector<Vertex> vertices;
+        std::vector<uint32_t> indices;
+
         for (const auto& index : shape.mesh.indices) {
             Vertex vertex {};
 
@@ -63,9 +66,11 @@ Scene Scene::fromObj(const char* path)
 
             vertex.color = { 1.0f, 1.0f, 1.0f };
 
-            scene.vertices.push_back(vertex);
-            scene.indices.push_back(scene.indices.size());
+            vertices.push_back(vertex);
+            indices.push_back(indices.size());
         }
+
+        scene.meshes.emplace_back(vertices, indices);
     }
 
     return scene;
@@ -79,7 +84,7 @@ Scene Scene::fromGltf(const char* path)
     tinygltf::TinyGLTF loader;
     std::string warn, err;
 
-    bool ret = loader.LoadBinaryFromFile(&model, &err, &warn, path);
+    bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, path);
 
     if (!warn.empty()) {
         LOG_WARN(warn.c_str(), "GLTF");
@@ -93,6 +98,66 @@ Scene Scene::fromGltf(const char* path)
     if (!ret) {
         LOG_ERROR("Failed to parse gltf file", "GLTF");
         return scene;
+    }
+
+    for (const auto& mesh : model.meshes) {
+        for (const auto& primitive : mesh.primitives) {
+            std::vector<Vertex> vertices;
+            std::vector<uint32_t> indices;
+
+            const float* positions;
+            const float* normals;
+            const float* texCoords;
+            size_t vertexCount;
+
+            // positions
+            {
+                const auto& accessor = model.accessors[primitive.attributes.at("POSITION")];
+                const auto& bufferView = model.bufferViews[accessor.bufferView];
+                const auto& buffer = model.buffers[bufferView.buffer];
+                positions = reinterpret_cast<const float*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
+                vertexCount = accessor.count;
+            }
+
+            // normals
+            {
+                const auto& accessor = model.accessors[primitive.attributes.at("NORMAL")];
+                const auto& bufferView = model.bufferViews[accessor.bufferView];
+                const auto& buffer = model.buffers[bufferView.buffer];
+                normals = reinterpret_cast<const float*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
+            }
+
+            // texCoords
+            {
+                const auto& accessor = model.accessors[primitive.attributes.at("TEXCOORD_0")];
+                const auto& bufferView = model.bufferViews[accessor.bufferView];
+                const auto& buffer = model.buffers[bufferView.buffer];
+                texCoords = reinterpret_cast<const float*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
+            }
+
+            // vertices
+            for (size_t i = 0; i < vertexCount; i++) {
+                vertices.emplace_back(
+                    glm::make_vec3(&positions[i * 3]),
+                    glm::vec3 { 1.0, 1.0, 1.0 },
+                    glm::make_vec2(&texCoords[i * 2]));
+            }
+
+            // indices
+            {
+                const auto& accessor = model.accessors[primitive.indices];
+                const auto& bufferView = model.bufferViews[accessor.bufferView];
+                const auto& buffer = model.buffers[bufferView.buffer];
+
+                const unsigned short* data = reinterpret_cast<const unsigned short*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
+
+                for (size_t i = 0; i < accessor.count; i++) {
+                    indices.push_back(data[i]);
+                }
+            }
+
+            scene.meshes.emplace_back(vertices, indices);
+        }
     }
 
     return scene;

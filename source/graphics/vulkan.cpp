@@ -254,8 +254,8 @@ void Vulkan::modelViewProj()
     float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
     vk_::UniformBufferObject ubo {
-        .model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
-        .view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
+        .model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f)),
+        .view = glm::lookAt(glm::vec3(0.0f, 0.0f, 0.15f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
         .proj = glm::perspective(glm::radians(45.0f), m_extent2D.width / (float)m_extent2D.height, 0.1f, 10.0f)
     };
     ubo.proj[1][1] *= -1;
@@ -269,10 +269,10 @@ void Vulkan::run()
         vk_::LOG_ERROR("Failed to run: Vulkan not initialized.", "GFX");
         return;
     }
-    if (!m_isTextureLoaded) {
-        vk_::LOG_ERROR("Failed to run: no texture loaded.", "GFX");
-        return;
-    }
+    //if (!m_isTextureLoaded) {
+    //    vk_::LOG_ERROR("Failed to run: no texture loaded.", "GFX");
+    //    return;
+    //}
     if (!m_isVerticesBound) {
         vk_::LOG_ERROR("Failed to run: no vertices bound.", "GFX");
         return;

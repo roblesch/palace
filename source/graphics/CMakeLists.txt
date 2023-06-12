@@ -1,7 +1,4 @@
-project(graphics)
-
 add_subdirectory(vk_)
-
 add_library(graphics
         "vulkan.cpp"
         "vulkan.hpp")

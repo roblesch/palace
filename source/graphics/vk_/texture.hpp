@@ -13,7 +13,7 @@ private:
 
 public:
     Texture() = default;
-    Texture(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::CommandPool& commandPool, vk::Queue& graphicsQueue, unsigned char* px, vk::Extent2D extent);
+    Texture(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::CommandPool& commandPool, vk::Queue& graphicsQueue, const unsigned char* px, vk::Extent2D extent);
 
     vk::ImageView& imageView();
     vk::Sampler& sampler();
