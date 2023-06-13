@@ -7,15 +7,6 @@
 namespace pl {
 
 class Parser {
-private:
-    const std::vector<const char*> m_flags {
-        "-g",
-        "-o",
-        "-t"
-    };
-
-    std::map<std::string, const char*> args;
-
 public:
     Parser() = default;
     Parser(int argc, const char* argv[]);
@@ -24,6 +15,15 @@ public:
     const char* obj_path();
     const char* gltf_path();
     const char* texture_path();
+
+private:
+    const std::vector<const char*> m_flags {
+        "-g",
+        "-o",
+        "-t"
+    };
+
+    std::map<std::string, const char*> args;
 };
 
 }

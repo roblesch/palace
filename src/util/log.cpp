@@ -1,4 +1,5 @@
 #include "log.hpp"
+
 #include <stdio.h>
 
 namespace pl {

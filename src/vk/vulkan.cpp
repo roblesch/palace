@@ -1,10 +1,12 @@
 #include "vulkan.hpp"
 
-#include "util/log.hpp"
-#include "gltf/scene.hpp"
 #include <chrono>
 #include <fstream>
+
 #include <glm/gtc/matrix_transform.hpp>
+
+#include "gltf/scene.hpp"
+#include "util/log.hpp"
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
@@ -58,28 +60,28 @@ std::vector<char> readSpirVFile(const std::string& spirVFile)
 }
 
 Vulkan::Vulkan(bool enableValidation)
-    : m_isValidationEnabled(enableValidation)
+    : isValidationEnabled_(enableValidation)
 {
     // dynamic dispatch loader
-    auto vkGetInstanceProcAddr = m_dynamicLoader.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
+    auto vkGetInstanceProcAddr = dynamicLoader_.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
     VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
 
     // window
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Vulkan_LoadLibrary(nullptr);
-    m_window = SDL_CreateWindow("palace", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-        s_windowWidth, s_windowHeight, SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | SDL_WINDOW_VULKAN);
-    SDL_SetWindowMinimumSize(m_window, 400, 300);
-    m_extent2D = vk::Extent2D {
-        .width = s_windowWidth,
-        .height = s_windowHeight
+    window_ = SDL_CreateWindow("palace", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+        sWidth_, sHeight_, SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | SDL_WINDOW_VULKAN);
+    SDL_SetWindowMinimumSize(window_, 400, 300);
+    extents_ = vk::Extent2D {
+        .width = sWidth_,
+        .height = sHeight_
     };
 
     // sdl2
     unsigned int extensionCount;
-    SDL_Vulkan_GetInstanceExtensions(m_window, &extensionCount, nullptr);
+    SDL_Vulkan_GetInstanceExtensions(window_, &extensionCount, nullptr);
     std::vector<const char*> instanceExtensions(extensionCount);
-    SDL_Vulkan_GetInstanceExtensions(m_window, &extensionCount, instanceExtensions.data());
+    SDL_Vulkan_GetInstanceExtensions(window_, &extensionCount, instanceExtensions.data());
 
     // molten vk
     vk::InstanceCreateFlagBits flags {};
@@ -96,13 +98,11 @@ Vulkan::Vulkan(bool enableValidation)
         .apiVersion = VK_API_VERSION_1_0
     };
 
-    
-
     // validation
     std::vector<const char*> validationLayers;
     vk::DebugUtilsMessengerCreateInfoEXT debugInfo {};
 
-    if (m_isValidationEnabled) {
+    if (isValidationEnabled_) {
         instanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
         validationLayers.push_back("VK_LAYER_KHRONOS_validation");
         debugInfo = {
@@ -122,41 +122,41 @@ Vulkan::Vulkan(bool enableValidation)
         .enabledExtensionCount = static_cast<uint32_t>(instanceExtensions.size()),
         .ppEnabledExtensionNames = instanceExtensions.data()
     };
-    m_instance = vk::createInstanceUnique(instanceInfo, nullptr);
-    VULKAN_HPP_DEFAULT_DISPATCHER.init(*m_instance);
+    instance_ = vk::createInstanceUnique(instanceInfo, nullptr);
+    VULKAN_HPP_DEFAULT_DISPATCHER.init(*instance_);
 
     // surface
     VkSurfaceKHR surface;
-    SDL_Vulkan_CreateSurface(m_window, *m_instance, &surface);
-    vk::ObjectDestroy<vk::Instance, VULKAN_HPP_DEFAULT_DISPATCHER_TYPE> deleter(*m_instance);
-    m_surface = vk::UniqueSurfaceKHR(surface, deleter);
+    SDL_Vulkan_CreateSurface(window_, *instance_, &surface);
+    vk::ObjectDestroy<vk::Instance, VULKAN_HPP_DEFAULT_DISPATCHER_TYPE> deleter(*instance_);
+    surface_ = vk::UniqueSurfaceKHR(surface, deleter);
 
     // physical device
-    for (auto& physicalDevice : m_instance->enumeratePhysicalDevices()) {
+    for (auto& physicalDevice : instance_->enumeratePhysicalDevices()) {
         vk::PhysicalDeviceProperties deviceProperties = physicalDevice.getProperties();
         vk::PhysicalDeviceFeatures deviceFeatures = physicalDevice.getFeatures();
         if (deviceProperties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu) {
-            m_physicalDevice = physicalDevice;
+            physicalDevice_ = physicalDevice;
             break;
         } else if (deviceProperties.deviceType == vk::PhysicalDeviceType::eIntegratedGpu) {
-            m_physicalDevice = physicalDevice;
+            physicalDevice_ = physicalDevice;
             break;
         } else if (deviceProperties.deviceType == vk::PhysicalDeviceType::eCpu) {
-            m_physicalDevice = physicalDevice;
+            physicalDevice_ = physicalDevice;
             break;
         }
     }
 
     // queue families
-    std::vector<vk::QueueFamilyProperties> queueFamilies = m_physicalDevice.getQueueFamilyProperties();
+    std::vector<vk::QueueFamilyProperties> queueFamilies = physicalDevice_.getQueueFamilyProperties();
     for (uint32_t i = 0; i < queueFamilies.size(); i++) {
         if (queueFamilies[i].queueFlags & vk::QueueFlagBits::eGraphics) {
-            m_queueFamilyIndices.graphics = i;
+            queueFamilyIndices_.graphics = i;
         }
     }
 
     std::vector<vk::DeviceQueueCreateInfo> queueInfos {
-        { .queueFamilyIndex = m_queueFamilyIndices.graphics,
+        { .queueFamilyIndex = queueFamilyIndices_.graphics,
             .queueCount = 1,
             .pQueuePriorities = new float(0.0f) }
     };
@@ -178,33 +178,33 @@ Vulkan::Vulkan(bool enableValidation)
         .pEnabledFeatures = &deviceFeatures
     };
 
-    m_device = m_physicalDevice.createDeviceUnique(deviceInfo);
+    device_ = physicalDevice_.createDeviceUnique(deviceInfo);
 
     // graphics queue
-    m_graphicsQueue = m_device->getQueue(m_queueFamilyIndices.graphics, 0);
+    graphicsQueue_ = device_->getQueue(queueFamilyIndices_.graphics, 0);
 
     // command pool
     vk::CommandPoolCreateInfo commandPoolInfo {
         .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
-        .queueFamilyIndex = m_queueFamilyIndices.graphics
+        .queueFamilyIndex = queueFamilyIndices_.graphics
     };
 
-    m_commandPool = m_device->createCommandPoolUnique(commandPoolInfo);
+    commandPool_ = device_->createCommandPoolUnique(commandPoolInfo);
 
     // command buffers
     vk::CommandBufferAllocateInfo commandBufferAllocInfo {
-        .commandPool = *m_commandPool,
+        .commandPool = *commandPool_,
         .level = vk::CommandBufferLevel::ePrimary,
-        .commandBufferCount = s_concurrentFrames
+        .commandBufferCount = sConcurrentFrames_
     };
 
-    m_commandBuffers = m_device->allocateCommandBuffersUnique(commandBufferAllocInfo);
+    commandBuffers_ = device_->allocateCommandBuffersUnique(commandBufferAllocInfo);
 
     // sync
-    for (size_t i = 0; i < s_concurrentFrames; i++) {
-        m_imageAvailableSemaphores.push_back(m_device->createSemaphoreUnique({}));
-        m_renderFinishedSemaphores.push_back(m_device->createSemaphoreUnique({}));
-        m_inFlightFences.push_back(m_device->createFenceUnique({ .flags = vk::FenceCreateFlagBits::eSignaled }));
+    for (size_t i = 0; i < sConcurrentFrames_; i++) {
+        imageAvailableSemaphores_.push_back(device_->createSemaphoreUnique({}));
+        renderFinishedSemaphores_.push_back(device_->createSemaphoreUnique({}));
+        inFlightFences_.push_back(device_->createFenceUnique({ .flags = vk::FenceCreateFlagBits::eSignaled }));
     }
 
     // uniform modelview transforms
@@ -230,49 +230,49 @@ Vulkan::Vulkan(bool enableValidation)
         .pBindings = bindings.data()
     };
 
-    m_descriptorSetLayout = m_device->createDescriptorSetLayoutUnique(descriptorLayoutInfo);
+    pipelineDescriptorLayout_ = device_->createDescriptorSetLayoutUnique(descriptorLayoutInfo);
 
     // descriptor pools
     vk::DescriptorPoolSize uboSize {
         .type = vk::DescriptorType::eUniformBuffer,
-        .descriptorCount = s_concurrentFrames
+        .descriptorCount = sConcurrentFrames_
     };
 
     vk::DescriptorPoolSize samplerSize {
         .type = vk::DescriptorType::eCombinedImageSampler,
-        .descriptorCount = s_concurrentFrames
+        .descriptorCount = sConcurrentFrames_
     };
 
     std::array<vk::DescriptorPoolSize, 2> pipelinePoolSizes { uboSize, samplerSize };
 
     vk::DescriptorPoolCreateInfo pipelinePoolInfo {
         .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-        .maxSets = s_concurrentFrames,
+        .maxSets = sConcurrentFrames_,
         .poolSizeCount = 2,
         .pPoolSizes = pipelinePoolSizes.data()
     };
 
-    m_descriptorPool = m_device->createDescriptorPoolUnique(pipelinePoolInfo);
+    pipelineDescriptorPool_ = device_->createDescriptorPoolUnique(pipelinePoolInfo);
 
     // descriptor sets
-    std::vector<vk::DescriptorSetLayout> layouts(s_concurrentFrames, *m_descriptorSetLayout);
+    std::vector<vk::DescriptorSetLayout> layouts(sConcurrentFrames_, *pipelineDescriptorLayout_);
 
     vk::DescriptorSetAllocateInfo descriptorSetInfo {
-        .descriptorPool = *m_descriptorPool,
-        .descriptorSetCount = s_concurrentFrames,
+        .descriptorPool = *pipelineDescriptorPool_,
+        .descriptorSetCount = sConcurrentFrames_,
         .pSetLayouts = layouts.data()
     };
 
-    m_descriptorSets = m_device->allocateDescriptorSetsUnique(descriptorSetInfo);
+    pipelineDescriptorSets_ = device_->allocateDescriptorSetsUnique(descriptorSetInfo);
 
     // shaders
     std::vector<char> vertexShaderBytes = readSpirVFile("shaders/vertex.spv");
     std::vector<char> fragmentShaderBytes = readSpirVFile("shaders/fragment.spv");
 
-    auto vertexShaderModule = m_device->createShaderModuleUnique({ .codeSize = vertexShaderBytes.size(),
+    auto vertexShaderModule = device_->createShaderModuleUnique({ .codeSize = vertexShaderBytes.size(),
         .pCode = reinterpret_cast<const uint32_t*>(vertexShaderBytes.data()) });
 
-    auto fragmentShaderModule = m_device->createShaderModuleUnique({ .codeSize = fragmentShaderBytes.size(),
+    auto fragmentShaderModule = device_->createShaderModuleUnique({ .codeSize = fragmentShaderBytes.size(),
         .pCode = reinterpret_cast<const uint32_t*>(fragmentShaderBytes.data()) });
 
     std::vector<vk::PipelineShaderStageCreateInfo> shaderStageInfos {
@@ -328,15 +328,15 @@ Vulkan::Vulkan(bool enableValidation)
     vk::Viewport viewport {
         .x = 0.0f,
         .y = 0.0f,
-        .width = static_cast<float>(m_extent2D.width),
-        .height = static_cast<float>(m_extent2D.height),
+        .width = static_cast<float>(extents_.width),
+        .height = static_cast<float>(extents_.height),
         .minDepth = 0.0f,
         .maxDepth = 1.0f
     };
 
     vk::Rect2D scissor {
         .offset = { 0, 0 },
-        .extent = m_extent2D
+        .extent = extents_
     };
 
     vk::PipelineViewportStateCreateInfo viewportStateInfo {
@@ -402,9 +402,9 @@ Vulkan::Vulkan(bool enableValidation)
     // pipeline layout
     vk::PipelineLayoutCreateInfo pipelineLayoutInfo {
         .setLayoutCount = 1,
-        .pSetLayouts = &(*m_descriptorSetLayout)
+        .pSetLayouts = &pipelineDescriptorLayout_.get()
     };
-    m_pipelineLayout = m_device->createPipelineLayoutUnique(pipelineLayoutInfo);
+    pipelineLayout_ = device_->createPipelineLayoutUnique(pipelineLayoutInfo);
 
     // attachments
     vk::AttachmentDescription colorAttachment {
@@ -466,7 +466,7 @@ Vulkan::Vulkan(bool enableValidation)
         .pDependencies = &dependency
     };
 
-    m_renderPass = m_device->createRenderPassUnique(renderPassInfo);
+    renderPass_ = device_->createRenderPassUnique(renderPassInfo);
 
     // pipeline
     vk::GraphicsPipelineCreateInfo graphicsPipelineInfo {
@@ -480,12 +480,12 @@ Vulkan::Vulkan(bool enableValidation)
         .pDepthStencilState = &depthStateInfo,
         .pColorBlendState = &colorBlendStateInfo,
         .pDynamicState = &dynamicStateInfo,
-        .layout = *m_pipelineLayout,
-        .renderPass = *m_renderPass,
+        .layout = *pipelineLayout_,
+        .renderPass = *renderPass_,
         .subpass = 0
     };
 
-    m_pipeline = m_device->createGraphicsPipelineUnique(nullptr, graphicsPipelineInfo).value;
+    pipeline_ = device_->createGraphicsPipelineUnique(nullptr, graphicsPipelineInfo).value;
 
     // swapchain
     createSwapchain();
@@ -512,149 +512,92 @@ Vulkan::Vulkan(bool enableValidation)
         .pPoolSizes = imguiPoolSizes
     };
 
-    m_imguiDescriptorPool = m_device->createDescriptorPoolUnique(imguiPoolInfo);
+    imguiDescriptorPool_ = device_->createDescriptorPoolUnique(imguiPoolInfo);
 
     ImGui::CreateContext();
-    ImGui_ImplSDL2_InitForVulkan(m_window);
+    ImGui_ImplSDL2_InitForVulkan(window_);
 
     ImGui_ImplVulkan_InitInfo imguiInfo {
-        .Instance = *m_instance,
-        .PhysicalDevice = m_physicalDevice,
-        .Device = *m_device,
-        .Queue = m_graphicsQueue,
-        .DescriptorPool = *m_imguiDescriptorPool,
+        .Instance = *instance_,
+        .PhysicalDevice = physicalDevice_,
+        .Device = *device_,
+        .Queue = graphicsQueue_,
+        .DescriptorPool = *imguiDescriptorPool_,
         .MinImageCount = 3,
         .ImageCount = 3,
         .MSAASamples = VK_SAMPLE_COUNT_1_BIT
     };
 
-    ImGui_ImplVulkan_Init(&imguiInfo, *m_renderPass);
+    ImGui_ImplVulkan_Init(&imguiInfo, *renderPass_);
     auto cmd = beginSingleUseCommandBuffer();
     ImGui_ImplVulkan_CreateFontsTexture(*cmd);
     endSingleUseCommandBuffer(*cmd);
     ImGui_ImplVulkan_DestroyFontUploadObjects();
 
-    m_isInitialized = true;
+    isInitialized_ = true;
 }
 
 Vulkan::~Vulkan()
 {
     ImGui_ImplVulkan_Shutdown();
-    SDL_DestroyWindow(m_window);
+    SDL_DestroyWindow(window_);
     SDL_Quit();
-}
-
-void Vulkan::copyBuffer(vk::Buffer src, vk::Buffer dst, vk::DeviceSize size)
-{
-    vk::CommandBufferAllocateInfo commandBufferInfo {
-        .commandPool = *m_commandPool,
-        .level = vk::CommandBufferLevel::ePrimary,
-        .commandBufferCount = 1
-    };
-
-    auto cmd = beginSingleUseCommandBuffer();
-    cmd->copyBuffer(src, dst, { { .size = size } });
-    endSingleUseCommandBuffer(*cmd);
-}
-
-uint32_t Vulkan::findMemoryType(uint32_t typeFilter, const vk::MemoryPropertyFlags memPropertyFlags)
-{
-    vk::PhysicalDeviceMemoryProperties memProperties = m_physicalDevice.getMemoryProperties();
-
-    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
-        if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & memPropertyFlags) == memPropertyFlags) {
-            return i;
-        }
-    }
-    return 0;
-}
-
-vk::UniqueBuffer Vulkan::createBufferUnique(vk::DeviceSize& size, const vk::BufferUsageFlags usage)
-{
-    vk::BufferCreateInfo bufferInfo {
-        .size = size,
-        .usage = usage,
-        .sharingMode = vk::SharingMode::eExclusive
-    };
-
-    return m_device->createBufferUnique(bufferInfo);
-}
-
-vk::UniqueBuffer Vulkan::createStagingBufferUnique(vk::DeviceSize& size)
-{
-    return createBufferUnique(size, vk::BufferUsageFlagBits::eTransferSrc);
-}
-
-vk::UniqueDeviceMemory Vulkan::createDeviceMemoryUnique(const vk::MemoryRequirements requirements, const vk::MemoryPropertyFlags memoryFlags)
-{
-    vk::MemoryAllocateInfo memoryInfo {
-        .allocationSize = requirements.size,
-        .memoryTypeIndex = findMemoryType(requirements.memoryTypeBits, memoryFlags)
-    };
-
-    return m_device->allocateMemoryUnique(memoryInfo);
-}
-
-vk::UniqueDeviceMemory Vulkan::createStagingMemoryUnique(vk::Buffer& buffer, vk::DeviceSize& size)
-{
-    return createDeviceMemoryUnique(m_device->getBufferMemoryRequirements(buffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 }
 
 void Vulkan::bindVertexBuffer(const std::vector<pl::Vertex>& vertices, const std::vector<uint32_t>& indices)
 {
-    m_vertexCount = vertices.size();
-    m_indexCount = indices.size();
+    indicesCount_ = indices.size();
 
     // vertex buffer
     vk::DeviceSize vertexBufferSize = sizeof(vertices[0]) * vertices.size();
     auto vertexStagingBuffer = createStagingBufferUnique(vertexBufferSize);
     auto vertexStagingMemory = createStagingMemoryUnique(*vertexStagingBuffer, vertexBufferSize);
-    m_device->bindBufferMemory(*vertexStagingBuffer, *vertexStagingMemory, 0);
+    device_->bindBufferMemory(*vertexStagingBuffer, *vertexStagingMemory, 0);
 
-    void* vertexMemoryPtr = m_device->mapMemory(*vertexStagingMemory, 0, vertexBufferSize);
+    void* vertexMemoryPtr = device_->mapMemory(*vertexStagingMemory, 0, vertexBufferSize);
     memcpy(vertexMemoryPtr, vertices.data(), vertexBufferSize);
-    m_device->unmapMemory(*vertexStagingMemory);
+    device_->unmapMemory(*vertexStagingMemory);
 
-    m_vertexBuffer = createBufferUnique(vertexBufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer);
-    m_vertexMemory = createDeviceMemoryUnique(m_device->getBufferMemoryRequirements(*m_vertexBuffer), vk::MemoryPropertyFlagBits::eDeviceLocal);
-    m_device->bindBufferMemory(*m_vertexBuffer, *m_vertexMemory, 0);
-    copyBuffer(*vertexStagingBuffer, *m_vertexBuffer, vertexBufferSize);
+    vertexBuffer_ = createBufferUnique(vertexBufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer);
+    vertexMemory_ = createDeviceMemoryUnique(device_->getBufferMemoryRequirements(*vertexBuffer_), vk::MemoryPropertyFlagBits::eDeviceLocal);
+    device_->bindBufferMemory(*vertexBuffer_, *vertexMemory_, 0);
+    copyBuffer(*vertexStagingBuffer, *vertexBuffer_, vertexBufferSize);
 
     // index buffer
     vk::DeviceSize indexBufferSize = sizeof(indices[0]) * indices.size();
     auto indexStagingBuffer = createStagingBufferUnique(indexBufferSize);
     auto indexStagingMemory = createStagingMemoryUnique(*indexStagingBuffer, indexBufferSize);
-    m_device->bindBufferMemory(*indexStagingBuffer, *indexStagingMemory, 0);
+    device_->bindBufferMemory(*indexStagingBuffer, *indexStagingMemory, 0);
 
-    void* indexMemoryPtr = m_device->mapMemory(*indexStagingMemory, 0, indexBufferSize);
+    void* indexMemoryPtr = device_->mapMemory(*indexStagingMemory, 0, indexBufferSize);
     memcpy(indexMemoryPtr, indices.data(), indexBufferSize);
-    m_device->unmapMemory(*indexStagingMemory);
+    device_->unmapMemory(*indexStagingMemory);
 
-    m_indexBuffer = createBufferUnique(indexBufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer);
-    m_indexMemory = createDeviceMemoryUnique(m_device->getBufferMemoryRequirements(*m_indexBuffer), vk::MemoryPropertyFlagBits::eDeviceLocal);
-    m_device->bindBufferMemory(*m_indexBuffer, *m_indexMemory, 0);
-    copyBuffer(*indexStagingBuffer, *m_indexBuffer, indexBufferSize);
+    indexBuffer_ = createBufferUnique(indexBufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer);
+    indexMemory_ = createDeviceMemoryUnique(device_->getBufferMemoryRequirements(*indexBuffer_), vk::MemoryPropertyFlagBits::eDeviceLocal);
+    device_->bindBufferMemory(*indexBuffer_, *indexMemory_, 0);
+    copyBuffer(*indexStagingBuffer, *indexBuffer_, indexBufferSize);
 
     // uniform buffers
     vk::DeviceSize uniformBufferSize = sizeof(UniformBufferObject);
 
-    m_uniformBuffers.resize(s_concurrentFrames);
-    m_uniformMemorys.resize(s_concurrentFrames);
-    m_uniformPtrs.resize(s_concurrentFrames);
+    uniformBuffers_.resize(sConcurrentFrames_);
+    uniformMemories_.resize(sConcurrentFrames_);
+    uniformPtrs_.resize(sConcurrentFrames_);
 
-    for (size_t i = 0; i < s_concurrentFrames; i++) {
-        m_uniformBuffers[i] = createBufferUnique(uniformBufferSize, vk::BufferUsageFlagBits::eUniformBuffer);
-        m_uniformMemorys[i] = createDeviceMemoryUnique(m_device->getBufferMemoryRequirements(*m_uniformBuffers[i]), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-        m_device->bindBufferMemory(*m_uniformBuffers[i], *m_uniformMemorys[i], 0);
-        m_uniformPtrs[i] = m_device->mapMemory(*m_uniformMemorys[i], 0, uniformBufferSize);
+    for (size_t i = 0; i < sConcurrentFrames_; i++) {
+        uniformBuffers_[i] = createBufferUnique(uniformBufferSize, vk::BufferUsageFlagBits::eUniformBuffer);
+        uniformMemories_[i] = createDeviceMemoryUnique(device_->getBufferMemoryRequirements(*uniformBuffers_[i]), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+        device_->bindBufferMemory(*uniformBuffers_[i], *uniformMemories_[i], 0);
+        uniformPtrs_[i] = device_->mapMemory(*uniformMemories_[i], 0, uniformBufferSize);
     }
 
-    m_isVerticesBound = true;
+    isVerticesBound_ = true;
 }
 
 void Vulkan::loadTextureImage(const char* path)
 {
-    if (!m_isVerticesBound) {
+    if (!isVerticesBound_) {
         LOG_ERROR("Failed to load texture: no vertices bound", "GFX");
         return;
     }
@@ -665,20 +608,20 @@ void Vulkan::loadTextureImage(const char* path)
     vk::DeviceSize imageSize = extent.width * extent.height * 4;
     vk::UniqueBuffer stagingBuffer = createStagingBufferUnique(imageSize);
     vk::UniqueDeviceMemory stagingMemory = createStagingMemoryUnique(*stagingBuffer, imageSize);
-    m_device->bindBufferMemory(*stagingBuffer, *stagingMemory, 0);
+    device_->bindBufferMemory(*stagingBuffer, *stagingMemory, 0);
 
-    void* ptr = m_device->mapMemory(*stagingMemory, 0, imageSize);
+    void* ptr = device_->mapMemory(*stagingMemory, 0, imageSize);
     memcpy(ptr, px, imageSize);
-    m_device->unmapMemory(*stagingMemory);
+    device_->unmapMemory(*stagingMemory);
 
     // image
     auto imageFormat = vk::Format::eR8G8B8A8Unorm;
 
-    m_texture = createImageUnique(extent, imageFormat, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled);
-    m_textureMemory = createDeviceMemoryUnique(m_device->getImageMemoryRequirements(*m_texture), vk::MemoryPropertyFlagBits::eDeviceLocal);
-    m_device->bindImageMemory(*m_texture, *m_textureMemory, 0);
+    texture_ = createImageUnique(extent, imageFormat, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled);
+    textureMemory_ = createDeviceMemoryUnique(device_->getImageMemoryRequirements(*texture_), vk::MemoryPropertyFlagBits::eDeviceLocal);
+    device_->bindImageMemory(*texture_, *textureMemory_, 0);
 
-    transitionImageLayout(*m_texture, imageFormat, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+    transitionImageLayout(*texture_, imageFormat, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
 
     vk::BufferImageCopy region {
         .bufferOffset = 0,
@@ -694,13 +637,13 @@ void Vulkan::loadTextureImage(const char* path)
     };
 
     auto cmd = beginSingleUseCommandBuffer();
-    cmd->copyBufferToImage(*stagingBuffer, *m_texture, vk::ImageLayout::eTransferDstOptimal, region);
+    cmd->copyBufferToImage(*stagingBuffer, *texture_, vk::ImageLayout::eTransferDstOptimal, region);
     endSingleUseCommandBuffer(*cmd);
 
-    transitionImageLayout(*m_texture, imageFormat, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+    transitionImageLayout(*texture_, imageFormat, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
 
     // image view
-    m_textureView = createImageViewUnique(*m_texture, imageFormat, vk::ImageAspectFlagBits::eColor);
+    textureView_ = createImageViewUnique(*texture_, imageFormat, vk::ImageAspectFlagBits::eColor);
 
     // sampler
     vk::SamplerCreateInfo samplerInfo {
@@ -712,7 +655,7 @@ void Vulkan::loadTextureImage(const char* path)
         .addressModeW = vk::SamplerAddressMode::eRepeat,
         .mipLodBias = 0.0f,
         .anisotropyEnable = VK_TRUE,
-        .maxAnisotropy = m_physicalDevice.getProperties().limits.maxSamplerAnisotropy,
+        .maxAnisotropy = physicalDevice_.getProperties().limits.maxSamplerAnisotropy,
         .compareEnable = VK_FALSE,
         .compareOp = vk::CompareOp::eAlways,
         .minLod = 0.0f,
@@ -721,26 +664,26 @@ void Vulkan::loadTextureImage(const char* path)
         .unnormalizedCoordinates = VK_FALSE
     };
 
-    m_textureSampler = m_device->createSamplerUnique(samplerInfo);
+    textureSampler_ = device_->createSamplerUnique(samplerInfo);
 
     // descriptor sets
-    m_descriptorSets.resize(s_concurrentFrames);
+    pipelineDescriptorSets_.resize(sConcurrentFrames_);
 
-    for (size_t i = 0; i < s_concurrentFrames; i++) {
+    for (size_t i = 0; i < sConcurrentFrames_; i++) {
         vk::DescriptorBufferInfo uboInfo {
-            .buffer = *m_uniformBuffers[i],
+            .buffer = *uniformBuffers_[i],
             .offset = 0,
             .range = sizeof(UniformBufferObject)
         };
 
         vk::DescriptorImageInfo samplerInfo {
-            .sampler = *m_textureSampler,
-            .imageView = *m_textureView,
+            .sampler = *textureSampler_,
+            .imageView = *textureView_,
             .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
         };
 
         vk::WriteDescriptorSet uboWriteDescriptor {
-            .dstSet = *m_descriptorSets[i],
+            .dstSet = *pipelineDescriptorSets_[i],
             .dstBinding = 0,
             .dstArrayElement = 0,
             .descriptorCount = 1,
@@ -749,7 +692,7 @@ void Vulkan::loadTextureImage(const char* path)
         };
 
         vk::WriteDescriptorSet samplerWriteDescriptor {
-            .dstSet = *m_descriptorSets[i],
+            .dstSet = *pipelineDescriptorSets_[i],
             .dstBinding = 1,
             .dstArrayElement = 0,
             .descriptorCount = 1,
@@ -758,11 +701,247 @@ void Vulkan::loadTextureImage(const char* path)
         };
 
         std::array<vk::WriteDescriptorSet, 2> writeDescriptors { uboWriteDescriptor, samplerWriteDescriptor };
-        m_device->updateDescriptorSets(writeDescriptors.size(), writeDescriptors.data(), 0, nullptr);
+        device_->updateDescriptorSets(writeDescriptors.size(), writeDescriptors.data(), 0, nullptr);
     }
 
     pl::stbFreeTexture(px);
-    m_isTextureLoaded = true;
+    isTextureLoaded_ = true;
+}
+
+void Vulkan::run()
+{
+    if (!isInitialized_) {
+        LOG_ERROR("Failed to run: Vulkan not initialized.", "GFX");
+        return;
+    }
+    if (!isTextureLoaded_) {
+        LOG_ERROR("Failed to run: no texture loaded.", "GFX");
+        return;
+    }
+    if (!isVerticesBound_) {
+        LOG_ERROR("Failed to run: no vertices bound.", "GFX");
+        return;
+    }
+
+    while (true) {
+        SDL_Event event;
+        if (SDL_PollEvent(&event)) {
+            ImGui_ImplSDL2_ProcessEvent(&event);
+            if (event.type == SDL_QUIT)
+                break;
+            if (event.type == SDL_WINDOWEVENT) {
+                if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
+                    isResized_ = true;
+                }
+            }
+        }
+
+        if (SDL_GetWindowFlags(window_) & SDL_WINDOW_MINIMIZED)
+            continue;
+
+        ImGui_ImplVulkan_NewFrame();
+        ImGui_ImplSDL2_NewFrame(window_);
+        ImGui::NewFrame();
+        ImGui::ShowDemoWindow();
+        ImGui::Render();
+
+        modelViewProj();
+        drawFrame();
+    }
+
+    device_->waitIdle();
+}
+
+void Vulkan::modelViewProj()
+{
+    static auto startTime = std::chrono::high_resolution_clock::now();
+
+    auto currentTime = std::chrono::high_resolution_clock::now();
+    float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+    UniformBufferObject ubo {
+        .model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f)),
+        .view = glm::lookAt(glm::vec3(0.0f, 0.0f, 0.15f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
+        .proj = glm::perspective(glm::radians(45.0f), extents_.width / (float)extents_.height, 0.1f, 10.0f)
+    };
+    ubo.proj[1][1] *= -1;
+
+    memcpy(uniformPtrs_[currentFrame_], &ubo, sizeof(ubo));
+}
+
+void Vulkan::drawFrame()
+{
+    auto inFlight = *inFlightFences_[currentFrame_];
+    auto imageAvailable = *imageAvailableSemaphores_[currentFrame_];
+    auto renderFinished = *renderFinishedSemaphores_[currentFrame_];
+    auto commandBuffer = *commandBuffers_[currentFrame_];
+
+    auto result = device_->waitForFences(inFlight, true, UINT64_MAX);
+
+    uint32_t imageIndex;
+
+    try {
+        std::tie(result, imageIndex) = device_->acquireNextImageKHR(*swapchain_, UINT64_MAX, imageAvailable, VK_NULL_HANDLE);
+        if (result == vk::Result::eSuboptimalKHR || result == vk::Result::eErrorOutOfDateKHR) {
+            imageAvailableSemaphores_[currentFrame_] = device_->createSemaphoreUnique({});
+            recreateSwapchain();
+            return;
+        }
+    } catch (vk::OutOfDateKHRError&) {
+        recreateSwapchain();
+        return;
+    }
+
+    device_->resetFences(inFlight);
+
+    commandBuffer.reset();
+    vk::CommandBufferBeginInfo commandBufferInfo {};
+    vk::ClearValue clearColor { .color = std::array<float, 4> { 0.0f, 0.0f, 0.0f, 1.0f } };
+    vk::ClearValue clearDepthValue { .depthStencil = vk::ClearDepthStencilValue { 1.0f } };
+    std::array<vk::ClearValue, 2> clearValues { clearColor, clearDepthValue };
+
+    vk::RenderPassBeginInfo renderPassInfo {
+        .renderPass = *renderPass_,
+        .framebuffer = *swapchainFramebuffers_[imageIndex],
+        .renderArea = {
+            .offset = { 0, 0 },
+            .extent = extents_ },
+        .clearValueCount = static_cast<uint32_t>(clearValues.size()),
+        .pClearValues = clearValues.data()
+    };
+
+    commandBuffer.begin(commandBufferInfo);
+    commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
+    {
+        commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline_);
+
+        vk::Viewport viewport {
+            .x = 0.0f,
+            .y = 0.0f,
+            .width = static_cast<float>(extents_.width),
+            .height = static_cast<float>(extents_.height),
+            .minDepth = 0.0f,
+            .maxDepth = 1.0f
+        };
+        commandBuffer.setViewport(0, 1, &viewport);
+
+        vk::Rect2D scissor {
+            .offset = { 0, 0 },
+            .extent = extents_
+        };
+        commandBuffer.setScissor(0, 1, &scissor);
+
+        commandBuffer.bindVertexBuffers(0, *vertexBuffer_, { 0 });
+        commandBuffer.bindIndexBuffer(*indexBuffer_, 0, vk::IndexType::eUint32);
+        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *pipelineLayout_, 0, 1, &pipelineDescriptorSets_[currentFrame_].get(), 0, nullptr);
+        commandBuffer.drawIndexed(indicesCount_, 1, 0, 0, 0);
+
+        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
+    }
+    commandBuffer.endRenderPass();
+    commandBuffer.end();
+
+    vk::PipelineStageFlags waitDstStageMask { vk::PipelineStageFlagBits::eColorAttachmentOutput };
+
+    vk::SubmitInfo submitInfo {
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = &imageAvailable,
+        .pWaitDstStageMask = &waitDstStageMask,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &commandBuffer,
+        .signalSemaphoreCount = 1,
+        .pSignalSemaphores = &renderFinished
+    };
+
+    graphicsQueue_.submit(submitInfo, inFlight);
+
+    vk::PresentInfoKHR presentInfo {
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = &renderFinished,
+        .swapchainCount = 1,
+        .pSwapchains = &swapchain_.get(),
+        .pImageIndices = &imageIndex
+    };
+
+    try {
+        result = graphicsQueue_.presentKHR(presentInfo);
+        if (result == vk::Result::eSuboptimalKHR || result == vk::Result::eErrorOutOfDateKHR || isResized_) {
+            recreateSwapchain();
+            isResized_ = false;
+        }
+    } catch (vk::OutOfDateKHRError&) {
+        recreateSwapchain();
+        isResized_ = false;
+    }
+
+    currentFrame_ = (currentFrame_ + 1) % sConcurrentFrames_;
+}
+
+vk::UniqueCommandBuffer Vulkan::beginSingleUseCommandBuffer()
+{
+    vk::CommandBufferAllocateInfo bufferInfo {
+        .commandPool = *commandPool_,
+        .level = vk::CommandBufferLevel::ePrimary,
+        .commandBufferCount = 1
+    };
+
+    vk::UniqueCommandBuffer commandBuffer { std::move(device_->allocateCommandBuffersUnique(bufferInfo)[0]) };
+    commandBuffer->begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+
+    return commandBuffer;
+}
+
+void Vulkan::endSingleUseCommandBuffer(vk::CommandBuffer& commandBuffer)
+{
+    commandBuffer.end();
+
+    vk::SubmitInfo submitInfo {
+        .commandBufferCount = 1,
+        .pCommandBuffers = &commandBuffer
+    };
+
+    graphicsQueue_.submit(submitInfo);
+    graphicsQueue_.waitIdle();
+}
+
+vk::UniqueBuffer Vulkan::createBufferUnique(vk::DeviceSize& size, const vk::BufferUsageFlags usage)
+{
+    vk::BufferCreateInfo bufferInfo {
+        .size = size,
+        .usage = usage,
+        .sharingMode = vk::SharingMode::eExclusive
+    };
+
+    return device_->createBufferUnique(bufferInfo);
+}
+
+vk::UniqueBuffer Vulkan::createStagingBufferUnique(vk::DeviceSize& size)
+{
+    return createBufferUnique(size, vk::BufferUsageFlagBits::eTransferSrc);
+}
+
+vk::UniqueDeviceMemory Vulkan::createDeviceMemoryUnique(const vk::MemoryRequirements requirements, const vk::MemoryPropertyFlags memoryFlags)
+{
+    vk::PhysicalDeviceMemoryProperties memProperties = physicalDevice_.getMemoryProperties();
+    uint32_t memoryTypeIndex = 0;
+
+    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+        if ((requirements.memoryTypeBits & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & memoryFlags) == memoryFlags) {
+            memoryTypeIndex = i;
+        }
+    }
+
+    vk::MemoryAllocateInfo memoryInfo {
+        .allocationSize = requirements.size,
+        .memoryTypeIndex = memoryTypeIndex
+    };
+
+    return device_->allocateMemoryUnique(memoryInfo);
+}
+
+vk::UniqueDeviceMemory Vulkan::createStagingMemoryUnique(vk::Buffer& buffer, vk::DeviceSize& size)
+{
+    return createDeviceMemoryUnique(device_->getBufferMemoryRequirements(buffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 }
 
 vk::UniqueImage Vulkan::createImageUnique(vk::Extent2D& extent, const vk::Format format, const vk::ImageTiling tiling, const vk::ImageUsageFlags usage)
@@ -783,7 +962,7 @@ vk::UniqueImage Vulkan::createImageUnique(vk::Extent2D& extent, const vk::Format
         .initialLayout = vk::ImageLayout::eUndefined
     };
 
-    return m_device->createImageUnique(imageInfo);
+    return device_->createImageUnique(imageInfo);
 }
 
 vk::UniqueImageView Vulkan::createImageViewUnique(vk::Image& image, const vk::Format format, vk::ImageAspectFlagBits aspectMask)
@@ -800,7 +979,20 @@ vk::UniqueImageView Vulkan::createImageViewUnique(vk::Image& image, const vk::Fo
             .layerCount = 1 }
     };
 
-    return m_device->createImageViewUnique(imageViewInfo);
+    return device_->createImageViewUnique(imageViewInfo);
+}
+
+void Vulkan::copyBuffer(vk::Buffer src, vk::Buffer dst, vk::DeviceSize size)
+{
+    vk::CommandBufferAllocateInfo commandBufferInfo {
+        .commandPool = *commandPool_,
+        .level = vk::CommandBufferLevel::ePrimary,
+        .commandBufferCount = 1
+    };
+
+    auto cmd = beginSingleUseCommandBuffer();
+    cmd->copyBuffer(src, dst, { { .size = size } });
+    endSingleUseCommandBuffer(*cmd);
 }
 
 void Vulkan::transitionImageLayout(vk::Image& image, const vk::Format format, const vk::ImageLayout oldLayout, const vk::ImageLayout newLayout)
@@ -846,16 +1038,16 @@ void Vulkan::transitionImageLayout(vk::Image& image, const vk::Format format, co
 void Vulkan::createSwapchain(vk::SwapchainKHR oldSwapchain)
 {
     // swapchain
-    vk::SurfaceCapabilitiesKHR capabilities = m_physicalDevice.getSurfaceCapabilitiesKHR(*m_surface);
+    vk::SurfaceCapabilitiesKHR capabilities = physicalDevice_.getSurfaceCapabilitiesKHR(*surface_);
     vk::Extent2D swapchainExtent {
-        std::clamp(m_extent2D.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
-        std::clamp(m_extent2D.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
+        std::clamp(extents_.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
+        std::clamp(extents_.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
     };
 
     auto imageFormat = vk::Format::eB8G8R8A8Unorm;
 
     vk::SwapchainCreateInfoKHR swapChainInfo {
-        .surface = *m_surface,
+        .surface = *surface_,
         .minImageCount = capabilities.minImageCount + 1,
         .imageFormat = imageFormat,
         .imageExtent = swapchainExtent,
@@ -869,255 +1061,51 @@ void Vulkan::createSwapchain(vk::SwapchainKHR oldSwapchain)
         .oldSwapchain = oldSwapchain
     };
 
-    m_swapchain = m_device->createSwapchainKHRUnique(swapChainInfo);
-    m_images = m_device->getSwapchainImagesKHR(*m_swapchain);
+    swapchain_ = device_->createSwapchainKHRUnique(swapChainInfo);
+    swapchainImages_ = device_->getSwapchainImagesKHR(*swapchain_);
 
     // image views
-    m_imageViews.resize(m_images.size());
-    for (size_t i = 0; i < m_images.size(); i++) {
-        m_imageViews[i] = createImageViewUnique(m_images[i], imageFormat, vk::ImageAspectFlagBits::eColor);
+    swapchainImageViews_.resize(swapchainImages_.size());
+    for (size_t i = 0; i < swapchainImages_.size(); i++) {
+        swapchainImageViews_[i] = createImageViewUnique(swapchainImages_[i], imageFormat, vk::ImageAspectFlagBits::eColor);
     }
 
     // depth buffer
     auto depthFormat = vk::Format::eD32Sfloat;
 
-    m_depthImage = createImageUnique(swapchainExtent, depthFormat, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eDepthStencilAttachment);
-    m_depthMemory = createDeviceMemoryUnique(m_device->getImageMemoryRequirements(*m_depthImage), vk::MemoryPropertyFlagBits::eDeviceLocal);
-    m_device->bindImageMemory(*m_depthImage, *m_depthMemory, 0);
+    depthImage_ = createImageUnique(swapchainExtent, depthFormat, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eDepthStencilAttachment);
+    depthMemory_ = createDeviceMemoryUnique(device_->getImageMemoryRequirements(*depthImage_), vk::MemoryPropertyFlagBits::eDeviceLocal);
+    device_->bindImageMemory(*depthImage_, *depthMemory_, 0);
 
-    m_depthView = createImageViewUnique(*m_depthImage, depthFormat, vk::ImageAspectFlagBits::eDepth);
+    depthView_ = createImageViewUnique(*depthImage_, depthFormat, vk::ImageAspectFlagBits::eDepth);
 
     // framebuffers
-    m_framebuffers.resize(m_images.size());
-    for (size_t i = 0; i < m_images.size(); i++) {
-        std::array<vk::ImageView, 2> attachments = { *m_imageViews[i], *m_depthView };
+    swapchainFramebuffers_.resize(swapchainImages_.size());
+    for (size_t i = 0; i < swapchainImages_.size(); i++) {
+        std::array<vk::ImageView, 2> attachments = { *swapchainImageViews_[i], *depthView_ };
         vk::FramebufferCreateInfo framebufferInfo {
-            .renderPass = *m_renderPass,
+            .renderPass = *renderPass_,
             .attachmentCount = static_cast<uint32_t>(attachments.size()),
             .pAttachments = attachments.data(),
             .width = swapchainExtent.width,
             .height = swapchainExtent.height,
             .layers = 1
         };
-        m_framebuffers[i] = m_device->createFramebufferUnique(framebufferInfo);
+        swapchainFramebuffers_[i] = device_->createFramebufferUnique(framebufferInfo);
     }
-}
-
-vk::UniqueCommandBuffer Vulkan::beginSingleUseCommandBuffer()
-{
-    vk::CommandBufferAllocateInfo bufferInfo {
-        .commandPool = *m_commandPool,
-        .level = vk::CommandBufferLevel::ePrimary,
-        .commandBufferCount = 1
-    };
-
-    vk::UniqueCommandBuffer commandBuffer { std::move(m_device->allocateCommandBuffersUnique(bufferInfo)[0]) };
-    commandBuffer->begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
-
-    return commandBuffer;
-}
-
-void Vulkan::endSingleUseCommandBuffer(vk::CommandBuffer& commandBuffer)
-{
-    commandBuffer.end();
-
-    vk::SubmitInfo submitInfo {
-        .commandBufferCount = 1,
-        .pCommandBuffers = &commandBuffer
-    };
-
-    m_graphicsQueue.submit(submitInfo);
-    m_graphicsQueue.waitIdle();
 }
 
 void Vulkan::recreateSwapchain()
 {
-    m_device->waitIdle();
+    device_->waitIdle();
     int width, height;
-    SDL_GetWindowSize(m_window, &width, &height);
-    m_extent2D = vk::Extent2D {
+    SDL_GetWindowSize(window_, &width, &height);
+    extents_ = vk::Extent2D {
         .width = static_cast<uint32_t>(width),
         .height = static_cast<uint32_t>(height)
     };
 
-    createSwapchain(*m_swapchain);
+    createSwapchain(*swapchain_);
 }
 
-void Vulkan::recordCommandBuffer(vk::CommandBuffer& commandBuffer, uint32_t imageIndex)
-{
-    vk::CommandBufferBeginInfo commandBufferInfo {};
-    vk::ClearValue clearColor { .color = std::array<float, 4> { 0.0f, 0.0f, 0.0f, 1.0f } };
-    vk::ClearValue clearDepthValue { .depthStencil = vk::ClearDepthStencilValue { 1.0f } };
-    std::array<vk::ClearValue, 2> clearValues { clearColor, clearDepthValue };
-
-    vk::RenderPassBeginInfo renderPassInfo {
-        .renderPass = *m_renderPass,
-        .framebuffer = *m_framebuffers[imageIndex],
-        .renderArea = {
-            .offset = { 0, 0 },
-            .extent = m_extent2D },
-        .clearValueCount = static_cast<uint32_t>(clearValues.size()),
-        .pClearValues = clearValues.data()
-    };
-
-    commandBuffer.begin(commandBufferInfo);
-    commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
-    {
-        commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *m_pipeline);
-
-        vk::Viewport viewport {
-            .x = 0.0f,
-            .y = 0.0f,
-            .width = static_cast<float>(m_extent2D.width),
-            .height = static_cast<float>(m_extent2D.height),
-            .minDepth = 0.0f,
-            .maxDepth = 1.0f
-        };
-        commandBuffer.setViewport(0, 1, &viewport);
-
-        vk::Rect2D scissor {
-            .offset = { 0, 0 },
-            .extent = m_extent2D
-        };
-        commandBuffer.setScissor(0, 1, &scissor);
-
-        commandBuffer.bindVertexBuffers(0, *m_vertexBuffer, { 0 });
-        commandBuffer.bindIndexBuffer(*m_indexBuffer, 0, vk::IndexType::eUint32);
-        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *m_pipelineLayout, 0, 1, &(*m_descriptorSets[m_currentFrame]), 0, nullptr);
-        commandBuffer.drawIndexed(m_indexCount, 1, 0, 0, 0);
-
-        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
-    }
-    commandBuffer.endRenderPass();
-    commandBuffer.end();
-}
-
-void Vulkan::drawFrame()
-{
-    auto device = *m_device;
-    auto inFlight = *m_inFlightFences[m_currentFrame];
-    auto imageAvailable = *m_imageAvailableSemaphores[m_currentFrame];
-    auto renderFinished = *m_renderFinishedSemaphores[m_currentFrame];
-    auto swapchain = *m_swapchain;
-    auto commandBuffer = *m_commandBuffers[m_currentFrame];
-    auto graphicsQueue = m_graphicsQueue;
-
-    auto result = m_device->waitForFences(inFlight, true, UINT64_MAX);
-
-    uint32_t imageIndex;
-
-    try {
-        std::tie(result, imageIndex) = m_device->acquireNextImageKHR(swapchain, UINT64_MAX, imageAvailable, VK_NULL_HANDLE);
-        if (result == vk::Result::eSuboptimalKHR || result == vk::Result::eErrorOutOfDateKHR) {
-            m_imageAvailableSemaphores[m_currentFrame] = m_device->createSemaphoreUnique({});
-            recreateSwapchain();
-            return;
-        }
-    } catch (vk::OutOfDateKHRError&) {
-        recreateSwapchain();
-        return;
-    }
-
-    m_device->resetFences(inFlight);
-
-    commandBuffer.reset();
-    recordCommandBuffer(commandBuffer, imageIndex);
-
-    vk::PipelineStageFlags waitDstStageMask { vk::PipelineStageFlagBits::eColorAttachmentOutput };
-
-    vk::SubmitInfo submitInfo {
-        .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &imageAvailable,
-        .pWaitDstStageMask = &waitDstStageMask,
-        .commandBufferCount = 1,
-        .pCommandBuffers = &commandBuffer,
-        .signalSemaphoreCount = 1,
-        .pSignalSemaphores = &renderFinished
-    };
-
-    graphicsQueue.submit(submitInfo, inFlight);
-
-    vk::PresentInfoKHR presentInfo {
-        .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &renderFinished,
-        .swapchainCount = 1,
-        .pSwapchains = &swapchain,
-        .pImageIndices = &imageIndex
-    };
-
-    try {
-        result = graphicsQueue.presentKHR(presentInfo);
-        if (result == vk::Result::eSuboptimalKHR || result == vk::Result::eErrorOutOfDateKHR || m_isResized) {
-            recreateSwapchain();
-            m_isResized = false;
-        }
-    } catch (vk::OutOfDateKHRError&) {
-        recreateSwapchain();
-        m_isResized = false;
-    }
-
-    m_currentFrame = (m_currentFrame + 1) % s_concurrentFrames;
-}
-
-void Vulkan::modelViewProj()
-{
-    static auto startTime = std::chrono::high_resolution_clock::now();
-
-    auto currentTime = std::chrono::high_resolution_clock::now();
-    float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
-    UniformBufferObject ubo {
-        .model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f)),
-        .view = glm::lookAt(glm::vec3(0.0f, 0.0f, 0.15f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
-        .proj = glm::perspective(glm::radians(45.0f), m_extent2D.width / (float)m_extent2D.height, 0.1f, 10.0f)
-    };
-    ubo.proj[1][1] *= -1;
-
-    memcpy(m_uniformPtrs[m_currentFrame], &ubo, sizeof(ubo));
-}
-
-void Vulkan::run()
-{
-    if (!m_isInitialized) {
-        LOG_ERROR("Failed to run: Vulkan not initialized.", "GFX");
-        return;
-    }
-    if (!m_isTextureLoaded) {
-        LOG_ERROR("Failed to run: no texture loaded.", "GFX");
-        return;
-    }
-    if (!m_isVerticesBound) {
-        LOG_ERROR("Failed to run: no vertices bound.", "GFX");
-        return;
-    }
-
-    while (true) {
-        SDL_Event event;
-        if (SDL_PollEvent(&event)) {
-            ImGui_ImplSDL2_ProcessEvent(&event);
-            if (event.type == SDL_QUIT)
-                break;
-            if (event.type == SDL_WINDOWEVENT) {
-                if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
-                    m_isResized = true;
-                }
-            }
-        }
-
-        if (SDL_GetWindowFlags(m_window) & SDL_WINDOW_MINIMIZED)
-            continue;
-
-        ImGui_ImplVulkan_NewFrame();
-        ImGui_ImplSDL2_NewFrame(m_window);
-        ImGui::NewFrame();
-        ImGui::ShowDemoWindow();
-        ImGui::Render();
-
-        modelViewProj();
-        drawFrame();
-    }
-
-    m_device->waitIdle();
-}
-
-}
+} // namespace pl

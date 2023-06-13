@@ -1,6 +1,7 @@
 #pragma once
 
-#include "gltf/vertex.hpp"
+#include <string>
+
 #define VK_ENABLE_BETA_EXTENSIONS
 #define VULKAN_HPP_NO_CONSTRUCTORS
 #define VULKAN_HPP_NO_SETTERS
@@ -16,7 +17,8 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
 #include <glm/glm.hpp>
-#include <string>
+
+#include "gltf/vertex.hpp"
 
 namespace pl {
 
@@ -27,117 +29,104 @@ struct UniformBufferObject {
 };
 
 class Vulkan {
+public:
+    static constexpr int sWidth_ = 800;
+    static constexpr int sHeight_ = 600;
+    static constexpr const std::string_view sSpirVDir_ = "/shaders";
+    static constexpr uint32_t sConcurrentFrames_ = 2;
+
+    explicit Vulkan(bool enableValidation = true);
+    ~Vulkan();
+
+    void bindVertexBuffer(const std::vector<pl::Vertex>& vertices, const std::vector<uint32_t>& indices);
+    void loadTextureImage(const char* path);
+    void run();
+
 private:
-    static constexpr int s_windowWidth = 800;
-    static constexpr int s_windowHeight = 600;
-    static constexpr const std::string_view s_spirVDir = "/shaders";
-    static constexpr uint32_t s_concurrentFrames = 2;
-
-    SDL_Window* m_window;
-    vk::DynamicLoader m_dynamicLoader;
-    vk::UniqueInstance m_instance;
-    vk::UniqueSurfaceKHR m_surface;
-
-    // device
-    vk::PhysicalDevice m_physicalDevice;
-    vk::UniqueDevice m_device;
-
-    struct {
-        uint32_t graphics;
-    } m_queueFamilyIndices;
-
-    vk::Queue m_graphicsQueue;
-    vk::UniqueCommandPool m_commandPool;
-    std::vector<vk::UniqueCommandBuffer> m_commandBuffers;
-
-    std::vector<vk::UniqueSemaphore> m_imageAvailableSemaphores;
-    std::vector<vk::UniqueSemaphore> m_renderFinishedSemaphores;
-    std::vector<vk::UniqueFence> m_inFlightFences;
-    // device
-
-    // pipeline
-    vk::UniqueDescriptorSetLayout m_descriptorSetLayout;
-    vk::UniqueDescriptorPool m_descriptorPool;
-    std::vector<vk::UniqueDescriptorSet> m_descriptorSets;
-
-    vk::UniqueRenderPass m_renderPass;
-    vk::UniquePipelineLayout m_pipelineLayout;
-    vk::UniquePipeline m_pipeline;
-    // pipeline
-
-    // swapchain
-    vk::UniqueSwapchainKHR m_swapchain;
-
-    std::vector<vk::Image> m_images;
-    std::vector<vk::UniqueImageView> m_imageViews;
-    std::vector<vk::UniqueFramebuffer> m_framebuffers;
-
-    vk::UniqueImage m_depthImage;
-    vk::UniqueDeviceMemory m_depthMemory;
-    vk::UniqueImageView m_depthView;
-    // swapchain
-
-    // buffer
-    vk::UniqueBuffer m_vertexBuffer;
-    vk::UniqueBuffer m_indexBuffer;
-
-    vk::UniqueDeviceMemory m_vertexMemory;
-    vk::UniqueDeviceMemory m_indexMemory;
-
-    std::vector<vk::UniqueBuffer> m_uniformBuffers;
-    std::vector<vk::UniqueDeviceMemory> m_uniformMemorys;
-    std::vector<void*> m_uniformPtrs;
-    // buffer
-
-    // texture
-    vk::UniqueImage m_texture;
-    vk::UniqueDeviceMemory m_textureMemory;
-    vk::UniqueImageView m_textureView;
-    vk::UniqueSampler m_textureSampler;
-    // texture
-
-    // imgui
-    vk::UniqueDescriptorPool m_imguiDescriptorPool;
-    // imgui
-
-    bool m_isValidationEnabled = true;
-    bool m_isInitialized = false;
-    bool m_isTextureLoaded = false;
-    bool m_isVerticesBound = false;
-    bool m_isResized = false;
-
-    vk::Extent2D m_extent2D;
-    size_t m_currentFrame = 0;
-    size_t m_vertexCount = 0;
-    size_t m_indexCount = 0;
-
-    vk::UniqueImage createImageUnique(vk::Extent2D& extent, const vk::Format format, const vk::ImageTiling tiling, const vk::ImageUsageFlags usage);
-    vk::UniqueImageView createImageViewUnique(vk::Image& image, const vk::Format format, vk::ImageAspectFlagBits aspectMask);
-    void transitionImageLayout(vk::Image& image, const vk::Format format, const vk::ImageLayout oldLayout, const vk::ImageLayout newLayout);
-    void createSwapchain(vk::SwapchainKHR oldSwapchain = VK_NULL_HANDLE);
+    void modelViewProj();
+    void drawFrame();
 
     vk::UniqueCommandBuffer beginSingleUseCommandBuffer();
     void endSingleUseCommandBuffer(vk::CommandBuffer& commandBuffer);
 
-    void copyBuffer(vk::Buffer src, vk::Buffer dst, vk::DeviceSize size);
-    uint32_t findMemoryType(uint32_t typeFilter, const vk::MemoryPropertyFlags memPropertyFlags);
     vk::UniqueBuffer createBufferUnique(vk::DeviceSize& size, const vk::BufferUsageFlags usage);
     vk::UniqueBuffer createStagingBufferUnique(vk::DeviceSize& size);
     vk::UniqueDeviceMemory createDeviceMemoryUnique(const vk::MemoryRequirements requirements, const vk::MemoryPropertyFlags memoryFlags);
     vk::UniqueDeviceMemory createStagingMemoryUnique(vk::Buffer& buffer, vk::DeviceSize& size);
+    vk::UniqueImage createImageUnique(vk::Extent2D& extent, const vk::Format format, const vk::ImageTiling tiling, const vk::ImageUsageFlags usage);
+    vk::UniqueImageView createImageViewUnique(vk::Image& image, const vk::Format format, vk::ImageAspectFlagBits aspectMask);
+    void copyBuffer(vk::Buffer src, vk::Buffer dst, vk::DeviceSize size);
+    void transitionImageLayout(vk::Image& image, const vk::Format format, const vk::ImageLayout oldLayout, const vk::ImageLayout newLayout);
 
+    void createSwapchain(vk::SwapchainKHR oldSwapchain = VK_NULL_HANDLE);
     void recreateSwapchain();
-    void recordCommandBuffer(vk::CommandBuffer& commandBuffer, uint32_t imageIndex);
-    void drawFrame();
-    void modelViewProj();
 
-public:
-    explicit Vulkan(bool enableValidation = true);
-    ~Vulkan();
+    bool isValidationEnabled_ = true;
+    bool isInitialized_ = false;
+    bool isTextureLoaded_ = false;
+    bool isVerticesBound_ = false;
+    bool isResized_ = false;
 
-    void loadTextureImage(const char* path);
-    void bindVertexBuffer(const std::vector<pl::Vertex>& vertices, const std::vector<uint32_t>& indices);
-    void run();
+    vk::Extent2D extents_;
+    size_t currentFrame_ = 0;
+    size_t indicesCount_ = 0;
+
+    // instance
+    SDL_Window* window_;
+    vk::DynamicLoader dynamicLoader_;
+    vk::UniqueInstance instance_;
+    vk::UniqueSurfaceKHR surface_;
+
+    // device
+    struct
+    {
+        uint32_t graphics;
+    } queueFamilyIndices_;
+    vk::PhysicalDevice physicalDevice_;
+    vk::UniqueDevice device_;
+    vk::Queue graphicsQueue_;
+    vk::UniqueCommandPool commandPool_;
+    std::vector<vk::UniqueCommandBuffer> commandBuffers_;
+
+    // sync
+    std::vector<vk::UniqueSemaphore> imageAvailableSemaphores_;
+    std::vector<vk::UniqueSemaphore> renderFinishedSemaphores_;
+    std::vector<vk::UniqueFence> inFlightFences_;
+
+    // pipeline
+    vk::UniqueDescriptorSetLayout pipelineDescriptorLayout_;
+    vk::UniqueDescriptorPool pipelineDescriptorPool_;
+    std::vector<vk::UniqueDescriptorSet> pipelineDescriptorSets_;
+    vk::UniqueRenderPass renderPass_;
+    vk::UniquePipelineLayout pipelineLayout_;
+    vk::UniquePipeline pipeline_;
+
+    // swapchain
+    vk::UniqueSwapchainKHR swapchain_;
+    std::vector<vk::Image> swapchainImages_;
+    std::vector<vk::UniqueImageView> swapchainImageViews_;
+    std::vector<vk::UniqueFramebuffer> swapchainFramebuffers_;
+    vk::UniqueImage depthImage_;
+    vk::UniqueDeviceMemory depthMemory_;
+    vk::UniqueImageView depthView_;
+
+    // buffers
+    vk::UniqueBuffer vertexBuffer_;
+    vk::UniqueBuffer indexBuffer_;
+    vk::UniqueDeviceMemory vertexMemory_;
+    vk::UniqueDeviceMemory indexMemory_;
+    std::vector<vk::UniqueBuffer> uniformBuffers_;
+    std::vector<vk::UniqueDeviceMemory> uniformMemories_;
+    std::vector<void*> uniformPtrs_;
+
+    // texture
+    vk::UniqueImage texture_;
+    vk::UniqueDeviceMemory textureMemory_;
+    vk::UniqueImageView textureView_;
+    vk::UniqueSampler textureSampler_;
+
+    // imgui
+    vk::UniqueDescriptorPool imguiDescriptorPool_;
 };
 
-}
+} // namespace pl
