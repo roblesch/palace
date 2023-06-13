@@ -1,6 +1,6 @@
 #pragma once
 
-namespace vk_ {
+namespace pl {
 
 void LOG_INFO(const char* message, const char* type = "GENERAL");
 void LOG_WARN(const char* message, const char* type = "GENERAL");

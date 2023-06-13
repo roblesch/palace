@@ -1,12 +1,16 @@
 #include "log.hpp"
 #include <stdio.h>
 
+namespace pl {
+
+namespace {
+
 void LOG(const char* severity, const char* message, const char* type)
 {
-    printf("(VK_:%s:%s) %s\n", severity, type, message);
+    printf("(PL:%s:%s) %s\n", severity, type, message);
 }
 
-namespace vk_ {
+}
 
 void LOG_INFO(const char* message, const char* type)
 {

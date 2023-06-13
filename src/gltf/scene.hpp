@@ -1,9 +1,9 @@
 #pragma once
 
-#include "include.hpp"
 #include "vertex.hpp"
+#include <vector>
 
-namespace vk_ {
+namespace pl {
 
 unsigned char* stbLoadTexture(const char* path, uint32_t* width, uint32_t* height);
 void stbFreeTexture(unsigned char* px);

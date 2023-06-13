@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+namespace pl {
+
 class Parser {
 private:
     const std::vector<const char*> m_flags {
@@ -23,3 +25,5 @@ public:
     const char* gltf_path();
     const char* texture_path();
 };
+
+}

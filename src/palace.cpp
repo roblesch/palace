@@ -1,18 +1,19 @@
-#include <string>
-#include "graphics/vk_/scene.hpp"
-#include "graphics/vulkan.hpp"
+#include "gltf/scene.hpp"
 #include "util/parser.hpp"
+#include "vk/vulkan.hpp"
+#include <string>
+
+using namespace pl;
 
 int main(const int argc, const char* argv[])
 {
     Parser args(argc, argv);
-
-    vk_::Scene scene = vk_::Scene::fromGltf(args.gltf_path());
+    Scene scene = Scene::fromGltf(args.gltf_path());
 
 #ifdef NDEBUG
-    gfx::Vulkan vulkan(false);
+    Vulkan vulkan(false);
 #else
-    gfx::Vulkan vulkan;
+    Vulkan vulkan;
 #endif
 
     vulkan.bindVertexBuffer(scene.meshes[0].vertices, scene.meshes[0].indices);

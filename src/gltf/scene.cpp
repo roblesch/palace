@@ -1,6 +1,6 @@
 #include "scene.hpp"
 
-#include "log.hpp"
+#include "util/log.hpp"
 #include <glm/gtc/type_ptr.hpp>
 #define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
@@ -9,7 +9,7 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
 
-namespace vk_ {
+namespace pl {
 
 unsigned char* stbLoadTexture(const char* path, uint32_t* width, uint32_t* height)
 {
@@ -42,7 +42,7 @@ Scene Scene::fromObj(const char* path)
     std::string warn, err;
 
     if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path)) {
-        LOG_ERROR("Failed to load obj file: %s", "OBJ");
+        pl::LOG_ERROR("Failed to load obj file: %s", "OBJ");
         return scene;
     }
 
@@ -87,16 +87,16 @@ Scene Scene::fromGltf(const char* path)
     bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, path);
 
     if (!warn.empty()) {
-        LOG_WARN(warn.c_str(), "GLTF");
+        pl::LOG_WARN(warn.c_str(), "GLTF");
     }
 
     if (!err.empty()) {
-        LOG_ERROR(err.c_str(), "GLTF");
+        pl::LOG_ERROR(err.c_str(), "GLTF");
         return scene;
     }
 
     if (!ret) {
-        LOG_ERROR("Failed to parse gltf file", "GLTF");
+        pl::LOG_ERROR("Failed to parse gltf file", "GLTF");
         return scene;
     }
 

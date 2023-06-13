@@ -1,15 +1,12 @@
-add_subdirectory(graphics)
+add_subdirectory(gltf)
 add_subdirectory(util)
+add_subdirectory(vk)
 
 add_executable(palace "palace.cpp")
 set_target_properties(palace PROPERTIES
 		RUNTIME_OUTPUT_DIRECTORY_DEBUG ${PROJECT_BINARY_DIR}
 		RUNTIME_OUTPUT_DIRECTORY_RELEASE ${PROJECT_BINARY_DIR})
-target_link_libraries(palace
-		graphics
-		util
-		Vulkan::Vulkan
-		SDL2::SDL2)
+target_link_libraries(palace gltf util vk)
 
 # copy dlls
 if(WIN32)
