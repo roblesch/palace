@@ -28,6 +28,7 @@ struct Scene {
 
     static Scene fromObj(const char* path);
     static Scene fromGltf(const char* path);
+
 };
 
 }

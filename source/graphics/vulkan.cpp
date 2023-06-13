@@ -85,11 +85,15 @@ Vulkan::Vulkan(bool enableValidation)
     m_swapchain = vk_::Swapchain(m_window, *m_uniqueSurface, m_extent2D,
         m_device.physicalDevice(), m_device.device(), m_pipeline.renderPass());
 
+    // imgui
+    m_imgui = vk_::Imgui(m_window, *m_uniqueInstance, m_device.physicalDevice(), m_device.device(), m_device.graphicsQueue(), m_pipeline.renderPass(), m_device.commandPool());
+
     m_isInitialized = true;
 }
 
 Vulkan::~Vulkan()
 {
+    m_imgui.cleanup();
     SDL_DestroyWindow(m_window);
     SDL_Quit();
 }
@@ -174,6 +178,8 @@ void Vulkan::recordCommandBuffer(vk::CommandBuffer& commandBuffer, uint32_t imag
         commandBuffer.bindIndexBuffer(m_buffer.indexBuffer(), 0, vk::IndexType::eUint32);
         commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipeline.pipelineLayout(), 0, 1, &m_pipeline.descriptorSet(m_currentFrame), 0, nullptr);
         commandBuffer.drawIndexed(m_indexCount, 1, 0, 0, 0);
+
+        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
     }
     commandBuffer.endRenderPass();
     commandBuffer.end();
@@ -269,10 +275,10 @@ void Vulkan::run()
         vk_::LOG_ERROR("Failed to run: Vulkan not initialized.", "GFX");
         return;
     }
-    //if (!m_isTextureLoaded) {
-    //    vk_::LOG_ERROR("Failed to run: no texture loaded.", "GFX");
-    //    return;
-    //}
+    if (!m_isTextureLoaded) {
+        vk_::LOG_ERROR("Failed to run: no texture loaded.", "GFX");
+        return;
+    }
     if (!m_isVerticesBound) {
         vk_::LOG_ERROR("Failed to run: no vertices bound.", "GFX");
         return;
@@ -281,6 +287,7 @@ void Vulkan::run()
     while (true) {
         SDL_Event event;
         if (SDL_PollEvent(&event)) {
+            ImGui_ImplSDL2_ProcessEvent(&event);
             if (event.type == SDL_QUIT)
                 break;
             if (event.type == SDL_WINDOWEVENT) {
@@ -292,6 +299,12 @@ void Vulkan::run()
 
         if (SDL_GetWindowFlags(m_window) & SDL_WINDOW_MINIMIZED)
             continue;
+
+        ImGui_ImplVulkan_NewFrame();
+        ImGui_ImplSDL2_NewFrame(m_window);
+        ImGui::NewFrame();
+        ImGui::ShowDemoWindow();
+        ImGui::Render();
 
         modelViewProj();
         drawFrame();

@@ -7,8 +7,7 @@ int main(const int argc, const char* argv[])
 {
     Parser args(argc, argv);
 
-    vk_::Scene scene = vk_::Scene::fromObj(args.obj_path());
-    vk_::Scene scene2 = vk_::Scene::fromGltf(args.gltf_path());
+    vk_::Scene scene = vk_::Scene::fromGltf(args.gltf_path());
 
 #ifdef NDEBUG
     gfx::Vulkan vulkan(false);
@@ -16,7 +15,7 @@ int main(const int argc, const char* argv[])
     gfx::Vulkan vulkan;
 #endif
 
-    vulkan.bindVertexBuffer(scene2.meshes[0].vertices, scene2.meshes[0].indices);
+    vulkan.bindVertexBuffer(scene.meshes[0].vertices, scene.meshes[0].indices);
     vulkan.loadTextureImage(args.texture_path());
 
     vulkan.run();

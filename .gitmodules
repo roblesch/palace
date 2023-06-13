@@ -11,3 +11,6 @@
 [submodule "ext/tinygltf"]
 	path = ext/tinygltf
 	url = git@github.com:syoyo/tinygltf.git
+[submodule "ext/imgui"]
+	path = ext/imgui
+	url = git@github.com:ocornut/imgui.git

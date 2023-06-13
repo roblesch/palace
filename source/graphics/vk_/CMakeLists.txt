@@ -1,24 +1,15 @@
 add_library(vk_
-        "buffer.hpp"
         "buffer.cpp"
         "debug.cpp"
-        "debug.hpp"
         "device.cpp"
-        "device.hpp"
-        "include.hpp"
-        "log.hpp"
+        "imgui.cpp"
         "log.cpp"
         "pipeline.cpp"
-        "pipeline.hpp"
-        "scene.hpp"
         "scene.cpp"
-        "sdl2.hpp"
         "swapchain.cpp"
-        "swapchain.hpp"
-        "texture.hpp"
-        "texture.cpp"
-        "vertex.hpp")
+        "texture.cpp")
 target_link_libraries(vk_
+        imgui
         Vulkan::Vulkan
         SDL2::SDL2
         tinyobjloader

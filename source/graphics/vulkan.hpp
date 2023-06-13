@@ -5,6 +5,7 @@
 #include "vk_/buffer.hpp"
 #include "vk_/debug.hpp"
 #include "vk_/device.hpp"
+#include "vk_/imgui.hpp"
 #include "vk_/include.hpp"
 #include "vk_/pipeline.hpp"
 #include "vk_/vertex.hpp"
@@ -30,6 +31,7 @@ private:
     vk_::Swapchain m_swapchain;
     vk_::Buffer m_buffer;
     vk_::Texture m_texture;
+    vk_::Imgui m_imgui;
 
     bool m_isValidationEnabled = true;
     bool m_isInitialized = false;
