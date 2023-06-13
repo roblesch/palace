@@ -18,7 +18,7 @@ Texture::Texture(vk::PhysicalDevice& physicalDevice, vk::Device& device, vk::Com
     device.unmapMemory(*stagingMemory);
 
     // image
-    auto imageFormat = vk::Format::eR8G8B8A8Srgb;
+    auto imageFormat = vk::Format::eR8G8B8A8Unorm;
 
     m_image = Swapchain::createImageUnique(device, extent, imageFormat, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled);
     m_imageMemory = Buffer::createDeviceMemoryUnique(physicalDevice, device, device.getImageMemoryRequirements(*m_image), vk::MemoryPropertyFlagBits::eDeviceLocal);

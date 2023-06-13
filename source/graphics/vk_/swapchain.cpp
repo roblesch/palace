@@ -92,13 +92,12 @@ void Swapchain::create(SDL_Window* window, vk::SurfaceKHR& surface, vk::Extent2D
         std::clamp(extent2D.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
     };
 
-    auto imageFormat = vk::Format::eB8G8R8A8Srgb;
+    auto imageFormat = vk::Format::eB8G8R8A8Unorm;
 
     vk::SwapchainCreateInfoKHR swapChainInfo {
         .surface = surface,
         .minImageCount = capabilities.minImageCount + 1,
         .imageFormat = imageFormat,
-        .imageColorSpace = vk::ColorSpaceKHR::eSrgbNonlinear,
         .imageExtent = swapchainExtent,
         .imageArrayLayers = 1,
         .imageUsage = vk::ImageUsageFlagBits::eColorAttachment,

@@ -204,7 +204,7 @@ Pipeline::Pipeline(vk::Device& device, vk::Extent2D& extent2D, uint32_t concurre
 
     // attachments
     vk::AttachmentDescription colorAttachment {
-        .format = vk::Format::eB8G8R8A8Srgb,
+        .format = vk::Format::eB8G8R8A8Unorm,
         .samples = vk::SampleCountFlagBits::e1,
         .loadOp = vk::AttachmentLoadOp::eClear,
         .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
