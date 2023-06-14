@@ -132,17 +132,17 @@ Vulkan::Vulkan(bool enableValidation)
     surface_ = vk::UniqueSurfaceKHR(surface, deleter);
 
     // physical device
-    for (auto& physicalDevice : instance_->enumeratePhysicalDevices()) {
-        vk::PhysicalDeviceProperties deviceProperties = physicalDevice.getProperties();
-        vk::PhysicalDeviceFeatures deviceFeatures = physicalDevice.getFeatures();
+    for (auto& _physicalDevice : instance_->enumeratePhysicalDevices()) {
+        vk::PhysicalDeviceProperties deviceProperties = _physicalDevice.getProperties();
+        vk::PhysicalDeviceFeatures deviceFeatures = _physicalDevice.getFeatures();
         if (deviceProperties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu) {
-            physicalDevice_ = physicalDevice;
+            physicalDevice_ = _physicalDevice;
             break;
         } else if (deviceProperties.deviceType == vk::PhysicalDeviceType::eIntegratedGpu) {
-            physicalDevice_ = physicalDevice;
+            physicalDevice_ = _physicalDevice;
             break;
         } else if (deviceProperties.deviceType == vk::PhysicalDeviceType::eCpu) {
-            physicalDevice_ = physicalDevice;
+            physicalDevice_ = _physicalDevice;
             break;
         }
     }
@@ -595,23 +595,21 @@ void Vulkan::bindVertexBuffer(const std::vector<pl::Vertex>& vertices, const std
     isVerticesBound_ = true;
 }
 
-void Vulkan::loadTextureImage(const char* path)
+void Vulkan::loadTextureImage(const unsigned char* data, uint32_t width, uint32_t height)
 {
     if (!isVerticesBound_) {
         LOG_ERROR("Failed to load texture: no vertices bound", "GFX");
         return;
     }
 
-    vk::Extent2D extent;
-    unsigned char* px = pl::stbLoadTexture(path, &extent.width, &extent.height);
-
+    vk::Extent2D extent { width, height };
     vk::DeviceSize imageSize = extent.width * extent.height * 4;
     vk::UniqueBuffer stagingBuffer = createStagingBufferUnique(imageSize);
     vk::UniqueDeviceMemory stagingMemory = createStagingMemoryUnique(*stagingBuffer, imageSize);
     device_->bindBufferMemory(*stagingBuffer, *stagingMemory, 0);
 
     void* ptr = device_->mapMemory(*stagingMemory, 0, imageSize);
-    memcpy(ptr, px, imageSize);
+    memcpy(ptr, data, imageSize);
     device_->unmapMemory(*stagingMemory);
 
     // image
@@ -704,7 +702,8 @@ void Vulkan::loadTextureImage(const char* path)
         device_->updateDescriptorSets(writeDescriptors.size(), writeDescriptors.data(), 0, nullptr);
     }
 
-    pl::stbFreeTexture(px);
+    // TODO:: free texture
+    //pl::stbFreeTexture(px);
     isTextureLoaded_ = true;
 }
 

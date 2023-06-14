@@ -18,7 +18,7 @@
 #define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
 #include <glm/glm.hpp>
 
-#include "gltf/vertex.hpp"
+#include "gltf/mesh.hpp"
 
 namespace pl {
 
@@ -38,8 +38,9 @@ public:
     explicit Vulkan(bool enableValidation = true);
     ~Vulkan();
 
+    //void loadMesh(Mesh& mesh);
     void bindVertexBuffer(const std::vector<pl::Vertex>& vertices, const std::vector<uint32_t>& indices);
-    void loadTextureImage(const char* path);
+    void loadTextureImage(const unsigned char* data, uint32_t width, uint32_t height);
     void run();
 
 private:

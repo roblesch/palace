@@ -7,19 +7,17 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "tiny_gltf.h"
 #define TINYOBJLOADER_IMPLEMENTATION
+#include <filesystem>
 #include <tiny_obj_loader.h>
+
+namespace fs = std::filesystem;
 
 namespace pl {
 
-unsigned char* stbLoadTexture(const char* path, uint32_t* width, uint32_t* height)
+unsigned char* stbLoadTexture(std::filesystem::path path)
 {
     int w, h, c;
-    stbi_uc* px = stbi_load(path, &w, &h, &c, STBI_rgb_alpha);
-
-    *width = static_cast<uint32_t>(w);
-    *height = static_cast<uint32_t>(h);
-
-    return px;
+    return stbi_load(path.string().c_str(), &w, &h, &c, STBI_rgb_alpha);
 }
 
 void stbFreeTexture(unsigned char* px)
@@ -27,59 +25,8 @@ void stbFreeTexture(unsigned char* px)
     stbi_image_free(px);
 }
 
-Scene::Scene()
-    : meshes(std::vector<Mesh>())
+Scene loadGltfScene(const char* path)
 {
-}
-
-Scene Scene::fromObj(const char* path)
-{
-    Scene scene;
-
-    tinyobj::attrib_t attrib;
-    std::vector<tinyobj::shape_t> shapes;
-    std::vector<tinyobj::material_t> materials;
-    std::string warn, err;
-
-    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path)) {
-        pl::LOG_ERROR("Failed to load obj file: %s", "OBJ");
-        return scene;
-    }
-
-    for (const auto& shape : shapes) {
-        std::vector<Vertex> vertices;
-        std::vector<uint32_t> indices;
-
-        for (const auto& index : shape.mesh.indices) {
-            Vertex vertex {};
-
-            vertex.pos = {
-                attrib.vertices[3 * index.vertex_index + 0],
-                attrib.vertices[3 * index.vertex_index + 1],
-                attrib.vertices[3 * index.vertex_index + 2]
-            };
-
-            vertex.texCoord = {
-                attrib.texcoords[2 * index.texcoord_index + 0],
-                1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
-            };
-
-            vertex.color = { 1.0f, 1.0f, 1.0f };
-
-            vertices.push_back(vertex);
-            indices.push_back(indices.size());
-        }
-
-        scene.meshes.emplace_back(vertices, indices);
-    }
-
-    return scene;
-}
-
-Scene Scene::fromGltf(const char* path)
-{
-    Scene scene;
-
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;
     std::string warn, err;
@@ -92,36 +39,57 @@ Scene Scene::fromGltf(const char* path)
 
     if (!err.empty()) {
         pl::LOG_ERROR(err.c_str(), "GLTF");
-        return scene;
+        return {};
     }
 
     if (!ret) {
         pl::LOG_ERROR("Failed to parse gltf file", "GLTF");
-        return scene;
+        return {};
     }
 
-    for (const auto& mesh : model.meshes) {
-        for (const auto& primitive : mesh.primitives) {
+    std::vector<Mesh> meshes;
+    std::vector<Texture> textures;
+
+    // textures
+    for (const auto& _image : model.images) {
+        auto uri = fs::path(path).parent_path() / _image.uri;
+
+        Texture texture {
+            .name = _image.uri, 
+            .data = stbLoadTexture(uri),
+            .width = static_cast<uint32_t>(_image.width),
+            .height = static_cast<uint32_t>(_image.height)
+        };
+
+        textures.emplace_back(std::move(texture));
+    }
+
+    // meshes
+    for (const auto& _mesh : model.meshes) {
+        Mesh mesh;
+
+        for (const auto& _primitive : _mesh.primitives) {
+
             std::vector<Vertex> vertices;
             std::vector<uint32_t> indices;
 
+            size_t vertexCount;
             const float* positions;
             const float* normals;
             const float* texCoords;
-            size_t vertexCount;
 
             // positions
             {
-                const auto& accessor = model.accessors[primitive.attributes.at("POSITION")];
+                const auto& accessor = model.accessors[_primitive.attributes.at("POSITION")];
                 const auto& bufferView = model.bufferViews[accessor.bufferView];
                 const auto& buffer = model.buffers[bufferView.buffer];
-                positions = reinterpret_cast<const float*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
                 vertexCount = accessor.count;
+                positions = reinterpret_cast<const float*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
             }
 
             // normals
             {
-                const auto& accessor = model.accessors[primitive.attributes.at("NORMAL")];
+                const auto& accessor = model.accessors[_primitive.attributes.at("NORMAL")];
                 const auto& bufferView = model.bufferViews[accessor.bufferView];
                 const auto& buffer = model.buffers[bufferView.buffer];
                 normals = reinterpret_cast<const float*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
@@ -129,7 +97,7 @@ Scene Scene::fromGltf(const char* path)
 
             // texCoords
             {
-                const auto& accessor = model.accessors[primitive.attributes.at("TEXCOORD_0")];
+                const auto& accessor = model.accessors[_primitive.attributes.at("TEXCOORD_0")];
                 const auto& bufferView = model.bufferViews[accessor.bufferView];
                 const auto& buffer = model.buffers[bufferView.buffer];
                 texCoords = reinterpret_cast<const float*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
@@ -145,22 +113,28 @@ Scene Scene::fromGltf(const char* path)
 
             // indices
             {
-                const auto& accessor = model.accessors[primitive.indices];
+                const auto& accessor = model.accessors[_primitive.indices];
                 const auto& bufferView = model.bufferViews[accessor.bufferView];
                 const auto& buffer = model.buffers[bufferView.buffer];
-
                 const unsigned short* data = reinterpret_cast<const unsigned short*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
-
-                for (size_t i = 0; i < accessor.count; i++) {
-                    indices.push_back(data[i]);
-                }
+                std::copy(data, data + accessor.count, std::back_inserter(indices));
             }
 
-            scene.meshes.emplace_back(vertices, indices);
+            // texture
+            size_t textureIdx = model.materials[_primitive.material].pbrMetallicRoughness.baseColorTexture.index;
+
+            Primitive primitive {
+                .vertices = std::move(vertices),
+                .indices = std::move(indices),
+                .texture = &textures[textureIdx]
+            };
+
+            mesh.primitives.emplace_back(std::move(primitive));
         }
+        meshes.emplace_back(std::move(mesh));
     }
 
-    return scene;
+    return { std::move(meshes), std::move(textures) };
 }
 
 }

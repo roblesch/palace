@@ -6,10 +6,10 @@
 
 using namespace pl;
 
-void main(const int argc, const char* argv[])
+int main(const int argc, const char* argv[])
 {
     Parser args(argc, argv);
-    Scene scene = Scene::fromGltf(args.gltf_path());
+    Scene scene = loadGltfScene(args.gltf_path());
 
 #ifdef NDEBUG
     Vulkan vulkan(false);
@@ -17,7 +17,10 @@ void main(const int argc, const char* argv[])
     Vulkan vulkan;
 #endif
 
-    vulkan.bindVertexBuffer(scene.meshes[0].vertices, scene.meshes[0].indices);
-    vulkan.loadTextureImage(args.texture_path());
+    auto primitive = scene.meshes_[0].primitives[0];
+    auto texture = *primitive.texture;
+
+    vulkan.bindVertexBuffer(primitive.vertices, primitive.indices);
+    vulkan.loadTextureImage(texture.data, texture.width, texture.height);
     vulkan.run();
 }

@@ -1,33 +1,15 @@
 #pragma once
 
-#include "vertex.hpp"
+#include "mesh.hpp"
 #include <vector>
 
 namespace pl {
 
-unsigned char* stbLoadTexture(const char* path, uint32_t* width, uint32_t* height);
-void stbFreeTexture(unsigned char* px);
-
-struct Mesh {
-    std::vector<Vertex> vertices;
-    std::vector<uint32_t> indices;
-
-    Mesh() = default;
-
-    Mesh(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices)
-        : vertices(vertices)
-        , indices(indices)
-    {
-    }
-};
-
 struct Scene {
-    std::vector<Mesh> meshes;
-
-    Scene();
-
-    static Scene fromObj(const char* path);
-    static Scene fromGltf(const char* path);
+    std::vector<Mesh> meshes_;
+    std::vector<Texture> textures_;
 };
+
+Scene loadGltfScene(const char* path);
 
 }
