@@ -1,7 +1,3 @@
 add_library(vk "vulkan.cpp")
-target_link_libraries(vk
-        util
-        imgui
-        glm::glm
-        Vulkan::Vulkan
-        SDL2::SDL2)
+add_library(pl::vk ALIAS vk)
+target_link_libraries(vk imgui glm::glm pl::util Vulkan::Vulkan SDL2::SDL2)

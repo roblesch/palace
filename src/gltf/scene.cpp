@@ -6,9 +6,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "tiny_gltf.h"
-#define TINYOBJLOADER_IMPLEMENTATION
 #include <filesystem>
-#include <tiny_obj_loader.h>
 
 namespace fs = std::filesystem;
 

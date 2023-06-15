@@ -6,7 +6,7 @@ add_executable(palace "palace.cpp")
 set_target_properties(palace PROPERTIES
 		RUNTIME_OUTPUT_DIRECTORY_DEBUG ${PROJECT_BINARY_DIR}
 		RUNTIME_OUTPUT_DIRECTORY_RELEASE ${PROJECT_BINARY_DIR})
-target_link_libraries(palace gltf util vk)
+target_link_libraries(palace pl::gltf pl::util pl::vk)
 
 # copy dlls
 if(WIN32)

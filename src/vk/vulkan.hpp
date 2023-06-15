@@ -1,24 +1,8 @@
 #pragma once
 
-#include <string>
-
-#define VK_ENABLE_BETA_EXTENSIONS
-#define VULKAN_HPP_NO_CONSTRUCTORS
-#define VULKAN_HPP_NO_SETTERS
-#define VULKAN_HPP_NO_SPACESHIP_OPERATOR
-#define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
-#include <vulkan/vulkan.hpp>
-#define SDL_MAIN_HANDLED
-#include <SDL.h>
-#include <SDL_vulkan.h>
-#include <backends/imgui_impl_sdl2.h>
-#include <backends/imgui_impl_vulkan.h>
-#define GLM_FORCE_RADIANS
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
-#include <glm/glm.hpp>
-
 #include "gltf/mesh.hpp"
+#include "types.hpp"
+#include <string>
 
 namespace pl {
 
@@ -38,7 +22,7 @@ public:
     explicit Vulkan(bool enableValidation = true);
     ~Vulkan();
 
-    //void loadMesh(Mesh& mesh);
+    // void loadMesh(Mesh& mesh);
     void bindVertexBuffer(const std::vector<pl::Vertex>& vertices, const std::vector<uint32_t>& indices);
     void loadTextureImage(const unsigned char* data, uint32_t width, uint32_t height);
     void run();

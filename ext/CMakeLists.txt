@@ -1,7 +1,6 @@
 add_subdirectory(glm)
 add_subdirectory(SDL)
 add_subdirectory(tinygltf)
-add_subdirectory(tinyobjloader)
 add_library(imgui
 		"${CMAKE_CURRENT_SOURCE_DIR}/imgui/imgui.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/imgui/imgui_demo.cpp"
@@ -10,6 +9,4 @@ add_library(imgui
 		"${CMAKE_CURRENT_SOURCE_DIR}/imgui/imgui_widgets.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/imgui/backends/imgui_impl_vulkan.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/imgui/backends/imgui_impl_sdl2.cpp")
-target_link_libraries(imgui
-		Vulkan::Vulkan
-		SDL2::SDL2)
+target_link_libraries(imgui Vulkan::Vulkan SDL2::SDL2)
