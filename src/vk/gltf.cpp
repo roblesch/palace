@@ -125,30 +125,32 @@ GltfScene loadGltfScene(const char* path)
     // nodes
     nodes.resize(model.nodes.size());
     for (size_t i = 0; i < model.nodes.size(); i++) {
-        const auto& node = model.nodes[i];
+        const auto& _node = model.nodes[i];
 
-        for (const auto& child : node.children) {
-            nodes[child].parent = &nodes[i];
+        for (const auto& _child : _node.children) {
+            nodes[_child].parent = &nodes[i];
         }
 
-        std::copy(node.children.begin(), node.children.end(), std::back_inserter(nodes[i].children));
+        nodes[i].mesh = _node.mesh > -1 ? &meshes[_node.mesh] : nullptr;
+
+        std::copy(_node.children.begin(), _node.children.end(), std::back_inserter(nodes[i].children));
 
         nodes[i].translation = glm::vec3 { 0.0f };
-        if (node.translation.size() == 3)
-            nodes[i].translation = glm::make_vec3(node.translation.data());
+        if (_node.translation.size() == 3)
+            nodes[i].translation = glm::make_vec3(_node.translation.data());
 
         nodes[i].rotation = glm::mat4 { 1.0f };
-        if (node.rotation.size() == 4) {
-            glm::quat q = glm::make_quat(node.rotation.data());
+        if (_node.rotation.size() == 4) {
+            glm::quat q = glm::make_quat(_node.rotation.data());
             nodes[i].rotation = glm::mat4(q);
         }
 
         nodes[i].scale = glm::vec3 { 1.0f };
-        if (node.scale.size() == 3)
-            nodes[i].scale = glm::make_vec3(node.scale.data());
+        if (_node.scale.size() == 3)
+            nodes[i].scale = glm::make_vec3(_node.scale.data());
 
-        if (node.matrix.size() == 16)
-            nodes[i].matrix = glm::make_mat4(node.matrix.data());
+        if (_node.matrix.size() == 16)
+            nodes[i].matrix = glm::make_mat4(_node.matrix.data());
     }
 
     return { std::move(meshes), std::move(textures), std::move(nodes) };

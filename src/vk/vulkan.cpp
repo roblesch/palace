@@ -741,6 +741,9 @@ void Vulkan::run()
     ticks = SDL_GetTicks64();
 
     glm::ivec4 wasd { 0 };
+    glm::ivec2 spacelctrl { 0 };
+    float speed = 1.0f;
+
     glm::ivec2 center { extents_.width / 2, extents_.height / 2 };
     glm::ivec2 mouse { 0 };
 
@@ -809,6 +812,15 @@ void Vulkan::run()
                 case SDLK_d:
                     wasd[3] = 1;
                     break;
+                case SDLK_SPACE:
+                    spacelctrl[0] = 1;
+                    break;
+                case SDLK_LCTRL:
+                    spacelctrl[1] = 1;
+                    break;
+                case SDLK_LSHIFT:
+                    speed = 0.25f;
+                    break;
                 }
                 break;
 
@@ -826,6 +838,15 @@ void Vulkan::run()
                 case SDLK_d:
                     wasd[3] = 0;
                     break;
+                case SDLK_SPACE:
+                    spacelctrl[0] = 0;
+                    break;
+                case SDLK_LCTRL:
+                    spacelctrl[1] = 0;
+                    break;
+                case SDLK_LSHIFT:
+                    speed = 1.0f;
+                    break;
                 }
                 break;
             }
@@ -842,8 +863,8 @@ void Vulkan::run()
 
         keyStates = SDL_GetKeyboardState(nullptr);
 
-        if (keyStates[SDL_SCANCODE_W] || keyStates[SDL_SCANCODE_A] || keyStates[SDL_SCANCODE_S] || keyStates[SDL_SCANCODE_D])
-            camera_.move(wasd);
+        if (keyStates[SDL_SCANCODE_W] || keyStates[SDL_SCANCODE_A] || keyStates[SDL_SCANCODE_S] || keyStates[SDL_SCANCODE_D] || keyStates[SDL_SCANCODE_SPACE] || keyStates[SDL_SCANCODE_LCTRL] || keyStates[SDL_SCANCODE_LSHIFT])
+            camera_.move(wasd, spacelctrl, speed);
 
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplSDL2_NewFrame(window_);

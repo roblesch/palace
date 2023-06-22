@@ -33,6 +33,7 @@ struct Mesh {
 
 struct Node {
     Node* parent;
+    Mesh* mesh;
     std::vector<uint32_t> children;
     glm::vec3 translation;
     glm::quat rotation;

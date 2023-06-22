@@ -18,6 +18,9 @@ struct Camera {
     glm::vec3 center;
     glm::vec3 up;
 
+    glm::vec3 forward;
+    glm::vec3 right;
+
     glm::mat4 view { 1.0f };
     glm::mat4 proj { 1.0f };
 
@@ -25,7 +28,10 @@ struct Camera {
     {
         this->eye = eye;
         this->center = center;
-        this->up = up;
+
+        this->up = glm::normalize(up);
+        forward = glm::normalize(center - eye);
+        right = glm::normalize(glm::cross(forward, up));
 
         view = glm::lookAt(eye, center, up);
     }
@@ -37,13 +43,15 @@ struct Camera {
 
     void rotate(int dx, int dy)
     {
-        glm::vec3 forward = glm::normalize(center - eye);
-        glm::vec3 right = glm::normalize(glm::cross(forward, up));
-        float angle = glm::angle(forward, up);
         forward = glm::rotate(forward, dx / 350.0f, up);
-        if ((dy > 0 && angle > 0.01) || (dy < 0 && angle < glm::pi<float>() - 0.01f))
+        right = glm::rotate(right, dx / 350.0f, up);
+
+        float angle = glm::angle(forward, up);
+        if ((dy > 0 && angle > 0.1) || (dy < 0 && angle < glm::pi<float>() - 0.1f))
             forward = glm::rotate(forward, dy / 350.0f, right);
-        lookAt(eye, eye + glm::vec3(forward) * glm::length(center - eye), up);
+
+        center = eye + forward * glm::length(center - eye);
+        lookAt(eye, center, up);
     }
 
     void zoom(float dz)
@@ -55,18 +63,21 @@ struct Camera {
         lookAt(eye, center, up);
     }
 
-    void move(glm::vec4 wasd)
+    void move(glm::ivec4 wasd, glm::ivec2 spacelctrl, float speed)
     {
-        glm::vec3 forward = center - eye;
-        glm::vec3 right = glm::cross(forward, up);
-        eye += 0.1f * wasd[0] * glm::normalize(forward);
-        eye += 0.1f * wasd[1] * glm::normalize(right);
-        eye -= 0.1f * wasd[2] * glm::normalize(forward);
-        eye -= 0.1f * wasd[3] * glm::normalize(right);
-        center += 0.1f * wasd[0] * glm::normalize(forward);
-        center += 0.1f * wasd[1] * glm::normalize(right);
-        center -= 0.1f * wasd[2] * glm::normalize(forward);
-        center -= 0.1f * wasd[3] * glm::normalize(right);
+        eye += 0.1f * wasd[0] * forward * speed;
+        eye += 0.1f * wasd[1] * right * speed;
+        eye -= 0.1f * wasd[2] * forward * speed;
+        eye -= 0.1f * wasd[3] * right * speed;
+        center += 0.1f * wasd[0] * forward * speed;
+        center += 0.1f * wasd[1] * right * speed;
+        center -= 0.1f * wasd[2] * forward * speed;
+        center -= 0.1f * wasd[3] * right * speed;
+        eye -= 0.1f * spacelctrl[0] * up * speed;
+        eye += 0.1f * spacelctrl[1] * up * speed;
+        center -= 0.1f * spacelctrl[0] * up * speed;
+        center += 0.1f * spacelctrl[1] * up * speed;
+
         lookAt(eye, center, up);
     }
 
