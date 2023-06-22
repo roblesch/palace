@@ -14,3 +14,6 @@
 [submodule "ext/glm"]
 	path = ext/glm
 	url = git@github.com:g-truc/glm.git
+[submodule "ext/VulkanMemoryAllocator"]
+	path = ext/VulkanMemoryAllocator
+	url = git@github.com:GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git

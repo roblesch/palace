@@ -1,16 +1,12 @@
 #pragma once
 
-#include "gltf/mesh.hpp"
+#include "camera.hpp"
+#include "gltf.hpp"
+#include "memory.hpp"
 #include "types.hpp"
 #include <string>
 
 namespace pl {
-
-struct UniformBufferObject {
-    alignas(16) glm::mat4 model;
-    alignas(16) glm::mat4 view;
-    alignas(16) glm::mat4 proj;
-};
 
 class Vulkan {
 public:
@@ -28,7 +24,7 @@ public:
     void run();
 
 private:
-    void modelViewProj();
+    void updateUniformBuffers();
     void drawFrame();
 
     vk::UniqueCommandBuffer beginSingleUseCommandBuffer();
@@ -95,6 +91,12 @@ private:
     vk::UniqueDeviceMemory depthMemory_;
     vk::UniqueImageView depthView_;
 
+    // vma
+    pl::UniqueMemory memory_;
+
+    // vulkan guide
+    vk::Pipeline meshPipeline_;
+
     // buffers
     vk::UniqueBuffer vertexBuffer_;
     vk::UniqueBuffer indexBuffer_;
@@ -112,6 +114,21 @@ private:
 
     // imgui
     vk::UniqueDescriptorPool imguiDescriptorPool_;
+
+    // camera
+    Camera camera_;
+
+    // ubo
+    struct UniformBuffer {
+        glm::mat4 model;
+        glm::mat4 view;
+        glm::mat4 proj;
+        //glm::vec3 pos;
+    } ubo_;
+
+    // time
+    Uint64 ticks { 0 };
+    Uint64 dt { 0 };
 };
 
 } // namespace pl

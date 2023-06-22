@@ -1,12 +1,8 @@
 #include "vulkan.hpp"
 
+#include "util/log.hpp"
 #include <chrono>
 #include <fstream>
-
-#include <glm/gtc/matrix_transform.hpp>
-
-#include "gltf/scene.hpp"
-#include "util/log.hpp"
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
@@ -297,19 +293,25 @@ Vulkan::Vulkan(bool enableValidation)
         .format = vk::Format::eR32G32B32Sfloat,
         .offset = offsetof(pl::Vertex, pos)
     };
-    vk::VertexInputAttributeDescription colorDescription {
+    vk::VertexInputAttributeDescription normalDescription {
         .location = 1,
+        .binding = 0,
+        .format = vk::Format::eR32G32B32Sfloat,
+        .offset = offsetof(pl::Vertex, normal)
+    };
+    vk::VertexInputAttributeDescription colorDescription {
+        .location = 2,
         .binding = 0,
         .format = vk::Format::eR32G32B32Sfloat,
         .offset = offsetof(pl::Vertex, color)
     };
-    vk::VertexInputAttributeDescription texCoordDescription {
-        .location = 2,
+    vk::VertexInputAttributeDescription uvDescription {
+        .location = 3,
         .binding = 0,
         .format = vk::Format::eR32G32Sfloat,
-        .offset = offsetof(pl::Vertex, texCoord)
+        .offset = offsetof(pl::Vertex, uv)
     };
-    std::array<vk::VertexInputAttributeDescription, 3> vertexAttributeDescriptions { posDescription, colorDescription, texCoordDescription };
+    std::array<vk::VertexInputAttributeDescription, 4> vertexAttributeDescriptions { posDescription, normalDescription, colorDescription, uvDescription };
 
     vk::PipelineVertexInputStateCreateInfo vertexStateInfo {
         .vertexBindingDescriptionCount = 1,
@@ -490,6 +492,16 @@ Vulkan::Vulkan(bool enableValidation)
     // swapchain
     createSwapchain();
 
+    // memory
+    pl::MemoryCreateInfo memoryInfo {
+        .physicalDevice = physicalDevice_,
+        .device = *device_,
+        .instance = *instance_
+    };
+
+    memory_ = pl::createMemoryUnique(memoryInfo);
+    memory_->loadMesh();
+
     // imgui
     vk::DescriptorPoolSize imguiPoolSizes[] = {
         { vk::DescriptorType::eSampler, 1000 },
@@ -533,6 +545,11 @@ Vulkan::Vulkan(bool enableValidation)
     ImGui_ImplVulkan_CreateFontsTexture(*cmd);
     endSingleUseCommandBuffer(*cmd);
     ImGui_ImplVulkan_DestroyFontUploadObjects();
+
+    // camera
+    camera_ = Camera { .fovy = 45.0f, .znear = 0.001f, .zfar = 1000.0f };
+    camera_.lookAt({ 0.0f, 0.0f, 2.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, -1.0f, 0.0f });
+    camera_.resize((float)extents_.width / extents_.height);
 
     isInitialized_ = true;
 }
@@ -579,7 +596,7 @@ void Vulkan::bindVertexBuffer(const std::vector<pl::Vertex>& vertices, const std
     copyBuffer(*indexStagingBuffer, *indexBuffer_, indexBufferSize);
 
     // uniform buffers
-    vk::DeviceSize uniformBufferSize = sizeof(UniformBufferObject);
+    vk::DeviceSize uniformBufferSize = sizeof(UniformBuffer);
 
     uniformBuffers_.resize(sConcurrentFrames_);
     uniformMemories_.resize(sConcurrentFrames_);
@@ -671,7 +688,7 @@ void Vulkan::loadTextureImage(const unsigned char* data, uint32_t width, uint32_
         vk::DescriptorBufferInfo uboInfo {
             .buffer = *uniformBuffers_[i],
             .offset = 0,
-            .range = sizeof(UniformBufferObject)
+            .range = sizeof(UniformBuffer)
         };
 
         vk::DescriptorImageInfo samplerInfo {
@@ -702,8 +719,6 @@ void Vulkan::loadTextureImage(const unsigned char* data, uint32_t width, uint32_
         device_->updateDescriptorSets(writeDescriptors.size(), writeDescriptors.data(), 0, nullptr);
     }
 
-    // TODO:: free texture
-    //pl::stbFreeTexture(px);
     isTextureLoaded_ = true;
 }
 
@@ -722,21 +737,113 @@ void Vulkan::run()
         return;
     }
 
-    while (true) {
+    bool quit = false;
+    ticks = SDL_GetTicks64();
+
+    glm::ivec4 wasd { 0 };
+    glm::ivec2 center { extents_.width / 2, extents_.height / 2 };
+    glm::ivec2 mouse { 0 };
+
+    const Uint8* keyStates = SDL_GetKeyboardState(nullptr);
+
+    while (!quit) {
+        Uint64 start = SDL_GetPerformanceCounter();
+        dt = SDL_GetTicks64() - ticks;
+        ticks += dt;
+
         SDL_Event event;
-        if (SDL_PollEvent(&event)) {
+        while (SDL_PollEvent(&event)) {
             ImGui_ImplSDL2_ProcessEvent(&event);
-            if (event.type == SDL_QUIT)
+            switch (event.type) {
+
+            case SDL_QUIT:
+                quit = true;
                 break;
-            if (event.type == SDL_WINDOWEVENT) {
-                if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
+
+            case SDL_WINDOWEVENT:
+                switch (event.window.event) {
+                case SDL_WINDOWEVENT_RESIZED:
                     isResized_ = true;
+                    break;
                 }
+                break;
+
+            case SDL_MOUSEBUTTONDOWN:
+                switch (event.button.button) {
+                case SDL_BUTTON_MIDDLE:
+                    camera_.reset();
+                    break;
+                case SDL_BUTTON_RIGHT:
+                    SDL_SetRelativeMouseMode(SDL_TRUE);
+                    SDL_WarpMouseInWindow(window_, center.x, center.y);
+                    break;
+                }
+                break;
+
+            case SDL_MOUSEBUTTONUP:
+                switch (event.button.button) {
+                case SDL_BUTTON_RIGHT:
+                    SDL_SetRelativeMouseMode(SDL_FALSE);
+                    break;
+                }
+                break;
+
+            case SDL_MOUSEWHEEL:
+                camera_.zoom(event.wheel.y);
+                break;
+
+            case SDL_KEYDOWN:
+                switch (event.key.keysym.sym) {
+                case SDLK_ESCAPE:
+                    quit = true;
+                    break;
+                case SDLK_w:
+                    wasd[0] = 1;
+                    break;
+                case SDLK_a:
+                    wasd[1] = 1;
+                    break;
+                case SDLK_s:
+                    wasd[2] = 1;
+                    break;
+                case SDLK_d:
+                    wasd[3] = 1;
+                    break;
+                }
+                break;
+
+            case SDL_KEYUP:
+                switch (event.key.keysym.sym) {
+                case SDLK_w:
+                    wasd[0] = 0;
+                    break;
+                case SDLK_a:
+                    wasd[1] = 0;
+                    break;
+                case SDLK_s:
+                    wasd[2] = 0;
+                    break;
+                case SDLK_d:
+                    wasd[3] = 0;
+                    break;
+                }
+                break;
             }
         }
 
         if (SDL_GetWindowFlags(window_) & SDL_WINDOW_MINIMIZED)
             continue;
+
+        if (SDL_GetRelativeMouseMode()) {
+            SDL_GetMouseState(&mouse.x, &mouse.y);
+            camera_.rotate(mouse.x - center.x, mouse.y - center.y);
+            SDL_WarpMouseInWindow(window_, center.x, center.y);
+        }
+
+        keyStates = SDL_GetKeyboardState(nullptr);
+
+        if (keyStates[SDL_SCANCODE_W] || keyStates[SDL_SCANCODE_A] || keyStates[SDL_SCANCODE_S] || keyStates[SDL_SCANCODE_D])
+            camera_.move(wasd);
 
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplSDL2_NewFrame(window_);
@@ -744,28 +851,25 @@ void Vulkan::run()
         ImGui::ShowDemoWindow();
         ImGui::Render();
 
-        modelViewProj();
+        updateUniformBuffers();
         drawFrame();
+
+        Uint64 end = SDL_GetPerformanceCounter();
+        float elapsedMS = (end - start) / (float)SDL_GetPerformanceFrequency();
+
+        printf("\33[2KMS: %f\r", elapsedMS);
     }
 
     device_->waitIdle();
 }
 
-void Vulkan::modelViewProj()
+void Vulkan::updateUniformBuffers()
 {
-    static auto startTime = std::chrono::high_resolution_clock::now();
+    ubo_.model = glm::rotate(glm::mat4(1.0f), ticks / 1000.0f * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    ubo_.view = camera_.view;
+    ubo_.proj = camera_.proj;
 
-    auto currentTime = std::chrono::high_resolution_clock::now();
-    float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
-    UniformBufferObject ubo {
-        .model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f)),
-        .view = glm::lookAt(glm::vec3(0.0f, 0.0f, 0.15f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
-        .proj = glm::perspective(glm::radians(45.0f), extents_.width / (float)extents_.height, 0.1f, 10.0f)
-    };
-    ubo.proj[1][1] *= -1;
-
-    memcpy(uniformPtrs_[currentFrame_], &ubo, sizeof(ubo));
+    memcpy(uniformPtrs_[currentFrame_], &ubo_, sizeof(ubo_));
 }
 
 void Vulkan::drawFrame()
@@ -1055,7 +1159,7 @@ void Vulkan::createSwapchain(vk::SwapchainKHR oldSwapchain)
         .imageSharingMode = vk::SharingMode::eExclusive,
         .preTransform = vk::SurfaceTransformFlagBitsKHR::eIdentity,
         .compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque,
-        .presentMode = vk::PresentModeKHR::eMailbox,
+        .presentMode = vk::PresentModeKHR::eFifo,
         .clipped = VK_TRUE,
         .oldSwapchain = oldSwapchain
     };
@@ -1099,12 +1203,14 @@ void Vulkan::recreateSwapchain()
     device_->waitIdle();
     int width, height;
     SDL_GetWindowSize(window_, &width, &height);
+
     extents_ = vk::Extent2D {
         .width = static_cast<uint32_t>(width),
         .height = static_cast<uint32_t>(height)
     };
 
     createSwapchain(*swapchain_);
+    camera_.resize((float)extents_.width / extents_.height);
 }
 
 } // namespace pl
