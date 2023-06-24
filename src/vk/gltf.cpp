@@ -1,7 +1,7 @@
 #include "gltf.hpp"
 
-#include "vulkan.hpp"
 #include "util/log.hpp"
+#include "vulkan.hpp"
 #define TINYGLTF_IMPLEMENTATION
 #define TINYGLTF_NO_STB_IMAGE_WRITE
 #define STB_IMAGE_IMPLEMENTATION
@@ -53,13 +53,19 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
     // textures
     for (const auto& _image : model.images) {
         auto uri = fs::path(path).parent_path() / _image.uri;
+        auto extent = vk::Extent3D {
+            .width = static_cast<uint32_t>(_image.width),
+            .height = static_cast<uint32_t>(_image.height),
+            .depth = 1
+        };
+        auto size = extent.width * extent.height * 4 * sizeof(unsigned char);
 
         Texture texture {
             .name = _image.uri,
-            .width = static_cast<uint32_t>(_image.width),
-            .height = static_cast<uint32_t>(_image.height)
+            .image = memory->createTextureImage(_image.image.data(), size, extent),
+            .width = extent.width,
+            .height = extent.height
         };
-        std::copy(_image.image.begin(), _image.image.end(), std::back_inserter(texture.data));
         textures.push_back(texture);
     }
 
@@ -168,8 +174,8 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
     }
 
     // buffers
-    vertexBuffer = memory->createBuffer(vertices.data(), vertices.size() * sizeof(Vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-    indexBuffer = memory->createBuffer(indices.data(), indices.size() * sizeof(uint32_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    vertexBuffer = memory->createBuffer(vertices.data(), vertices.size() * sizeof(Vertex), vk::BufferUsageFlagBits::eVertexBuffer);
+    indexBuffer = memory->createBuffer(indices.data(), indices.size() * sizeof(uint32_t), vk::BufferUsageFlagBits::eIndexBuffer);
 
     // nodes
     nodes.resize(model.nodes.size());

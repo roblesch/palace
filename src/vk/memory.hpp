@@ -31,8 +31,8 @@ public:
     vk::UniqueCommandBuffer beginSingleUseCommandBuffer();
     void endSingleUseCommandBuffer(vk::CommandBuffer& commandBuffer);
 
-    VmaBuffer* createBuffer(void* src, size_t size, VkBufferUsageFlags usage);
-    VmaImage* createTextureImage(void* src, size_t size, vk::Extent3D extent);
+    VmaBuffer* createBuffer(void* src, size_t size, vk::BufferUsageFlags usage);
+    VmaImage* createTextureImage(const void* src, size_t size, vk::Extent3D  extent);
 
 private:
     vk::Device device_;

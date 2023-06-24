@@ -16,9 +16,18 @@ struct Vertex {
 
 struct Texture {
     std::string name;
-    std::vector<unsigned char> data;
+    VmaImage* image;
+    vk::ImageView view;
+    vk::DescriptorImageInfo descriptor;
+    vk::Sampler sampler;
     uint32_t width;
     uint32_t height;
+};
+
+struct Material {
+    Texture* baseColor;
+    Texture* normal;
+    vk::DescriptorSet descriptorSet;
 };
 
 struct Primitive {
@@ -63,6 +72,7 @@ public:
     std::vector<Mesh> meshes;
     std::vector<Primitive> primitives;
     std::vector<Texture> textures;
+    std::vector<Material> materials;
     std::vector<Node> nodes;
 
     VmaBuffer* vertexBuffer;

@@ -56,7 +56,7 @@ void Memory::endSingleUseCommandBuffer(vk::CommandBuffer& commandBuffer)
     graphicsQueue_.waitIdle();
 }
 
-VmaBuffer* Memory::createBuffer(void* src, size_t size, VkBufferUsageFlags usage)
+VmaBuffer* Memory::createBuffer(void* src, size_t size, vk::BufferUsageFlags usage)
 {
     VkBufferCreateInfo stagingBufferInfo {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -78,7 +78,7 @@ VmaBuffer* Memory::createBuffer(void* src, size_t size, VkBufferUsageFlags usage
     VkBufferCreateInfo bufferInfo {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = size,
-        .usage = usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+        .usage = (VkBufferUsageFlags)usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT
     };
     VmaAllocationCreateInfo bufferAllocInfo {
         .usage = VMA_MEMORY_USAGE_AUTO
@@ -100,8 +100,9 @@ VmaBuffer* Memory::createBuffer(void* src, size_t size, VkBufferUsageFlags usage
     return buffer;
 }
 
-VmaImage* Memory::createTextureImage(void* src, size_t size, vk::Extent3D extent)
+VmaImage* Memory::createTextureImage(const void* src, size_t size, vk::Extent3D extent)
 {
+    // upload to staging
     VkBufferCreateInfo stagingBufferInfo {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = size,
@@ -119,6 +120,7 @@ VmaImage* Memory::createTextureImage(void* src, size_t size, vk::Extent3D extent
     memcpy(data, src, size);
     vmaUnmapMemory(allocator_, staging.allocation);
 
+    // create image
     VkImageCreateInfo imageInfo {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = VK_IMAGE_TYPE_2D,
@@ -133,26 +135,29 @@ VmaImage* Memory::createTextureImage(void* src, size_t size, vk::Extent3D extent
     VmaAllocationCreateInfo imageAllocInfo {
         .usage = VMA_MEMORY_USAGE_AUTO
     };
-    auto image = new VmaImage;
-    vmaCreateImage(allocator_, &imageInfo, &imageAllocInfo, &image->image, &image->allocation, nullptr);
+    auto texture = new VmaImage;
+    vmaCreateImage(allocator_, &imageInfo, &imageAllocInfo, &texture->image, &texture->allocation, nullptr);
 
+    // transition staging format
     auto cmd = beginSingleUseCommandBuffer();
-    // transition layout
-    vk::ImageSubresourceRange range {
-        .aspectMask = vk::ImageAspectFlagBits::eColor,
-        .baseMipLevel = 0,
-        .levelCount = 1,
-        .baseArrayLayer = 0,
-        .layerCount = 1
-    };
-    vk::ImageMemoryBarrier barrier {
+    vk::ImageMemoryBarrier transferBarrier {
+        .srcAccessMask = {},
         .dstAccessMask = vk::AccessFlagBits::eTransferWrite,
         .oldLayout = vk::ImageLayout::eUndefined,
         .newLayout = vk::ImageLayout::eTransferDstOptimal,
-        .image = image->image,
-        .subresourceRange = range
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = texture->image,
+        .subresourceRange = {
+            .aspectMask = vk::ImageAspectFlagBits::eColor,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1 }
     };
-    // copy image
+    cmd->pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTransfer, {}, {}, {}, transferBarrier);
+
+    // copy to image
     vk::BufferImageCopy copy {
         .bufferOffset = 0,
         .bufferRowLength = 0,
@@ -162,14 +167,33 @@ VmaImage* Memory::createTextureImage(void* src, size_t size, vk::Extent3D extent
             .mipLevel = 0,
             .baseArrayLayer = 0,
             .layerCount = 1 },
+        .imageOffset = { 0, 0, 0 },
         .imageExtent = extent
     };
-    cmd->pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTransfer, {}, {}, {}, barrier);
+    cmd->copyBufferToImage(staging.buffer, texture->image, vk::ImageLayout::eTransferDstOptimal, copy);
+
+    // transition image format
+    vk::ImageMemoryBarrier readableBarrier {
+        .srcAccessMask = vk::AccessFlagBits::eTransferWrite,
+        .dstAccessMask = vk::AccessFlagBits::eShaderRead,
+        .oldLayout = vk::ImageLayout::eTransferDstOptimal,
+        .newLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = texture->image,
+        .subresourceRange = {
+            .aspectMask = vk::ImageAspectFlagBits::eColor,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1 }
+    };
+    cmd->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader, {}, {}, {}, readableBarrier);
     endSingleUseCommandBuffer(*cmd);
     vmaDestroyBuffer(allocator_, staging.buffer, staging.allocation);
 
-    images_.push_back(image);
-    return image;
+    images_.push_back(texture);
+    return texture;
 }
 
 UniqueMemory createMemoryUnique(const MemoryCreateInfo& createInfo)
