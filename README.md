@@ -15,6 +15,8 @@ vma
 
 Alexander Overvoorde, Vulkan Tutorial https://vulkan-tutorial.com/
 
+Victor Blanco, Vulkan Guide https://vkguide.dev/
+
 Sascha Willems, Vulkan C++ examples and demos https://github.com/SaschaWillems/Vulkan
 
 KhronosGroup, Vulkan-Hpp: C++ Bindings for Vulkan https://github.com/KhronosGroup/Vulkan-Hpp
