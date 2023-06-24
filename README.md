@@ -5,10 +5,11 @@ A vulkan engine.
 vulkan.hpp
 - designated initializers
 - unique handles
-- dynamic dispatch loader
+- dynamic dispatch
 
 sdl2
 
+vma
 
 ## resources
 
