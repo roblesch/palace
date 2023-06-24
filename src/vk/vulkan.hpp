@@ -4,48 +4,40 @@
 #include "gltf.hpp"
 #include "memory.hpp"
 #include "types.hpp"
+#include <functional>
 #include <string>
 
 namespace pl {
 
 class Vulkan {
 public:
+    explicit Vulkan(bool enableValidation = true);
+    ~Vulkan();
+
+    void loadGltfModel(const char* path);
+    void run();
+
+private:
+    void updateUniformBuffers(int dx);
+    void drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node);
+    void drawFrame();
+
+    vk::UniqueBuffer createBufferUnique(vk::DeviceSize& size, const vk::BufferUsageFlags usage);
+    vk::UniqueDeviceMemory createDeviceMemoryUnique(const vk::MemoryRequirements requirements, const vk::MemoryPropertyFlags memoryFlags);
+    vk::UniqueImage createImageUnique(vk::Extent2D& extent, const vk::Format format, const vk::ImageTiling tiling, const vk::ImageUsageFlags usage);
+    vk::UniqueImageView createImageViewUnique(vk::Image& image, const vk::Format format, vk::ImageAspectFlagBits aspectMask);
+
+    void createSwapchain(vk::SwapchainKHR oldSwapchain = VK_NULL_HANDLE);
+    void recreateSwapchain();
+
     static constexpr int sWidth_ = 800;
     static constexpr int sHeight_ = 600;
     static constexpr const std::string_view sSpirVDir_ = "/shaders";
     static constexpr uint32_t sConcurrentFrames_ = 2;
 
-    explicit Vulkan(bool enableValidation = true);
-    ~Vulkan();
-
-    // void loadMesh(Mesh& mesh);
-    void bindVertexBuffer(const std::vector<pl::Vertex>& vertices, const std::vector<uint32_t>& indices);
-    void loadTextureImage(const unsigned char* data, uint32_t width, uint32_t height);
-    void run();
-
-private:
-    void updateUniformBuffers();
-    void drawFrame();
-
-    vk::UniqueCommandBuffer beginSingleUseCommandBuffer();
-    void endSingleUseCommandBuffer(vk::CommandBuffer& commandBuffer);
-
-    vk::UniqueBuffer createBufferUnique(vk::DeviceSize& size, const vk::BufferUsageFlags usage);
-    vk::UniqueBuffer createStagingBufferUnique(vk::DeviceSize& size);
-    vk::UniqueDeviceMemory createDeviceMemoryUnique(const vk::MemoryRequirements requirements, const vk::MemoryPropertyFlags memoryFlags);
-    vk::UniqueDeviceMemory createStagingMemoryUnique(vk::Buffer& buffer, vk::DeviceSize& size);
-    vk::UniqueImage createImageUnique(vk::Extent2D& extent, const vk::Format format, const vk::ImageTiling tiling, const vk::ImageUsageFlags usage);
-    vk::UniqueImageView createImageViewUnique(vk::Image& image, const vk::Format format, vk::ImageAspectFlagBits aspectMask);
-    void copyBuffer(vk::Buffer src, vk::Buffer dst, vk::DeviceSize size);
-    void transitionImageLayout(vk::Image& image, const vk::Format format, const vk::ImageLayout oldLayout, const vk::ImageLayout newLayout);
-
-    void createSwapchain(vk::SwapchainKHR oldSwapchain = VK_NULL_HANDLE);
-    void recreateSwapchain();
-
     bool isValidationEnabled_ = true;
     bool isInitialized_ = false;
-    bool isTextureLoaded_ = false;
-    bool isVerticesBound_ = false;
+    bool isSceneLoaded_ = false;
     bool isResized_ = false;
 
     vk::Extent2D extents_;
@@ -91,40 +83,29 @@ private:
     vk::UniqueDeviceMemory depthMemory_;
     vk::UniqueImageView depthView_;
 
-    // vma
-    pl::UniqueMemory memory_;
-
-    // vulkan guide
-    vk::Pipeline meshPipeline_;
-
     // buffers
-    vk::UniqueBuffer vertexBuffer_;
-    vk::UniqueBuffer indexBuffer_;
-    vk::UniqueDeviceMemory vertexMemory_;
-    vk::UniqueDeviceMemory indexMemory_;
     std::vector<vk::UniqueBuffer> uniformBuffers_;
     std::vector<vk::UniqueDeviceMemory> uniformMemories_;
     std::vector<void*> uniformPtrs_;
 
-    // texture
-    vk::UniqueImage texture_;
-    vk::UniqueDeviceMemory textureMemory_;
-    vk::UniqueImageView textureView_;
-    vk::UniqueSampler textureSampler_;
+    // ubo
+    struct UniformBuffer {
+        glm::mat4 model { 1.0f };
+        glm::mat4 view { 1.0f };
+        glm::mat4 proj { 1.0f };
+    } ubo_;
+
+    // memory
+    pl::UniqueMemory memory_;
+
+    // scene
+    pl::UniqueGltfScene scene_;
 
     // imgui
     vk::UniqueDescriptorPool imguiDescriptorPool_;
 
     // camera
     Camera camera_;
-
-    // ubo
-    struct UniformBuffer {
-        glm::mat4 model;
-        glm::mat4 view;
-        glm::mat4 proj;
-        //glm::vec3 pos;
-    } ubo_;
 
     // time
     Uint64 ticks { 0 };

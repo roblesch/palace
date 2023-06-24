@@ -6,6 +6,10 @@ namespace pl {
 
 Memory::Memory(const MemoryCreateInfo& createInfo)
 {
+    device_ = createInfo.device;
+    commandPool_ = createInfo.commandPool;
+    graphicsQueue_ = createInfo.graphicsQueue;
+
     VmaAllocatorCreateInfo allocatorInfo {
         .physicalDevice = createInfo.physicalDevice,
         .device = createInfo.device,
@@ -17,48 +21,155 @@ Memory::Memory(const MemoryCreateInfo& createInfo)
 
 Memory::~Memory()
 {
-    vmaDestroyBuffer(allocator_, mesh_.vertexBuffer.buffer, mesh_.vertexBuffer.allocation);
+    for (auto& buffer : buffers_)
+        vmaDestroyBuffer(allocator_, buffer->buffer, buffer->allocation);
+    for (auto& image : images_)
+        vmaDestroyImage(allocator_, image->image, image->allocation);
+
     vmaDestroyAllocator(allocator_);
 }
 
-void Memory::loadMesh()
+vk::UniqueCommandBuffer Memory::beginSingleUseCommandBuffer()
 {
-    // make the array 3 vertices long
-    mesh_.vertices.resize(3);
+    vk::CommandBufferAllocateInfo bufferInfo {
+        .commandPool = commandPool_,
+        .level = vk::CommandBufferLevel::ePrimary,
+        .commandBufferCount = 1
+    };
 
-    // vertex positions
-    mesh_.vertices[0].position = { 1.f, 1.f, 0.0f };
-    mesh_.vertices[1].position = { -1.f, 1.f, 0.0f };
-    mesh_.vertices[2].position = { 0.f, -1.f, 0.0f };
+    vk::UniqueCommandBuffer commandBuffer { std::move(device_.allocateCommandBuffersUnique(bufferInfo)[0]) };
+    commandBuffer->begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
 
-    // vertex colors, all green
-    mesh_.vertices[0].color = { 0.f, 1.f, 0.0f }; // pure green
-    mesh_.vertices[1].color = { 0.f, 1.f, 0.0f }; // pure green
-    mesh_.vertices[2].color = { 0.f, 1.f, 0.0f }; // pure green
-
-    uploadMesh(mesh_);
+    return commandBuffer;
 }
 
-vk::Result Memory::uploadMesh(Mesh2& mesh)
+void Memory::endSingleUseCommandBuffer(vk::CommandBuffer& commandBuffer)
 {
-    VkBufferCreateInfo bufferInfo {
+    commandBuffer.end();
+
+    vk::SubmitInfo submitInfo {
+        .commandBufferCount = 1,
+        .pCommandBuffers = &commandBuffer
+    };
+
+    graphicsQueue_.submit(submitInfo);
+    graphicsQueue_.waitIdle();
+}
+
+VmaBuffer* Memory::createBuffer(void* src, size_t size, VkBufferUsageFlags usage)
+{
+    VkBufferCreateInfo stagingBufferInfo {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .size = mesh.vertices.size() * sizeof(Vertex2),
-        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
+        .size = size,
+        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT
     };
-
-    VmaAllocationCreateInfo allocationInfo {
-        .usage = VMA_MEMORY_USAGE_CPU_TO_GPU
+    VmaAllocationCreateInfo stagingAllocInfo {
+        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+        .usage = VMA_MEMORY_USAGE_AUTO
     };
-
-    auto result = vmaCreateBuffer(allocator_, &bufferInfo, &allocationInfo, &mesh.vertexBuffer.buffer, &mesh.vertexBuffer.allocation, VK_NULL_HANDLE);
+    VmaBuffer staging;
+    vmaCreateBuffer(allocator_, &stagingBufferInfo, &stagingAllocInfo, &staging.buffer, &staging.allocation, nullptr);
 
     void* data;
-    vmaMapMemory(allocator_, mesh.vertexBuffer.allocation, &data);
-    memcpy(data, mesh.vertices.data(), mesh.vertices.size() * sizeof(Vertex2));
-    vmaUnmapMemory(allocator_, mesh.vertexBuffer.allocation);
+    vmaMapMemory(allocator_, staging.allocation, &data);
+    memcpy(data, src, size);
+    vmaUnmapMemory(allocator_, staging.allocation);
 
-    return static_cast<vk::Result>(result);
+    VkBufferCreateInfo bufferInfo {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = size,
+        .usage = usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+    };
+    VmaAllocationCreateInfo bufferAllocInfo {
+        .usage = VMA_MEMORY_USAGE_AUTO
+    };
+    auto buffer = new VmaBuffer;
+    vmaCreateBuffer(allocator_, &bufferInfo, &bufferAllocInfo, &buffer->buffer, &buffer->allocation, nullptr);
+
+    auto cmd = beginSingleUseCommandBuffer();
+    vk::BufferCopy copy {
+        .srcOffset = 0,
+        .dstOffset = 0,
+        .size = size
+    };
+    cmd->copyBuffer(staging.buffer, buffer->buffer, 1, &copy);
+    endSingleUseCommandBuffer(*cmd);
+    vmaDestroyBuffer(allocator_, staging.buffer, staging.allocation);
+
+    buffers_.push_back(buffer);
+    return buffer;
+}
+
+VmaImage* Memory::createTextureImage(void* src, size_t size, vk::Extent3D extent)
+{
+    VkBufferCreateInfo stagingBufferInfo {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = size,
+        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+    };
+    VmaAllocationCreateInfo stagingAllocInfo {
+        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+        .usage = VMA_MEMORY_USAGE_AUTO
+    };
+    VmaBuffer staging;
+    vmaCreateBuffer(allocator_, &stagingBufferInfo, &stagingAllocInfo, &staging.buffer, &staging.allocation, nullptr);
+
+    void* data;
+    vmaMapMemory(allocator_, staging.allocation, &data);
+    memcpy(data, src, size);
+    vmaUnmapMemory(allocator_, staging.allocation);
+
+    VkImageCreateInfo imageInfo {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = VK_FORMAT_R8G8B8A8_UNORM,
+        .extent = extent,
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+    };
+    VmaAllocationCreateInfo imageAllocInfo {
+        .usage = VMA_MEMORY_USAGE_AUTO
+    };
+    auto image = new VmaImage;
+    vmaCreateImage(allocator_, &imageInfo, &imageAllocInfo, &image->image, &image->allocation, nullptr);
+
+    auto cmd = beginSingleUseCommandBuffer();
+    // transition layout
+    vk::ImageSubresourceRange range {
+        .aspectMask = vk::ImageAspectFlagBits::eColor,
+        .baseMipLevel = 0,
+        .levelCount = 1,
+        .baseArrayLayer = 0,
+        .layerCount = 1
+    };
+    vk::ImageMemoryBarrier barrier {
+        .dstAccessMask = vk::AccessFlagBits::eTransferWrite,
+        .oldLayout = vk::ImageLayout::eUndefined,
+        .newLayout = vk::ImageLayout::eTransferDstOptimal,
+        .image = image->image,
+        .subresourceRange = range
+    };
+    // copy image
+    vk::BufferImageCopy copy {
+        .bufferOffset = 0,
+        .bufferRowLength = 0,
+        .bufferImageHeight = 0,
+        .imageSubresource = {
+            .aspectMask = vk::ImageAspectFlagBits::eColor,
+            .mipLevel = 0,
+            .baseArrayLayer = 0,
+            .layerCount = 1 },
+        .imageExtent = extent
+    };
+    cmd->pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTransfer, {}, {}, {}, barrier);
+    endSingleUseCommandBuffer(*cmd);
+    vmaDestroyBuffer(allocator_, staging.buffer, staging.allocation);
+
+    images_.push_back(image);
+    return image;
 }
 
 UniqueMemory createMemoryUnique(const MemoryCreateInfo& createInfo)

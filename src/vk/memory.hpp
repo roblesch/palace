@@ -5,41 +5,22 @@
 
 namespace pl {
 
-/*** types ***/
-
-struct AllocatedBuffer {
+struct VmaBuffer {
     VkBuffer buffer;
     VmaAllocation allocation;
 };
 
-/*** mesh ***/
-
-struct Vertex2 {
-    glm::vec3 position;
-    glm::vec3 normal;
-    glm::vec3 color;
+struct VmaImage {
+    VkImage image;
+    VmaAllocation allocation;
 };
-
-struct Mesh2 {
-    std::vector<Vertex2> vertices;
-    AllocatedBuffer vertexBuffer;
-};
-
-/*** vma ***/
-
-// struct VmaAllocatorDeleter {
-//     using pointer = VmaAllocator;
-//     void operator()(VmaAllocator allocator) {
-//         vmaDestroyAllocator(allocator);
-//     }
-// };
-//
-// using UniqueAllocator = std::unique_ptr<VmaAllocator, VmaAllocatorDeleter>;
 
 struct MemoryCreateInfo {
     vk::PhysicalDevice physicalDevice;
     vk::Device device;
     vk::Instance instance;
+    vk::CommandPool commandPool;
+    vk::Queue graphicsQueue;
 };
 
 class Memory {
@@ -47,12 +28,20 @@ public:
     Memory(const MemoryCreateInfo& createInfo);
     ~Memory();
 
-    void loadMesh();
-    vk::Result uploadMesh(Mesh2& mesh);
+    vk::UniqueCommandBuffer beginSingleUseCommandBuffer();
+    void endSingleUseCommandBuffer(vk::CommandBuffer& commandBuffer);
+
+    VmaBuffer* createBuffer(void* src, size_t size, VkBufferUsageFlags usage);
+    VmaImage* createTextureImage(void* src, size_t size, vk::Extent3D extent);
 
 private:
+    vk::Device device_;
+    vk::CommandPool commandPool_;
+    vk::Queue graphicsQueue_;
+
     VmaAllocator allocator_;
-    Mesh2 mesh_;
+    std::vector<VmaBuffer*> buffers_;
+    std::vector<VmaImage*> images_;
 };
 
 using UniqueMemory = std::unique_ptr<Memory>;

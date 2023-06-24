@@ -1,5 +1,6 @@
 #pragma once
 
+#include "memory.hpp"
 #include "types.hpp"
 #include <string>
 #include <vector>
@@ -21,14 +22,16 @@ struct Texture {
 };
 
 struct Primitive {
-    std::vector<Vertex> vertices;
-    std::vector<uint32_t> indices;
+    uint32_t firstVertex;
+    uint32_t vertexCount;
+    uint32_t firstIndex;
+    uint32_t indexCount;
     Texture* texture;
 };
 
 struct Mesh {
     std::string name;
-    std::vector<Primitive> primitives;
+    std::vector<uint32_t> primitives;
 };
 
 struct Node {
@@ -41,12 +44,33 @@ struct Node {
     glm::mat4 matrix;
 };
 
-struct GltfScene {
-    std::vector<Mesh> meshes;
-    std::vector<Texture> textures;
-    std::vector<Node> nodes;
+struct Scene {
+    std::string name;
+    std::vector<uint32_t> nodes;
 };
 
-GltfScene loadGltfScene(const char* path);
+struct GltfModelCreateInfo {
+    const char* path;
+    Memory* memory;
+};
+
+class GltfModel {
+public:
+    GltfModel(const GltfModelCreateInfo& createInfo);
+
+    uint32_t defaultScene;
+    std::vector<Scene> scenes;
+    std::vector<Mesh> meshes;
+    std::vector<Primitive> primitives;
+    std::vector<Texture> textures;
+    std::vector<Node> nodes;
+
+    VmaBuffer* vertexBuffer;
+    VmaBuffer* indexBuffer;
+};
+
+using UniqueGltfScene = std::unique_ptr<GltfModel>;
+
+UniqueGltfScene createGltfModelUnique(const GltfModelCreateInfo& createInfo);
 
 }

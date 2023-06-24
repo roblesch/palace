@@ -1,5 +1,6 @@
 #include "gltf.hpp"
 
+#include "vulkan.hpp"
 #include "util/log.hpp"
 #define TINYGLTF_IMPLEMENTATION
 #define TINYGLTF_NO_STB_IMAGE_WRITE
@@ -11,8 +12,15 @@ namespace fs = std::filesystem;
 
 namespace pl {
 
-GltfScene loadGltfScene(const char* path)
+GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
 {
+    auto path = createInfo.path;
+    auto memory = createInfo.memory;
+
+    defaultScene = 0;
+    vertexBuffer = nullptr;
+    indexBuffer = nullptr;
+
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;
     std::string warn, err;
@@ -25,17 +33,22 @@ GltfScene loadGltfScene(const char* path)
 
     if (!err.empty()) {
         pl::LOG_ERROR(err.c_str(), "GLTF");
-        return {};
+        return;
     }
 
     if (!ret) {
         pl::LOG_ERROR("Failed to parse gltf file", "GLTF");
-        return {};
+        return;
     }
 
-    std::vector<Mesh> meshes;
-    std::vector<Texture> textures;
-    std::vector<Node> nodes;
+    // scenes
+    defaultScene = model.defaultScene;
+
+    for (const auto& _scene : model.scenes) {
+        std::vector<uint32_t> nodeIdxs;
+        std::copy(_scene.nodes.begin(), _scene.nodes.end(), std::back_inserter(nodeIdxs));
+        scenes.emplace_back(_scene.name, nodeIdxs);
+    }
 
     // textures
     for (const auto& _image : model.images) {
@@ -47,19 +60,25 @@ GltfScene loadGltfScene(const char* path)
             .height = static_cast<uint32_t>(_image.height)
         };
         std::copy(_image.image.begin(), _image.image.end(), std::back_inserter(texture.data));
-        textures.emplace_back(std::move(texture));
+        textures.push_back(texture);
     }
 
     // meshes
+    std::vector<Vertex> vertices;
+    std::vector<uint32_t> indices;
+
     for (const auto& _mesh : model.meshes) {
-        Mesh mesh;
+        Mesh mesh { .name = _mesh.name };
 
         for (const auto& _primitive : _mesh.primitives) {
+            if (_primitive.indices < 0)
+                continue;
 
-            std::vector<Vertex> vertices;
-            std::vector<uint32_t> indices;
+            uint32_t firstVertex = static_cast<uint32_t>(vertices.size());
+            uint32_t vertexCount;
+            uint32_t firstIndex = static_cast<uint32_t>(indices.size());
+            uint32_t indexCount;
 
-            size_t vertexCount;
             const float* positions;
             const float* normals;
             const float* texCoords;
@@ -69,12 +88,12 @@ GltfScene loadGltfScene(const char* path)
                 const auto& accessor = model.accessors[_primitive.attributes.at("POSITION")];
                 const auto& bufferView = model.bufferViews[accessor.bufferView];
                 const auto& buffer = model.buffers[bufferView.buffer];
-                vertexCount = accessor.count;
+                vertexCount = static_cast<uint32_t>(accessor.count);
                 positions = reinterpret_cast<const float*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
             }
 
             // normals
-            {
+            if (_primitive.attributes.find("NORMAL") != _primitive.attributes.end()) {
                 const auto& accessor = model.accessors[_primitive.attributes.at("NORMAL")];
                 const auto& bufferView = model.bufferViews[accessor.bufferView];
                 const auto& buffer = model.buffers[bufferView.buffer];
@@ -82,19 +101,22 @@ GltfScene loadGltfScene(const char* path)
             }
 
             // texCoords
-            {
+            if (_primitive.attributes.find("TEXCOORD_0") != _primitive.attributes.end()) {
                 const auto& accessor = model.accessors[_primitive.attributes.at("TEXCOORD_0")];
                 const auto& bufferView = model.bufferViews[accessor.bufferView];
                 const auto& buffer = model.buffers[bufferView.buffer];
                 texCoords = reinterpret_cast<const float*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
             }
 
+            // color
+            auto color = glm::make_vec4(model.materials[_primitive.material].pbrMetallicRoughness.baseColorFactor.data());
+
             // vertices
             for (size_t i = 0; i < vertexCount; i++) {
                 vertices.emplace_back(
                     glm::make_vec3(&positions[i * 3]),
                     glm::make_vec3(&normals[i * 3]),
-                    glm::vec3 { 1.0, 1.0, 1.0 },
+                    glm::vec3(color),
                     glm::make_vec2(&texCoords[i * 2]));
             }
 
@@ -103,8 +125,28 @@ GltfScene loadGltfScene(const char* path)
                 const auto& accessor = model.accessors[_primitive.indices];
                 const auto& bufferView = model.bufferViews[accessor.bufferView];
                 const auto& buffer = model.buffers[bufferView.buffer];
-                const unsigned short* data = reinterpret_cast<const unsigned short*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
-                std::copy(data, data + accessor.count, std::back_inserter(indices));
+                indexCount = accessor.count;
+
+                auto readIndexBuffer = [&]<typename T>(T dummy) {
+                    T* buf = new T[accessor.count];
+                    memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(T));
+                    for (size_t i = 0; i < accessor.count; i++) {
+                        indices.push_back(buf[i] + firstVertex);
+                    }
+                    delete[] buf;
+                };
+
+                switch (accessor.componentType) {
+                case TINYGLTF_PARAMETER_TYPE_UNSIGNED_INT:
+                    readIndexBuffer(uint32_t {});
+                    break;
+                case TINYGLTF_PARAMETER_TYPE_UNSIGNED_SHORT:
+                    readIndexBuffer(uint16_t {});
+                    break;
+                case TINYGLTF_PARAMETER_TYPE_UNSIGNED_BYTE:
+                    readIndexBuffer(uint8_t {});
+                    break;
+                }
             }
 
             // texture
@@ -112,48 +154,54 @@ GltfScene loadGltfScene(const char* path)
             auto image = texture > -1 ? model.textures[texture].source : -1;
 
             Primitive primitive {
-                .vertices = std::move(vertices),
-                .indices = std::move(indices),
+                .firstVertex = firstVertex,
+                .vertexCount = vertexCount,
+                .firstIndex = firstIndex,
+                .indexCount = indexCount,
                 .texture = image > -1 ? &textures[image] : nullptr
             };
 
-            mesh.primitives.emplace_back(std::move(primitive));
+            primitives.push_back(primitive);
+            mesh.primitives.push_back(primitives.size() - 1);
         }
-        meshes.emplace_back(std::move(mesh));
+        meshes.push_back(mesh);
     }
+
+    // buffers
+    vertexBuffer = memory->createBuffer(vertices.data(), vertices.size() * sizeof(Vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    indexBuffer = memory->createBuffer(indices.data(), indices.size() * sizeof(uint32_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 
     // nodes
     nodes.resize(model.nodes.size());
     for (size_t i = 0; i < model.nodes.size(); i++) {
         const auto& _node = model.nodes[i];
-
         for (const auto& _child : _node.children) {
             nodes[_child].parent = &nodes[i];
         }
 
-        nodes[i].mesh = _node.mesh > -1 ? &meshes[_node.mesh] : nullptr;
-
-        std::copy(_node.children.begin(), _node.children.end(), std::back_inserter(nodes[i].children));
-
-        nodes[i].translation = glm::vec3 { 0.0f };
+        nodes[i].matrix = glm::mat4(1.0f);
         if (_node.translation.size() == 3)
-            nodes[i].translation = glm::make_vec3(_node.translation.data());
+            nodes[i].matrix = glm::translate(nodes[i].matrix, glm::vec3(glm::make_vec3(_node.translation.data())));
 
-        nodes[i].rotation = glm::mat4 { 1.0f };
         if (_node.rotation.size() == 4) {
             glm::quat q = glm::make_quat(_node.rotation.data());
-            nodes[i].rotation = glm::mat4(q);
+            nodes[i].matrix *= glm::mat4(q);
         }
 
-        nodes[i].scale = glm::vec3 { 1.0f };
         if (_node.scale.size() == 3)
-            nodes[i].scale = glm::make_vec3(_node.scale.data());
+            nodes[i].matrix = glm::scale(nodes[i].matrix, glm::vec3(glm::make_vec3(_node.scale.data())));
 
         if (_node.matrix.size() == 16)
             nodes[i].matrix = glm::make_mat4(_node.matrix.data());
-    }
 
-    return { std::move(meshes), std::move(textures), std::move(nodes) };
+        std::copy(_node.children.begin(), _node.children.end(), std::back_inserter(nodes[i].children));
+        nodes[i].mesh = _node.mesh > -1 ? &meshes[_node.mesh] : nullptr;
+    }
+}
+
+UniqueGltfScene createGltfModelUnique(const GltfModelCreateInfo& createInfo)
+{
+    return std::make_unique<GltfModel>(createInfo);
 }
 
 }

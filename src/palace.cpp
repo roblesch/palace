@@ -9,7 +9,6 @@ using namespace pl;
 int main(const int argc, const char* argv[])
 {
     Parser args(argc, argv);
-    GltfScene scene = loadGltfScene(args.gltf_path());
 
 #ifdef NDEBUG
     Vulkan vulkan(false);
@@ -17,10 +16,8 @@ int main(const int argc, const char* argv[])
     Vulkan vulkan;
 #endif
 
-    auto primitive = scene.meshes[0].primitives[0];
-    auto texture = primitive.texture;
-
-    vulkan.bindVertexBuffer(primitive.vertices, primitive.indices);
-    vulkan.loadTextureImage(texture->data.data(), texture->width, texture->height);
+    vulkan.loadGltfModel(args.gltf_path());
     vulkan.run();
+
+    return 0;
 }

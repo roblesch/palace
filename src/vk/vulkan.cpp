@@ -211,19 +211,9 @@ Vulkan::Vulkan(bool enableValidation)
         .stageFlags = vk::ShaderStageFlagBits::eVertex
     };
 
-    // image sampler
-    vk::DescriptorSetLayoutBinding samplerLayoutBinding {
-        .binding = 1,
-        .descriptorType = vk::DescriptorType::eCombinedImageSampler,
-        .descriptorCount = 1,
-        .stageFlags = vk::ShaderStageFlagBits::eFragment
-    };
-
-    // layout
-    std::array<vk::DescriptorSetLayoutBinding, 2> bindings { uboLayoutBinding, samplerLayoutBinding };
     vk::DescriptorSetLayoutCreateInfo descriptorLayoutInfo {
-        .bindingCount = 2,
-        .pBindings = bindings.data()
+        .bindingCount = 1,
+        .pBindings = &uboLayoutBinding
     };
 
     pipelineDescriptorLayout_ = device_->createDescriptorSetLayoutUnique(descriptorLayoutInfo);
@@ -234,18 +224,11 @@ Vulkan::Vulkan(bool enableValidation)
         .descriptorCount = sConcurrentFrames_
     };
 
-    vk::DescriptorPoolSize samplerSize {
-        .type = vk::DescriptorType::eCombinedImageSampler,
-        .descriptorCount = sConcurrentFrames_
-    };
-
-    std::array<vk::DescriptorPoolSize, 2> pipelinePoolSizes { uboSize, samplerSize };
-
     vk::DescriptorPoolCreateInfo pipelinePoolInfo {
         .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
         .maxSets = sConcurrentFrames_,
-        .poolSizeCount = 2,
-        .pPoolSizes = pipelinePoolSizes.data()
+        .poolSizeCount = 1,
+        .pPoolSizes = &uboSize
     };
 
     pipelineDescriptorPool_ = device_->createDescriptorPoolUnique(pipelinePoolInfo);
@@ -349,7 +332,6 @@ Vulkan::Vulkan(bool enableValidation)
     };
 
     // rasterization state
-    // TODO: debugging toggle mode
     vk::PipelineRasterizationStateCreateInfo rasterStateInfo {
         .depthClampEnable = VK_FALSE,
         .rasterizerDiscardEnable = VK_FALSE,
@@ -402,9 +384,16 @@ Vulkan::Vulkan(bool enableValidation)
     };
 
     // pipeline layout
+    vk::PushConstantRange pushConstantRange {
+        .stageFlags = vk::ShaderStageFlagBits::eVertex,
+        .offset = 0,
+        .size = sizeof(glm::mat4)
+    };
     vk::PipelineLayoutCreateInfo pipelineLayoutInfo {
         .setLayoutCount = 1,
-        .pSetLayouts = &pipelineDescriptorLayout_.get()
+        .pSetLayouts = &pipelineDescriptorLayout_.get(),
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &pushConstantRange
     };
     pipelineLayout_ = device_->createPipelineLayoutUnique(pipelineLayoutInfo);
 
@@ -489,6 +478,42 @@ Vulkan::Vulkan(bool enableValidation)
 
     pipeline_ = device_->createGraphicsPipelineUnique(nullptr, graphicsPipelineInfo).value;
 
+    // uniform buffers
+    vk::DeviceSize uniformBufferSize = sizeof(UniformBuffer);
+
+    uniformBuffers_.resize(sConcurrentFrames_);
+    uniformMemories_.resize(sConcurrentFrames_);
+    uniformPtrs_.resize(sConcurrentFrames_);
+
+    for (size_t i = 0; i < sConcurrentFrames_; i++) {
+        uniformBuffers_[i] = createBufferUnique(uniformBufferSize, vk::BufferUsageFlagBits::eUniformBuffer);
+        uniformMemories_[i] = createDeviceMemoryUnique(device_->getBufferMemoryRequirements(*uniformBuffers_[i]), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+        device_->bindBufferMemory(*uniformBuffers_[i], *uniformMemories_[i], 0);
+        uniformPtrs_[i] = device_->mapMemory(*uniformMemories_[i], 0, uniformBufferSize);
+    }
+
+    // descriptor sets
+    pipelineDescriptorSets_.resize(sConcurrentFrames_);
+
+    for (size_t i = 0; i < sConcurrentFrames_; i++) {
+        vk::DescriptorBufferInfo uboInfo {
+            .buffer = *uniformBuffers_[i],
+            .offset = 0,
+            .range = sizeof(UniformBuffer)
+        };
+
+        vk::WriteDescriptorSet uboWriteDescriptor {
+            .dstSet = *pipelineDescriptorSets_[i],
+            .dstBinding = 0,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = vk::DescriptorType::eUniformBuffer,
+            .pBufferInfo = &uboInfo
+        };
+
+        device_->updateDescriptorSets(1, &uboWriteDescriptor, 0, nullptr);
+    }
+
     // swapchain
     createSwapchain();
 
@@ -496,11 +521,12 @@ Vulkan::Vulkan(bool enableValidation)
     pl::MemoryCreateInfo memoryInfo {
         .physicalDevice = physicalDevice_,
         .device = *device_,
-        .instance = *instance_
+        .instance = *instance_,
+        .commandPool = *commandPool_,
+        .graphicsQueue = graphicsQueue_
     };
 
     memory_ = pl::createMemoryUnique(memoryInfo);
-    memory_->loadMesh();
 
     // imgui
     vk::DescriptorPoolSize imguiPoolSizes[] = {
@@ -541,14 +567,14 @@ Vulkan::Vulkan(bool enableValidation)
     };
 
     ImGui_ImplVulkan_Init(&imguiInfo, *renderPass_);
-    auto cmd = beginSingleUseCommandBuffer();
+    auto cmd = memory_->beginSingleUseCommandBuffer();
     ImGui_ImplVulkan_CreateFontsTexture(*cmd);
-    endSingleUseCommandBuffer(*cmd);
+    memory_->endSingleUseCommandBuffer(*cmd);
     ImGui_ImplVulkan_DestroyFontUploadObjects();
 
     // camera
     camera_ = Camera { .fovy = 45.0f, .znear = 0.001f, .zfar = 1000.0f };
-    camera_.lookAt({ 0.0f, 0.0f, 2.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, -1.0f, 0.0f });
+    camera_.lookAt({ 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, -1.0f, 0.0f });
     camera_.resize((float)extents_.width / extents_.height);
 
     isInitialized_ = true;
@@ -561,165 +587,10 @@ Vulkan::~Vulkan()
     SDL_Quit();
 }
 
-void Vulkan::bindVertexBuffer(const std::vector<pl::Vertex>& vertices, const std::vector<uint32_t>& indices)
+void Vulkan::loadGltfModel(const char* path)
 {
-    indicesCount_ = indices.size();
-
-    // vertex buffer
-    vk::DeviceSize vertexBufferSize = sizeof(vertices[0]) * vertices.size();
-    auto vertexStagingBuffer = createStagingBufferUnique(vertexBufferSize);
-    auto vertexStagingMemory = createStagingMemoryUnique(*vertexStagingBuffer, vertexBufferSize);
-    device_->bindBufferMemory(*vertexStagingBuffer, *vertexStagingMemory, 0);
-
-    void* vertexMemoryPtr = device_->mapMemory(*vertexStagingMemory, 0, vertexBufferSize);
-    memcpy(vertexMemoryPtr, vertices.data(), vertexBufferSize);
-    device_->unmapMemory(*vertexStagingMemory);
-
-    vertexBuffer_ = createBufferUnique(vertexBufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer);
-    vertexMemory_ = createDeviceMemoryUnique(device_->getBufferMemoryRequirements(*vertexBuffer_), vk::MemoryPropertyFlagBits::eDeviceLocal);
-    device_->bindBufferMemory(*vertexBuffer_, *vertexMemory_, 0);
-    copyBuffer(*vertexStagingBuffer, *vertexBuffer_, vertexBufferSize);
-
-    // index buffer
-    vk::DeviceSize indexBufferSize = sizeof(indices[0]) * indices.size();
-    auto indexStagingBuffer = createStagingBufferUnique(indexBufferSize);
-    auto indexStagingMemory = createStagingMemoryUnique(*indexStagingBuffer, indexBufferSize);
-    device_->bindBufferMemory(*indexStagingBuffer, *indexStagingMemory, 0);
-
-    void* indexMemoryPtr = device_->mapMemory(*indexStagingMemory, 0, indexBufferSize);
-    memcpy(indexMemoryPtr, indices.data(), indexBufferSize);
-    device_->unmapMemory(*indexStagingMemory);
-
-    indexBuffer_ = createBufferUnique(indexBufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer);
-    indexMemory_ = createDeviceMemoryUnique(device_->getBufferMemoryRequirements(*indexBuffer_), vk::MemoryPropertyFlagBits::eDeviceLocal);
-    device_->bindBufferMemory(*indexBuffer_, *indexMemory_, 0);
-    copyBuffer(*indexStagingBuffer, *indexBuffer_, indexBufferSize);
-
-    // uniform buffers
-    vk::DeviceSize uniformBufferSize = sizeof(UniformBuffer);
-
-    uniformBuffers_.resize(sConcurrentFrames_);
-    uniformMemories_.resize(sConcurrentFrames_);
-    uniformPtrs_.resize(sConcurrentFrames_);
-
-    for (size_t i = 0; i < sConcurrentFrames_; i++) {
-        uniformBuffers_[i] = createBufferUnique(uniformBufferSize, vk::BufferUsageFlagBits::eUniformBuffer);
-        uniformMemories_[i] = createDeviceMemoryUnique(device_->getBufferMemoryRequirements(*uniformBuffers_[i]), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-        device_->bindBufferMemory(*uniformBuffers_[i], *uniformMemories_[i], 0);
-        uniformPtrs_[i] = device_->mapMemory(*uniformMemories_[i], 0, uniformBufferSize);
-    }
-
-    isVerticesBound_ = true;
-}
-
-void Vulkan::loadTextureImage(const unsigned char* data, uint32_t width, uint32_t height)
-{
-    if (!isVerticesBound_) {
-        LOG_ERROR("Failed to load texture: no vertices bound", "GFX");
-        return;
-    }
-
-    vk::Extent2D extent { width, height };
-    vk::DeviceSize imageSize = extent.width * extent.height * 4;
-    vk::UniqueBuffer stagingBuffer = createStagingBufferUnique(imageSize);
-    vk::UniqueDeviceMemory stagingMemory = createStagingMemoryUnique(*stagingBuffer, imageSize);
-    device_->bindBufferMemory(*stagingBuffer, *stagingMemory, 0);
-
-    void* ptr = device_->mapMemory(*stagingMemory, 0, imageSize);
-    memcpy(ptr, data, imageSize);
-    device_->unmapMemory(*stagingMemory);
-
-    // image
-    auto imageFormat = vk::Format::eR8G8B8A8Unorm;
-
-    texture_ = createImageUnique(extent, imageFormat, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled);
-    textureMemory_ = createDeviceMemoryUnique(device_->getImageMemoryRequirements(*texture_), vk::MemoryPropertyFlagBits::eDeviceLocal);
-    device_->bindImageMemory(*texture_, *textureMemory_, 0);
-
-    transitionImageLayout(*texture_, imageFormat, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
-
-    vk::BufferImageCopy region {
-        .bufferOffset = 0,
-        .bufferRowLength = 0,
-        .bufferImageHeight = 0,
-        .imageSubresource = {
-            .aspectMask = vk::ImageAspectFlagBits::eColor,
-            .mipLevel = 0,
-            .baseArrayLayer = 0,
-            .layerCount = 1 },
-        .imageOffset = { 0, 0, 0 },
-        .imageExtent = { extent.width, extent.height, 1 }
-    };
-
-    auto cmd = beginSingleUseCommandBuffer();
-    cmd->copyBufferToImage(*stagingBuffer, *texture_, vk::ImageLayout::eTransferDstOptimal, region);
-    endSingleUseCommandBuffer(*cmd);
-
-    transitionImageLayout(*texture_, imageFormat, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
-
-    // image view
-    textureView_ = createImageViewUnique(*texture_, imageFormat, vk::ImageAspectFlagBits::eColor);
-
-    // sampler
-    vk::SamplerCreateInfo samplerInfo {
-        .magFilter = vk::Filter::eLinear,
-        .minFilter = vk::Filter::eLinear,
-        .mipmapMode = vk::SamplerMipmapMode::eLinear,
-        .addressModeU = vk::SamplerAddressMode::eRepeat,
-        .addressModeV = vk::SamplerAddressMode::eRepeat,
-        .addressModeW = vk::SamplerAddressMode::eRepeat,
-        .mipLodBias = 0.0f,
-        .anisotropyEnable = VK_TRUE,
-        .maxAnisotropy = physicalDevice_.getProperties().limits.maxSamplerAnisotropy,
-        .compareEnable = VK_FALSE,
-        .compareOp = vk::CompareOp::eAlways,
-        .minLod = 0.0f,
-        .maxLod = 0.0f,
-        .borderColor = vk::BorderColor::eIntOpaqueBlack,
-        .unnormalizedCoordinates = VK_FALSE
-    };
-
-    textureSampler_ = device_->createSamplerUnique(samplerInfo);
-
-    // descriptor sets
-    pipelineDescriptorSets_.resize(sConcurrentFrames_);
-
-    for (size_t i = 0; i < sConcurrentFrames_; i++) {
-        vk::DescriptorBufferInfo uboInfo {
-            .buffer = *uniformBuffers_[i],
-            .offset = 0,
-            .range = sizeof(UniformBuffer)
-        };
-
-        vk::DescriptorImageInfo samplerInfo {
-            .sampler = *textureSampler_,
-            .imageView = *textureView_,
-            .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
-        };
-
-        vk::WriteDescriptorSet uboWriteDescriptor {
-            .dstSet = *pipelineDescriptorSets_[i],
-            .dstBinding = 0,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = vk::DescriptorType::eUniformBuffer,
-            .pBufferInfo = &uboInfo
-        };
-
-        vk::WriteDescriptorSet samplerWriteDescriptor {
-            .dstSet = *pipelineDescriptorSets_[i],
-            .dstBinding = 1,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = vk::DescriptorType::eCombinedImageSampler,
-            .pImageInfo = &samplerInfo
-        };
-
-        std::array<vk::WriteDescriptorSet, 2> writeDescriptors { uboWriteDescriptor, samplerWriteDescriptor };
-        device_->updateDescriptorSets(writeDescriptors.size(), writeDescriptors.data(), 0, nullptr);
-    }
-
-    isTextureLoaded_ = true;
+    scene_ = pl::createGltfModelUnique({ path, memory_.get() });
+    isSceneLoaded_ = true;
 }
 
 void Vulkan::run()
@@ -728,24 +599,21 @@ void Vulkan::run()
         LOG_ERROR("Failed to run: Vulkan not initialized.", "GFX");
         return;
     }
-    if (!isTextureLoaded_) {
-        LOG_ERROR("Failed to run: no texture loaded.", "GFX");
-        return;
-    }
-    if (!isVerticesBound_) {
-        LOG_ERROR("Failed to run: no vertices bound.", "GFX");
+    if (!isSceneLoaded_) {
+        LOG_ERROR("Failed to run: no scene loaded.", "GFX");
         return;
     }
 
     bool quit = false;
     ticks = SDL_GetTicks64();
 
-    glm::ivec4 wasd { 0 };
-    glm::ivec2 spacelctrl { 0 };
+    glm::ivec4 wasd {};
+    glm::ivec2 spacelctrl {};
     float speed = 1.0f;
 
-    glm::ivec2 center { extents_.width / 2, extents_.height / 2 };
-    glm::ivec2 mouse { 0 };
+    glm::ivec2 center {};
+    glm::ivec2 mouse {};
+    glm::ivec2 mouse_ {};
 
     const Uint8* keyStates = SDL_GetKeyboardState(nullptr);
 
@@ -753,6 +621,8 @@ void Vulkan::run()
         Uint64 start = SDL_GetPerformanceCounter();
         dt = SDL_GetTicks64() - ticks;
         ticks += dt;
+
+        center = { extents_.width / 2, extents_.height / 2 };
 
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -777,6 +647,7 @@ void Vulkan::run()
                     camera_.reset();
                     break;
                 case SDL_BUTTON_RIGHT:
+                    SDL_GetMouseState(&mouse_.x, &mouse_.y);
                     SDL_SetRelativeMouseMode(SDL_TRUE);
                     SDL_WarpMouseInWindow(window_, center.x, center.y);
                     break;
@@ -787,6 +658,7 @@ void Vulkan::run()
                 switch (event.button.button) {
                 case SDL_BUTTON_RIGHT:
                     SDL_SetRelativeMouseMode(SDL_FALSE);
+                    SDL_WarpMouseInWindow(window_, mouse_.x, mouse_.y);
                     break;
                 }
                 break;
@@ -872,7 +744,7 @@ void Vulkan::run()
         ImGui::ShowDemoWindow();
         ImGui::Render();
 
-        updateUniformBuffers();
+        updateUniformBuffers(0);
         drawFrame();
 
         Uint64 end = SDL_GetPerformanceCounter();
@@ -884,9 +756,31 @@ void Vulkan::run()
     device_->waitIdle();
 }
 
-void Vulkan::updateUniformBuffers()
+void Vulkan::drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node)
 {
-    ubo_.model = glm::rotate(glm::mat4(1.0f), ticks / 1000.0f * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    if (node->mesh != nullptr && node->mesh->primitives.size() > 0) {
+        glm::mat4 matrix = node->matrix;
+        pl::Node* parent = node->parent;
+        while (parent != nullptr) {
+            matrix = parent->matrix * matrix;
+            parent = parent->parent;
+        }
+        commandBuffer.pushConstants(*pipelineLayout_, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), &matrix);
+        for (const auto& i : node->mesh->primitives) {
+            const auto& _primitive = scene_->primitives[i];
+            if (_primitive.indexCount > 0) {
+                commandBuffer.drawIndexed(_primitive.indexCount, 1, _primitive.firstIndex, 0, 0);
+            }
+        }
+    }
+    for (const auto& i : node->children) {
+        drawNode(commandBuffer, &scene_->nodes[i]);
+    }
+}
+
+void Vulkan::updateUniformBuffers(int dx)
+{
+    ubo_.model = glm::rotate(ubo_.model, 0.0001f * dx, camera_.up);
     ubo_.view = camera_.view;
     ubo_.proj = camera_.proj;
 
@@ -955,10 +849,13 @@ void Vulkan::drawFrame()
         };
         commandBuffer.setScissor(0, 1, &scissor);
 
-        commandBuffer.bindVertexBuffers(0, *vertexBuffer_, { 0 });
-        commandBuffer.bindIndexBuffer(*indexBuffer_, 0, vk::IndexType::eUint32);
+        commandBuffer.bindVertexBuffers(0, vk::Buffer(scene_->vertexBuffer->buffer), { 0 });
+        commandBuffer.bindIndexBuffer(vk::Buffer(scene_->indexBuffer->buffer), 0, vk::IndexType::eUint32);
         commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *pipelineLayout_, 0, 1, &pipelineDescriptorSets_[currentFrame_].get(), 0, nullptr);
-        commandBuffer.drawIndexed(indicesCount_, 1, 0, 0, 0);
+
+        for (const auto& i : scene_->scenes[scene_->defaultScene].nodes) {
+            drawNode(commandBuffer, &scene_->nodes[i]);
+        }
 
         ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
     }
@@ -1001,33 +898,6 @@ void Vulkan::drawFrame()
     currentFrame_ = (currentFrame_ + 1) % sConcurrentFrames_;
 }
 
-vk::UniqueCommandBuffer Vulkan::beginSingleUseCommandBuffer()
-{
-    vk::CommandBufferAllocateInfo bufferInfo {
-        .commandPool = *commandPool_,
-        .level = vk::CommandBufferLevel::ePrimary,
-        .commandBufferCount = 1
-    };
-
-    vk::UniqueCommandBuffer commandBuffer { std::move(device_->allocateCommandBuffersUnique(bufferInfo)[0]) };
-    commandBuffer->begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
-
-    return commandBuffer;
-}
-
-void Vulkan::endSingleUseCommandBuffer(vk::CommandBuffer& commandBuffer)
-{
-    commandBuffer.end();
-
-    vk::SubmitInfo submitInfo {
-        .commandBufferCount = 1,
-        .pCommandBuffers = &commandBuffer
-    };
-
-    graphicsQueue_.submit(submitInfo);
-    graphicsQueue_.waitIdle();
-}
-
 vk::UniqueBuffer Vulkan::createBufferUnique(vk::DeviceSize& size, const vk::BufferUsageFlags usage)
 {
     vk::BufferCreateInfo bufferInfo {
@@ -1037,11 +907,6 @@ vk::UniqueBuffer Vulkan::createBufferUnique(vk::DeviceSize& size, const vk::Buff
     };
 
     return device_->createBufferUnique(bufferInfo);
-}
-
-vk::UniqueBuffer Vulkan::createStagingBufferUnique(vk::DeviceSize& size)
-{
-    return createBufferUnique(size, vk::BufferUsageFlagBits::eTransferSrc);
 }
 
 vk::UniqueDeviceMemory Vulkan::createDeviceMemoryUnique(const vk::MemoryRequirements requirements, const vk::MemoryPropertyFlags memoryFlags)
@@ -1061,11 +926,6 @@ vk::UniqueDeviceMemory Vulkan::createDeviceMemoryUnique(const vk::MemoryRequirem
     };
 
     return device_->allocateMemoryUnique(memoryInfo);
-}
-
-vk::UniqueDeviceMemory Vulkan::createStagingMemoryUnique(vk::Buffer& buffer, vk::DeviceSize& size)
-{
-    return createDeviceMemoryUnique(device_->getBufferMemoryRequirements(buffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 }
 
 vk::UniqueImage Vulkan::createImageUnique(vk::Extent2D& extent, const vk::Format format, const vk::ImageTiling tiling, const vk::ImageUsageFlags usage)
@@ -1104,59 +964,6 @@ vk::UniqueImageView Vulkan::createImageViewUnique(vk::Image& image, const vk::Fo
     };
 
     return device_->createImageViewUnique(imageViewInfo);
-}
-
-void Vulkan::copyBuffer(vk::Buffer src, vk::Buffer dst, vk::DeviceSize size)
-{
-    vk::CommandBufferAllocateInfo commandBufferInfo {
-        .commandPool = *commandPool_,
-        .level = vk::CommandBufferLevel::ePrimary,
-        .commandBufferCount = 1
-    };
-
-    auto cmd = beginSingleUseCommandBuffer();
-    cmd->copyBuffer(src, dst, { { .size = size } });
-    endSingleUseCommandBuffer(*cmd);
-}
-
-void Vulkan::transitionImageLayout(vk::Image& image, const vk::Format format, const vk::ImageLayout oldLayout, const vk::ImageLayout newLayout)
-{
-    vk::PipelineStageFlags srcStageMask;
-    vk::PipelineStageFlags dstStageMask;
-    vk::AccessFlags srcAccessMask;
-    vk::AccessFlags dstAccessMask;
-
-    if (oldLayout == vk::ImageLayout::eUndefined && newLayout == vk::ImageLayout::eTransferDstOptimal) {
-        srcAccessMask = {};
-        dstAccessMask = vk::AccessFlagBits::eTransferWrite;
-        srcStageMask = vk::PipelineStageFlagBits::eTopOfPipe;
-        dstStageMask = vk::PipelineStageFlagBits::eTransfer;
-    } else if (oldLayout == vk::ImageLayout::eTransferDstOptimal && newLayout == vk::ImageLayout::eShaderReadOnlyOptimal) {
-        srcAccessMask = vk::AccessFlagBits::eTransferWrite;
-        dstAccessMask = vk::AccessFlagBits::eShaderRead;
-        srcStageMask = vk::PipelineStageFlagBits::eTransfer;
-        dstStageMask = vk::PipelineStageFlagBits::eFragmentShader;
-    }
-
-    vk::ImageMemoryBarrier barrier {
-        .srcAccessMask = srcAccessMask,
-        .dstAccessMask = dstAccessMask,
-        .oldLayout = oldLayout,
-        .newLayout = newLayout,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = image,
-        .subresourceRange = {
-            .aspectMask = vk::ImageAspectFlagBits::eColor,
-            .baseMipLevel = 0,
-            .levelCount = 1,
-            .baseArrayLayer = 0,
-            .layerCount = 1 }
-    };
-
-    auto cmd = beginSingleUseCommandBuffer();
-    cmd->pipelineBarrier(srcStageMask, dstStageMask, {}, {}, {}, barrier);
-    endSingleUseCommandBuffer(*cmd);
 }
 
 void Vulkan::createSwapchain(vk::SwapchainKHR oldSwapchain)
