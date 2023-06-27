@@ -6,6 +6,7 @@
 namespace pl {
 
 struct VmaBuffer {
+    size_t size;
     VkBuffer buffer;
     VmaAllocation allocation;
 };
@@ -31,11 +32,18 @@ public:
     vk::UniqueCommandBuffer beginSingleUseCommandBuffer();
     void endSingleUseCommandBuffer(vk::CommandBuffer& commandBuffer);
 
-    VmaBuffer* createBuffer(void* src, size_t size, vk::BufferUsageFlags usage);
+    vk::UniqueImageView createImageViewUnique(vk::Image image, vk::Format format, vk::ImageAspectFlagBits aspectMask);
+
+    VmaBuffer* createBuffer(size_t size, vk::BufferUsageFlags usage, VmaAllocationCreateFlags flags);
+    void uploadToBuffer(VmaBuffer* buffer, void* src);
+    void uploadToBufferDirect(VmaBuffer* buffer, void* src);
+    VmaImage* createImage(vk::Extent3D extent, vk::Format format, vk::ImageUsageFlags usage);
     VmaImage* createTextureImage(const void* src, size_t size, vk::Extent3D extent);
     vk::UniqueImageView createTextureViewUnique(vk::Image image);
 
 private:
+    VmaBuffer* createStagingBuffer(size_t size);
+
     vk::Device device_;
     vk::CommandPool commandPool_;
     vk::Queue graphicsQueue_;

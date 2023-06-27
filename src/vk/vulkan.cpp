@@ -178,12 +178,16 @@ Vulkan::Vulkan(bool enableValidation)
 
     commandBuffers_ = device_->allocateCommandBuffersUnique(commandBufferAllocInfo);
 
-    // sync
-    for (size_t i = 0; i < sConcurrentFrames_; i++) {
-        imageAvailableSemaphores_.push_back(device_->createSemaphoreUnique({}));
-        renderFinishedSemaphores_.push_back(device_->createSemaphoreUnique({}));
-        inFlightFences_.push_back(device_->createFenceUnique({ .flags = vk::FenceCreateFlagBits::eSignaled }));
-    }
+    // memory
+    pl::MemoryHelperCreateInfo memoryInfo {
+        .physicalDevice = physicalDevice_,
+        .device = *device_,
+        .instance = *instance_,
+        .commandPool = *commandPool_,
+        .graphicsQueue = graphicsQueue_
+    };
+
+    memoryHelper_ = createMemoryHelperUnique(memoryInfo);
 
     // subpass attachments
     vk::AttachmentDescription colorAttachment {
@@ -281,14 +285,9 @@ Vulkan::Vulkan(bool enableValidation)
     vk::DeviceSize uniformBufferSize = sizeof(UniformBuffer);
 
     uniformBuffers_.resize(sConcurrentFrames_);
-    uniformMemories_.resize(sConcurrentFrames_);
-    uniformPtrs_.resize(sConcurrentFrames_);
 
     for (size_t i = 0; i < sConcurrentFrames_; i++) {
-        uniformBuffers_[i] = createBufferUnique(uniformBufferSize, vk::BufferUsageFlagBits::eUniformBuffer);
-        uniformMemories_[i] = createDeviceMemoryUnique(device_->getBufferMemoryRequirements(*uniformBuffers_[i]), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-        device_->bindBufferMemory(*uniformBuffers_[i], *uniformMemories_[i], 0);
-        uniformPtrs_[i] = device_->mapMemory(*uniformMemories_[i], 0, uniformBufferSize);
+        uniformBuffers_[i] = memoryHelper_->createBuffer(sizeof(UniformBuffer), vk::BufferUsageFlagBits::eUniformBuffer, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
     }
 
     // descriptor sets
@@ -304,7 +303,7 @@ Vulkan::Vulkan(bool enableValidation)
 
     for (size_t i = 0; i < sConcurrentFrames_; i++) {
         vk::DescriptorBufferInfo uboInfo {
-            .buffer = *uniformBuffers_[i],
+            .buffer = uniformBuffers_[i]->buffer,
             .offset = 0,
             .range = sizeof(UniformBuffer)
         };
@@ -335,16 +334,12 @@ Vulkan::Vulkan(bool enableValidation)
     // swapchain
     createSwapchain();
 
-    // memory
-    pl::MemoryHelperCreateInfo memoryInfo {
-        .physicalDevice = physicalDevice_,
-        .device = *device_,
-        .instance = *instance_,
-        .commandPool = *commandPool_,
-        .graphicsQueue = graphicsQueue_
-    };
-
-    memoryHelper_ = createMemoryHelperUnique(memoryInfo);
+    // sync
+    for (size_t i = 0; i < sConcurrentFrames_; i++) {
+        imageAvailableSemaphores_.push_back(device_->createSemaphoreUnique({}));
+        renderFinishedSemaphores_.push_back(device_->createSemaphoreUnique({}));
+        inFlightFences_.push_back(device_->createFenceUnique({ .flags = vk::FenceCreateFlagBits::eSignaled }));
+    }
 
     // imgui
     vk::DescriptorPoolSize imguiPoolSizes[] = {
@@ -409,6 +404,217 @@ void Vulkan::loadGltfModel(const char* path)
 {
     model_ = pl::createGltfModelUnique({ path, memoryHelper_.get() });
     isSceneLoaded_ = true;
+}
+
+void Vulkan::createSwapchain(vk::SwapchainKHR oldSwapchain)
+{
+    // swapchain
+    vk::SurfaceCapabilitiesKHR capabilities = physicalDevice_.getSurfaceCapabilitiesKHR(*surface_);
+    vk::Extent2D swapchainExtent {
+        std::clamp(extent_.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
+        std::clamp(extent_.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
+    };
+
+    auto imageFormat = vk::Format::eB8G8R8A8Unorm;
+
+    vk::SwapchainCreateInfoKHR swapChainInfo {
+        .surface = *surface_,
+        .minImageCount = capabilities.minImageCount + 1,
+        .imageFormat = imageFormat,
+        .imageExtent = swapchainExtent,
+        .imageArrayLayers = 1,
+        .imageUsage = vk::ImageUsageFlagBits::eColorAttachment,
+        .imageSharingMode = vk::SharingMode::eExclusive,
+        .preTransform = vk::SurfaceTransformFlagBitsKHR::eIdentity,
+        .compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque,
+        .presentMode = vk::PresentModeKHR::eFifo,
+        .clipped = VK_TRUE,
+        .oldSwapchain = oldSwapchain
+    };
+
+    swapchain_ = device_->createSwapchainKHRUnique(swapChainInfo);
+    swapchainImages_ = device_->getSwapchainImagesKHR(*swapchain_);
+
+    // image views
+    swapchainImageViews_.resize(swapchainImages_.size());
+    for (size_t i = 0; i < swapchainImages_.size(); i++) {
+        swapchainImageViews_[i] = memoryHelper_->createImageViewUnique(swapchainImages_[i], imageFormat, vk::ImageAspectFlagBits::eColor);
+    }
+
+    // depth buffer
+    depthImage_ = memoryHelper_->createImage(vk::Extent3D(extent_.width, extent_.height, 1), vk::Format::eD32Sfloat, vk::ImageUsageFlagBits::eDepthStencilAttachment);
+    depthView_ = memoryHelper_->createImageViewUnique(depthImage_->image, vk::Format::eD32Sfloat, vk::ImageAspectFlagBits::eDepth);
+
+    // framebuffers
+    swapchainFramebuffers_.resize(swapchainImages_.size());
+    for (size_t i = 0; i < swapchainImages_.size(); i++) {
+        std::array<vk::ImageView, 2> attachments = { *swapchainImageViews_[i], *depthView_ };
+        vk::FramebufferCreateInfo framebufferInfo {
+            .renderPass = *renderPass_,
+            .attachmentCount = static_cast<uint32_t>(attachments.size()),
+            .pAttachments = attachments.data(),
+            .width = swapchainExtent.width,
+            .height = swapchainExtent.height,
+            .layers = 1
+        };
+        swapchainFramebuffers_[i] = device_->createFramebufferUnique(framebufferInfo);
+    }
+}
+
+void Vulkan::recreateSwapchain()
+{
+    device_->waitIdle();
+    int width, height;
+    SDL_GetWindowSize(window_, &width, &height);
+
+    extent_ = vk::Extent2D {
+        .width = static_cast<uint32_t>(width),
+        .height = static_cast<uint32_t>(height)
+    };
+
+    createSwapchain(*swapchain_);
+    camera_.resize((float)extent_.width / (float)extent_.height);
+}
+
+void Vulkan::updateUniformBuffers(int dx)
+{
+    ubo_.model = glm::rotate(ubo_.model, 0.0001f * dx, camera_.up);
+    ubo_.view = camera_.view;
+    ubo_.proj = camera_.proj;
+
+    memoryHelper_->uploadToBufferDirect(uniformBuffers_[currentFrame_], &ubo_);
+}
+
+void Vulkan::drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node)
+{
+    if (node->mesh != nullptr && !node->mesh->primitives.empty()) {
+        glm::mat4 matrix = node->matrix;
+        pl::Node* parent = node->parent;
+        while (parent != nullptr) {
+            matrix = parent->matrix * matrix;
+            parent = parent->parent;
+        }
+        commandBuffer.pushConstants(*pipelineLayout_, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), &matrix);
+        for (const auto& _primitive : node->mesh->primitives) {
+            if (_primitive->indexCount > 0) {
+                commandBuffer.drawIndexed(_primitive->indexCount, 1, _primitive->firstIndex, 0, 0);
+            }
+        }
+    }
+    for (const auto& _node : node->children) {
+        drawNode(commandBuffer, _node);
+    }
+}
+
+void Vulkan::drawFrame()
+{
+    auto inFlight = *inFlightFences_[currentFrame_];
+    auto imageAvailable = *imageAvailableSemaphores_[currentFrame_];
+    auto renderFinished = *renderFinishedSemaphores_[currentFrame_];
+    auto commandBuffer = *commandBuffers_[currentFrame_];
+
+    auto result = device_->waitForFences(inFlight, true, UINT64_MAX);
+
+    uint32_t imageIndex;
+
+    try {
+        std::tie(result, imageIndex) = device_->acquireNextImageKHR(*swapchain_, UINT64_MAX, imageAvailable, VK_NULL_HANDLE);
+        if (result == vk::Result::eSuboptimalKHR || result == vk::Result::eErrorOutOfDateKHR) {
+            imageAvailableSemaphores_[currentFrame_] = device_->createSemaphoreUnique({});
+            recreateSwapchain();
+            return;
+        }
+    } catch (vk::OutOfDateKHRError&) {
+        recreateSwapchain();
+        return;
+    }
+
+    device_->resetFences(inFlight);
+
+    commandBuffer.reset();
+    vk::CommandBufferBeginInfo commandBufferInfo {};
+    vk::ClearValue clearColor { .color = { std::array<float, 4> { 0.0f, 0.0f, 0.0f, 1.0f } } };
+    vk::ClearValue clearDepthValue { .depthStencil = vk::ClearDepthStencilValue { 1.0f } };
+    std::array<vk::ClearValue, 2> clearValues { clearColor, clearDepthValue };
+
+    vk::RenderPassBeginInfo renderPassInfo {
+        .renderPass = *renderPass_,
+        .framebuffer = *swapchainFramebuffers_[imageIndex],
+        .renderArea = {
+            .offset = { 0, 0 },
+            .extent = extent_ },
+        .clearValueCount = static_cast<uint32_t>(clearValues.size()),
+        .pClearValues = clearValues.data()
+    };
+
+    commandBuffer.begin(commandBufferInfo);
+    commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
+    {
+        commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *vertColorPipeline_);
+
+        vk::Viewport viewport {
+            .x = 0.0f,
+            .y = 0.0f,
+            .width = static_cast<float>(extent_.width),
+            .height = static_cast<float>(extent_.height),
+            .minDepth = 0.0f,
+            .maxDepth = 1.0f
+        };
+        commandBuffer.setViewport(0, 1, &viewport);
+
+        vk::Rect2D scissor {
+            .offset = { 0, 0 },
+            .extent = extent_
+        };
+        commandBuffer.setScissor(0, 1, &scissor);
+
+        commandBuffer.bindVertexBuffers(0, vk::Buffer(model_->vertexBuffer->buffer), { 0 });
+        commandBuffer.bindIndexBuffer(vk::Buffer(model_->indexBuffer->buffer), 0, vk::IndexType::eUint32);
+        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *pipelineLayout_, 0, 1, &pipelineDescriptorSets_[currentFrame_].get(), 0, nullptr);
+
+        for (const auto& _node : model_->defaultScene->nodes) {
+            drawNode(commandBuffer, _node);
+        }
+
+        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
+    }
+    commandBuffer.endRenderPass();
+    commandBuffer.end();
+
+    vk::PipelineStageFlags waitDstStageMask { vk::PipelineStageFlagBits::eColorAttachmentOutput };
+
+    vk::SubmitInfo submitInfo {
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = &imageAvailable,
+        .pWaitDstStageMask = &waitDstStageMask,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &commandBuffer,
+        .signalSemaphoreCount = 1,
+        .pSignalSemaphores = &renderFinished
+    };
+
+    graphicsQueue_.submit(submitInfo, inFlight);
+
+    vk::PresentInfoKHR presentInfo {
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = &renderFinished,
+        .swapchainCount = 1,
+        .pSwapchains = &swapchain_.get(),
+        .pImageIndices = &imageIndex
+    };
+
+    try {
+        result = graphicsQueue_.presentKHR(presentInfo);
+        if (result == vk::Result::eSuboptimalKHR || result == vk::Result::eErrorOutOfDateKHR || isResized_) {
+            recreateSwapchain();
+            isResized_ = false;
+        }
+    } catch (vk::OutOfDateKHRError&) {
+        recreateSwapchain();
+        isResized_ = false;
+    }
+
+    currentFrame_ = (currentFrame_ + 1) % sConcurrentFrames_;
 }
 
 void Vulkan::run()
@@ -574,288 +780,4 @@ void Vulkan::run()
     device_->waitIdle();
 }
 
-void Vulkan::drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node)
-{
-    if (node->mesh != nullptr && !node->mesh->primitives.empty()) {
-        glm::mat4 matrix = node->matrix;
-        pl::Node* parent = node->parent;
-        while (parent != nullptr) {
-            matrix = parent->matrix * matrix;
-            parent = parent->parent;
-        }
-        commandBuffer.pushConstants(*pipelineLayout_, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), &matrix);
-        for (const auto& _primitive : node->mesh->primitives) {
-            if (_primitive->indexCount > 0) {
-                commandBuffer.drawIndexed(_primitive->indexCount, 1, _primitive->firstIndex, 0, 0);
-            }
-        }
-    }
-    for (const auto& _node : node->children) {
-        drawNode(commandBuffer, _node);
-    }
 }
-
-void Vulkan::updateUniformBuffers(int dx)
-{
-    ubo_.model = glm::rotate(ubo_.model, 0.0001f * dx, camera_.up);
-    ubo_.view = camera_.view;
-    ubo_.proj = camera_.proj;
-
-    memcpy(uniformPtrs_[currentFrame_], &ubo_, sizeof(ubo_));
-}
-
-void Vulkan::drawFrame()
-{
-    auto inFlight = *inFlightFences_[currentFrame_];
-    auto imageAvailable = *imageAvailableSemaphores_[currentFrame_];
-    auto renderFinished = *renderFinishedSemaphores_[currentFrame_];
-    auto commandBuffer = *commandBuffers_[currentFrame_];
-
-    auto result = device_->waitForFences(inFlight, true, UINT64_MAX);
-
-    uint32_t imageIndex;
-
-    try {
-        std::tie(result, imageIndex) = device_->acquireNextImageKHR(*swapchain_, UINT64_MAX, imageAvailable, VK_NULL_HANDLE);
-        if (result == vk::Result::eSuboptimalKHR || result == vk::Result::eErrorOutOfDateKHR) {
-            imageAvailableSemaphores_[currentFrame_] = device_->createSemaphoreUnique({});
-            recreateSwapchain();
-            return;
-        }
-    } catch (vk::OutOfDateKHRError&) {
-        recreateSwapchain();
-        return;
-    }
-
-    device_->resetFences(inFlight);
-
-    commandBuffer.reset();
-    vk::CommandBufferBeginInfo commandBufferInfo {};
-    vk::ClearValue clearColor { .color = { std::array<float, 4> { 0.0f, 0.0f, 0.0f, 1.0f } } };
-    vk::ClearValue clearDepthValue { .depthStencil = vk::ClearDepthStencilValue { 1.0f } };
-    std::array<vk::ClearValue, 2> clearValues { clearColor, clearDepthValue };
-
-    vk::RenderPassBeginInfo renderPassInfo {
-        .renderPass = *renderPass_,
-        .framebuffer = *swapchainFramebuffers_[imageIndex],
-        .renderArea = {
-            .offset = { 0, 0 },
-            .extent = extent_ },
-        .clearValueCount = static_cast<uint32_t>(clearValues.size()),
-        .pClearValues = clearValues.data()
-    };
-
-    commandBuffer.begin(commandBufferInfo);
-    commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
-    {
-        commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *vertColorPipeline_);
-
-        vk::Viewport viewport {
-            .x = 0.0f,
-            .y = 0.0f,
-            .width = static_cast<float>(extent_.width),
-            .height = static_cast<float>(extent_.height),
-            .minDepth = 0.0f,
-            .maxDepth = 1.0f
-        };
-        commandBuffer.setViewport(0, 1, &viewport);
-
-        vk::Rect2D scissor {
-            .offset = { 0, 0 },
-            .extent = extent_
-        };
-        commandBuffer.setScissor(0, 1, &scissor);
-
-        commandBuffer.bindVertexBuffers(0, vk::Buffer(model_->vertexBuffer->buffer), { 0 });
-        commandBuffer.bindIndexBuffer(vk::Buffer(model_->indexBuffer->buffer), 0, vk::IndexType::eUint32);
-        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *pipelineLayout_, 0, 1, &pipelineDescriptorSets_[currentFrame_].get(), 0, nullptr);
-
-        for (const auto& _node : model_->defaultScene->nodes) {
-            drawNode(commandBuffer, _node);
-        }
-
-        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
-    }
-    commandBuffer.endRenderPass();
-    commandBuffer.end();
-
-    vk::PipelineStageFlags waitDstStageMask { vk::PipelineStageFlagBits::eColorAttachmentOutput };
-
-    vk::SubmitInfo submitInfo {
-        .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &imageAvailable,
-        .pWaitDstStageMask = &waitDstStageMask,
-        .commandBufferCount = 1,
-        .pCommandBuffers = &commandBuffer,
-        .signalSemaphoreCount = 1,
-        .pSignalSemaphores = &renderFinished
-    };
-
-    graphicsQueue_.submit(submitInfo, inFlight);
-
-    vk::PresentInfoKHR presentInfo {
-        .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &renderFinished,
-        .swapchainCount = 1,
-        .pSwapchains = &swapchain_.get(),
-        .pImageIndices = &imageIndex
-    };
-
-    try {
-        result = graphicsQueue_.presentKHR(presentInfo);
-        if (result == vk::Result::eSuboptimalKHR || result == vk::Result::eErrorOutOfDateKHR || isResized_) {
-            recreateSwapchain();
-            isResized_ = false;
-        }
-    } catch (vk::OutOfDateKHRError&) {
-        recreateSwapchain();
-        isResized_ = false;
-    }
-
-    currentFrame_ = (currentFrame_ + 1) % sConcurrentFrames_;
-}
-
-vk::UniqueBuffer Vulkan::createBufferUnique(vk::DeviceSize& size, vk::BufferUsageFlags usage)
-{
-    vk::BufferCreateInfo bufferInfo {
-        .size = size,
-        .usage = usage,
-        .sharingMode = vk::SharingMode::eExclusive
-    };
-
-    return device_->createBufferUnique(bufferInfo);
-}
-
-vk::UniqueDeviceMemory Vulkan::createDeviceMemoryUnique(vk::MemoryRequirements requirements, vk::MemoryPropertyFlags memoryFlags)
-{
-    vk::PhysicalDeviceMemoryProperties memProperties = physicalDevice_.getMemoryProperties();
-    uint32_t memoryTypeIndex = 0;
-
-    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
-        if ((requirements.memoryTypeBits & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & memoryFlags) == memoryFlags) {
-            memoryTypeIndex = i;
-        }
-    }
-
-    vk::MemoryAllocateInfo memoryInfo {
-        .allocationSize = requirements.size,
-        .memoryTypeIndex = memoryTypeIndex
-    };
-
-    return device_->allocateMemoryUnique(memoryInfo);
-}
-
-vk::UniqueImage Vulkan::createImageUnique(vk::Extent2D& extent, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage)
-{
-    vk::ImageCreateInfo imageInfo {
-        .imageType = vk::ImageType::e2D,
-        .format = format,
-        .extent = {
-            .width = extent.width,
-            .height = extent.height,
-            .depth = 1 },
-        .mipLevels = 1,
-        .arrayLayers = 1,
-        .samples = vk::SampleCountFlagBits::e1,
-        .tiling = tiling,
-        .usage = usage,
-        .sharingMode = vk::SharingMode::eExclusive,
-        .initialLayout = vk::ImageLayout::eUndefined
-    };
-
-    return device_->createImageUnique(imageInfo);
-}
-
-vk::UniqueImageView Vulkan::createImageViewUnique(vk::Image& image, vk::Format format, vk::ImageAspectFlagBits aspectMask)
-{
-    vk::ImageViewCreateInfo imageViewInfo {
-        .image = image,
-        .viewType = vk::ImageViewType::e2D,
-        .format = format,
-        .subresourceRange {
-            .aspectMask = aspectMask,
-            .baseMipLevel = 0,
-            .levelCount = 1,
-            .baseArrayLayer = 0,
-            .layerCount = 1 }
-    };
-
-    return device_->createImageViewUnique(imageViewInfo);
-}
-
-void Vulkan::createSwapchain(vk::SwapchainKHR oldSwapchain)
-{
-    // swapchain
-    vk::SurfaceCapabilitiesKHR capabilities = physicalDevice_.getSurfaceCapabilitiesKHR(*surface_);
-    vk::Extent2D swapchainExtent {
-        std::clamp(extent_.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
-        std::clamp(extent_.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
-    };
-
-    auto imageFormat = vk::Format::eB8G8R8A8Unorm;
-
-    vk::SwapchainCreateInfoKHR swapChainInfo {
-        .surface = *surface_,
-        .minImageCount = capabilities.minImageCount + 1,
-        .imageFormat = imageFormat,
-        .imageExtent = swapchainExtent,
-        .imageArrayLayers = 1,
-        .imageUsage = vk::ImageUsageFlagBits::eColorAttachment,
-        .imageSharingMode = vk::SharingMode::eExclusive,
-        .preTransform = vk::SurfaceTransformFlagBitsKHR::eIdentity,
-        .compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque,
-        .presentMode = vk::PresentModeKHR::eFifo,
-        .clipped = VK_TRUE,
-        .oldSwapchain = oldSwapchain
-    };
-
-    swapchain_ = device_->createSwapchainKHRUnique(swapChainInfo);
-    swapchainImages_ = device_->getSwapchainImagesKHR(*swapchain_);
-
-    // image views
-    swapchainImageViews_.resize(swapchainImages_.size());
-    for (size_t i = 0; i < swapchainImages_.size(); i++) {
-        swapchainImageViews_[i] = createImageViewUnique(swapchainImages_[i], imageFormat, vk::ImageAspectFlagBits::eColor);
-    }
-
-    // depth buffer
-    auto depthFormat = vk::Format::eD32Sfloat;
-
-    depthImage_ = createImageUnique(swapchainExtent, depthFormat, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eDepthStencilAttachment);
-    depthMemory_ = createDeviceMemoryUnique(device_->getImageMemoryRequirements(*depthImage_), vk::MemoryPropertyFlagBits::eDeviceLocal);
-    device_->bindImageMemory(*depthImage_, *depthMemory_, 0);
-
-    depthView_ = createImageViewUnique(*depthImage_, depthFormat, vk::ImageAspectFlagBits::eDepth);
-
-    // framebuffers
-    swapchainFramebuffers_.resize(swapchainImages_.size());
-    for (size_t i = 0; i < swapchainImages_.size(); i++) {
-        std::array<vk::ImageView, 2> attachments = { *swapchainImageViews_[i], *depthView_ };
-        vk::FramebufferCreateInfo framebufferInfo {
-            .renderPass = *renderPass_,
-            .attachmentCount = static_cast<uint32_t>(attachments.size()),
-            .pAttachments = attachments.data(),
-            .width = swapchainExtent.width,
-            .height = swapchainExtent.height,
-            .layers = 1
-        };
-        swapchainFramebuffers_[i] = device_->createFramebufferUnique(framebufferInfo);
-    }
-}
-
-void Vulkan::recreateSwapchain()
-{
-    device_->waitIdle();
-    int width, height;
-    SDL_GetWindowSize(window_, &width, &height);
-
-    extent_ = vk::Extent2D {
-        .width = static_cast<uint32_t>(width),
-        .height = static_cast<uint32_t>(height)
-    };
-
-    createSwapchain(*swapchain_);
-    camera_.resize((float)extent_.width / (float)extent_.height);
-}
-
-} // namespace pl

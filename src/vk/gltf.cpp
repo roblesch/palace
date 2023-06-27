@@ -51,7 +51,7 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
         };
         auto size = texture->extent.width * texture->extent.height * 4 * sizeof(unsigned char);
         texture->image = memory->createTextureImage(_image.image.data(), size, texture->extent);
-        texture->view = memory->createTextureViewUnique(texture->image->image);
+        texture->view = memory->createImageViewUnique(texture->image->image, vk::Format::eR8G8B8A8Unorm, vk::ImageAspectFlagBits::eColor);
         textures.push_back(texture);
     }
 
@@ -152,8 +152,10 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
     }
 
     // buffers
-    vertexBuffer = memory->createBuffer(vertices.data(), vertices.size() * sizeof(Vertex), vk::BufferUsageFlagBits::eVertexBuffer);
-    indexBuffer = memory->createBuffer(indices.data(), indices.size() * sizeof(uint32_t), vk::BufferUsageFlagBits::eIndexBuffer);
+    vertexBuffer = memory->createBuffer(vertices.size() * sizeof(Vertex), vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer, {});
+    indexBuffer = memory->createBuffer(indices.size() * sizeof(uint32_t), vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer, {});
+    memory->uploadToBuffer(vertexBuffer, vertices.data());
+    memory->uploadToBuffer(indexBuffer, indices.data());
 
     // nodes
     for (size_t i = 0; i < model.nodes.size(); i++) {

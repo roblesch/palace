@@ -19,17 +19,12 @@ public:
     void run();
 
 private:
+    void createSwapchain(vk::SwapchainKHR oldSwapchain = VK_NULL_HANDLE);
+    void recreateSwapchain();
+
     void updateUniformBuffers(int dx);
     void drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node);
     void drawFrame();
-
-    vk::UniqueBuffer createBufferUnique(vk::DeviceSize& size, vk::BufferUsageFlags usage);
-    vk::UniqueDeviceMemory createDeviceMemoryUnique(vk::MemoryRequirements requirements, vk::MemoryPropertyFlags memoryFlags);
-    vk::UniqueImage createImageUnique(vk::Extent2D& extent, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage);
-    vk::UniqueImageView createImageViewUnique(vk::Image& image, vk::Format format, vk::ImageAspectFlagBits aspectMask);
-
-    void createSwapchain(vk::SwapchainKHR oldSwapchain = VK_NULL_HANDLE);
-    void recreateSwapchain();
 
     static constexpr int sWidth_ = 1800;
     static constexpr int sHeight_ = 600;
@@ -77,19 +72,19 @@ private:
     vk::UniquePipeline vertColorPipeline_;
     vk::UniquePipeline texturePipeline_;
 
+    // memory
+    pl::UniqueMemoryHelper memoryHelper_;
+
     // swapchain
     vk::UniqueSwapchainKHR swapchain_;
     std::vector<vk::Image> swapchainImages_;
     std::vector<vk::UniqueImageView> swapchainImageViews_;
     std::vector<vk::UniqueFramebuffer> swapchainFramebuffers_;
-    vk::UniqueImage depthImage_;
-    vk::UniqueDeviceMemory depthMemory_;
+    pl::VmaImage* depthImage_;
     vk::UniqueImageView depthView_;
 
     // buffers
-    std::vector<vk::UniqueBuffer> uniformBuffers_;
-    std::vector<vk::UniqueDeviceMemory> uniformMemories_;
-    std::vector<void*> uniformPtrs_;
+    std::vector<VmaBuffer*> uniformBuffers_;
 
     // ubo
     struct UniformBuffer {
@@ -97,9 +92,6 @@ private:
         glm::mat4 view { 1.0f };
         glm::mat4 proj { 1.0f };
     } ubo_;
-
-    // memory
-    pl::UniqueMemoryHelper memoryHelper_;
 
     // scene
     pl::UniqueGltfModel model_;
@@ -115,4 +107,4 @@ private:
     Uint64 dt { 0 };
 };
 
-} // namespace pl
+}
