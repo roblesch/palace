@@ -4,7 +4,7 @@
 
 namespace pl {
 
-Memory::Memory(const MemoryCreateInfo& createInfo)
+MemoryHelper::MemoryHelper(const MemoryHelperCreateInfo& createInfo)
     : device_(createInfo.device)
     , commandPool_(createInfo.commandPool)
     , graphicsQueue_(createInfo.graphicsQueue)
@@ -18,7 +18,7 @@ Memory::Memory(const MemoryCreateInfo& createInfo)
     vmaCreateAllocator(&allocatorInfo, &allocator_);
 }
 
-Memory::~Memory()
+MemoryHelper::~MemoryHelper()
 {
     for (auto& buffer : buffers_)
         vmaDestroyBuffer(allocator_, buffer->buffer, buffer->allocation);
@@ -28,7 +28,7 @@ Memory::~Memory()
     vmaDestroyAllocator(allocator_);
 }
 
-vk::UniqueCommandBuffer Memory::beginSingleUseCommandBuffer()
+vk::UniqueCommandBuffer MemoryHelper::beginSingleUseCommandBuffer()
 {
     vk::CommandBufferAllocateInfo bufferInfo {
         .commandPool = commandPool_,
@@ -42,7 +42,7 @@ vk::UniqueCommandBuffer Memory::beginSingleUseCommandBuffer()
     return commandBuffer;
 }
 
-void Memory::endSingleUseCommandBuffer(vk::CommandBuffer& commandBuffer)
+void MemoryHelper::endSingleUseCommandBuffer(vk::CommandBuffer& commandBuffer)
 {
     commandBuffer.end();
 
@@ -55,7 +55,7 @@ void Memory::endSingleUseCommandBuffer(vk::CommandBuffer& commandBuffer)
     graphicsQueue_.waitIdle();
 }
 
-VmaBuffer* Memory::createBuffer(void* src, size_t size, vk::BufferUsageFlags usage)
+VmaBuffer* MemoryHelper::createBuffer(void* src, size_t size, vk::BufferUsageFlags usage)
 {
     VkBufferCreateInfo stagingBufferInfo {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -99,7 +99,7 @@ VmaBuffer* Memory::createBuffer(void* src, size_t size, vk::BufferUsageFlags usa
     return buffer;
 }
 
-VmaImage* Memory::createTextureImage(const void* src, size_t size, vk::Extent3D extent)
+VmaImage* MemoryHelper::createTextureImage(const void* src, size_t size, vk::Extent3D extent)
 {
     // upload to staging
     VkBufferCreateInfo stagingBufferInfo {
@@ -195,7 +195,7 @@ VmaImage* Memory::createTextureImage(const void* src, size_t size, vk::Extent3D 
     return texture;
 }
 
-vk::UniqueImageView Memory::createTextureViewUnique(vk::Image image)
+vk::UniqueImageView MemoryHelper::createTextureViewUnique(vk::Image image)
 {
     vk::ImageViewCreateInfo imageViewInfo {
         .image = image,
@@ -211,9 +211,9 @@ vk::UniqueImageView Memory::createTextureViewUnique(vk::Image image)
     return device_.createImageViewUnique(imageViewInfo);
 }
 
-UniqueMemory createMemoryUnique(const MemoryCreateInfo& createInfo)
+UniqueMemoryHelper createMemoryHelperUnique(const MemoryHelperCreateInfo& createInfo)
 {
-    return std::make_unique<Memory>(createInfo);
+    return std::make_unique<MemoryHelper>(createInfo);
 }
 
 }

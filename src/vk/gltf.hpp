@@ -57,7 +57,7 @@ struct Scene {
 
 struct GltfModelCreateInfo {
     const char* path;
-    Memory* memory;
+    MemoryHelper* memory;
 };
 
 class GltfModel {

@@ -37,24 +37,6 @@ VkBool32 debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
     return VK_FALSE;
 }
 
-std::vector<char> readSpirVFile(const std::string& spirVFile)
-{
-    std::ifstream file(spirVFile, std::ios::binary | std::ios::in | std::ios::ate);
-
-    if (!file.is_open()) {
-        printf("(VK_:ERROR) Pipeline failed to open spir-v file for reading: %s", spirVFile.c_str());
-        exit(1);
-    }
-
-    size_t fileSize = file.tellg();
-    file.seekg(std::ios::beg);
-    std::vector<char> spirVBytes(fileSize);
-    file.read(spirVBytes.data(), fileSize);
-    file.close();
-
-    return spirVBytes;
-}
-
 Vulkan::Vulkan(bool enableValidation)
     : isValidationEnabled_(enableValidation)
 {
@@ -203,191 +185,7 @@ Vulkan::Vulkan(bool enableValidation)
         inFlightFences_.push_back(device_->createFenceUnique({ .flags = vk::FenceCreateFlagBits::eSignaled }));
     }
 
-    // TODO: descriptor sets
-    // uniform modelview transforms
-    vk::DescriptorSetLayoutBinding uboLayoutBinding {
-        .binding = 0,
-        .descriptorType = vk::DescriptorType::eUniformBuffer,
-        .descriptorCount = 1,
-        .stageFlags = vk::ShaderStageFlagBits::eVertex
-    };
-
-    vk::DescriptorSetLayoutCreateInfo descriptorLayoutInfo {
-        .bindingCount = 1,
-        .pBindings = &uboLayoutBinding
-    };
-
-    pipelineDescriptorLayout_ = device_->createDescriptorSetLayoutUnique(descriptorLayoutInfo);
-
-    // descriptor pools
-    vk::DescriptorPoolSize uboSize {
-        .type = vk::DescriptorType::eUniformBuffer,
-        .descriptorCount = sConcurrentFrames_
-    };
-
-    vk::DescriptorPoolCreateInfo pipelinePoolInfo {
-        .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-        .maxSets = sConcurrentFrames_,
-        .poolSizeCount = 1,
-        .pPoolSizes = &uboSize
-    };
-
-    pipelineDescriptorPool_ = device_->createDescriptorPoolUnique(pipelinePoolInfo);
-
-    // shaders
-    std::vector<char> vertexShaderBytes = readSpirVFile("shaders/vertex.spv");
-    std::vector<char> fragmentShaderBytes = readSpirVFile("shaders/fragment.spv");
-
-    auto vertexShaderModule = device_->createShaderModuleUnique({ .codeSize = vertexShaderBytes.size(),
-        .pCode = reinterpret_cast<const uint32_t*>(vertexShaderBytes.data()) });
-
-    auto fragmentShaderModule = device_->createShaderModuleUnique({ .codeSize = fragmentShaderBytes.size(),
-        .pCode = reinterpret_cast<const uint32_t*>(fragmentShaderBytes.data()) });
-
-    std::vector<vk::PipelineShaderStageCreateInfo> shaderStageInfos {
-        { .stage = vk::ShaderStageFlagBits::eVertex,
-            .module = *vertexShaderModule,
-            .pName = "main" },
-        { .stage = vk::ShaderStageFlagBits::eFragment,
-            .module = *fragmentShaderModule,
-            .pName = "main" }
-    };
-
-    // vertex input
-    vk::VertexInputBindingDescription vertexBindingDescription {
-        .binding = 0,
-        .stride = sizeof(pl::Vertex),
-        .inputRate = vk::VertexInputRate::eVertex
-    };
-
-    vk::VertexInputAttributeDescription posDescription {
-        .location = 0,
-        .binding = 0,
-        .format = vk::Format::eR32G32B32Sfloat,
-        .offset = offsetof(pl::Vertex, pos)
-    };
-    vk::VertexInputAttributeDescription normalDescription {
-        .location = 1,
-        .binding = 0,
-        .format = vk::Format::eR32G32B32Sfloat,
-        .offset = offsetof(pl::Vertex, normal)
-    };
-    vk::VertexInputAttributeDescription colorDescription {
-        .location = 2,
-        .binding = 0,
-        .format = vk::Format::eR32G32B32Sfloat,
-        .offset = offsetof(pl::Vertex, color)
-    };
-    vk::VertexInputAttributeDescription uvDescription {
-        .location = 3,
-        .binding = 0,
-        .format = vk::Format::eR32G32Sfloat,
-        .offset = offsetof(pl::Vertex, uv)
-    };
-    std::array<vk::VertexInputAttributeDescription, 4> vertexAttributeDescriptions { posDescription, normalDescription, colorDescription, uvDescription };
-
-    vk::PipelineVertexInputStateCreateInfo vertexStateInfo {
-        .vertexBindingDescriptionCount = 1,
-        .pVertexBindingDescriptions = &vertexBindingDescription,
-        .vertexAttributeDescriptionCount = vertexAttributeDescriptions.size(),
-        .pVertexAttributeDescriptions = vertexAttributeDescriptions.data()
-    };
-
-    // input assembly
-    vk::PipelineInputAssemblyStateCreateInfo assemblyStateInfo {
-        .topology = vk::PrimitiveTopology::eTriangleList,
-        .primitiveRestartEnable = VK_FALSE
-    };
-
-    // viewport state
-    vk::Viewport viewport {
-        .x = 0.0f,
-        .y = 0.0f,
-        .width = static_cast<float>(extent_.width),
-        .height = static_cast<float>(extent_.height),
-        .minDepth = 0.0f,
-        .maxDepth = 1.0f
-    };
-
-    vk::Rect2D scissor {
-        .offset = { 0, 0 },
-        .extent = extent_
-    };
-
-    vk::PipelineViewportStateCreateInfo viewportStateInfo {
-        .viewportCount = 1,
-        .pViewports = &viewport,
-        .scissorCount = 1,
-        .pScissors = &scissor
-    };
-
-    // rasterization state
-    vk::PipelineRasterizationStateCreateInfo rasterStateInfo {
-        .depthClampEnable = VK_FALSE,
-        .rasterizerDiscardEnable = VK_FALSE,
-        .polygonMode = vk::PolygonMode::eFill,
-        .cullMode = vk::CullModeFlagBits::eBack,
-        .frontFace = vk::FrontFace::eCounterClockwise,
-        .depthBiasEnable = VK_FALSE,
-        .lineWidth = 1.0f
-    };
-
-    // multisample state
-    vk::PipelineMultisampleStateCreateInfo multisampleStateInfo {
-        .rasterizationSamples = vk::SampleCountFlagBits::e1,
-        .sampleShadingEnable = VK_FALSE
-    };
-
-    // color blend state
-    vk::PipelineColorBlendAttachmentState colorBlendAttachment {
-        .blendEnable = VK_TRUE,
-        .srcColorBlendFactor = vk::BlendFactor::eSrcAlpha,
-        .dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
-        .srcAlphaBlendFactor = vk::BlendFactor::eOne,
-        .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA
-    };
-
-    vk::PipelineColorBlendStateCreateInfo colorBlendStateInfo {
-        .logicOpEnable = VK_FALSE,
-        .attachmentCount = 1,
-        .pAttachments = &colorBlendAttachment
-    };
-
-    // depth state
-    vk::PipelineDepthStencilStateCreateInfo depthStateInfo {
-        .depthTestEnable = VK_TRUE,
-        .depthWriteEnable = VK_TRUE,
-        .depthCompareOp = vk::CompareOp::eLess,
-        .depthBoundsTestEnable = VK_FALSE,
-        .stencilTestEnable = VK_FALSE
-    };
-
-    // dynamic state
-    std::vector<vk::DynamicState> dynamicStates {
-        vk::DynamicState::eViewport,
-        vk::DynamicState::eScissor
-    };
-
-    vk::PipelineDynamicStateCreateInfo dynamicStateInfo {
-        .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
-        .pDynamicStates = dynamicStates.data()
-    };
-
-    // pipeline layout
-    vk::PushConstantRange pushConstantRange {
-        .stageFlags = vk::ShaderStageFlagBits::eVertex,
-        .offset = 0,
-        .size = sizeof(glm::mat4)
-    };
-    vk::PipelineLayoutCreateInfo pipelineLayoutInfo {
-        .setLayoutCount = 1,
-        .pSetLayouts = &pipelineDescriptorLayout_.get(),
-        .pushConstantRangeCount = 1,
-        .pPushConstantRanges = &pushConstantRange
-    };
-    pipelineLayout_ = device_->createPipelineLayoutUnique(pipelineLayoutInfo);
-
-    // attachments
+    // subpass attachments
     vk::AttachmentDescription colorAttachment {
         .format = vk::Format::eB8G8R8A8Unorm,
         .samples = vk::SampleCountFlagBits::e1,
@@ -449,24 +247,35 @@ Vulkan::Vulkan(bool enableValidation)
 
     renderPass_ = device_->createRenderPassUnique(renderPassInfo);
 
-    // pipeline
-    vk::GraphicsPipelineCreateInfo graphicsPipelineInfo {
-        .stageCount = static_cast<uint32_t>(shaderStageInfos.size()),
-        .pStages = shaderStageInfos.data(),
-        .pVertexInputState = &vertexStateInfo,
-        .pInputAssemblyState = &assemblyStateInfo,
-        .pViewportState = &viewportStateInfo,
-        .pRasterizationState = &rasterStateInfo,
-        .pMultisampleState = &multisampleStateInfo,
-        .pDepthStencilState = &depthStateInfo,
-        .pColorBlendState = &colorBlendStateInfo,
-        .pDynamicState = &dynamicStateInfo,
-        .layout = *pipelineLayout_,
-        .renderPass = *renderPass_,
-        .subpass = 0
+    // descriptor set layout
+    vk::DescriptorSetLayoutBinding uboLayoutBinding {
+        .binding = 0,
+        .descriptorType = vk::DescriptorType::eUniformBuffer,
+        .descriptorCount = 1,
+        .stageFlags = vk::ShaderStageFlagBits::eVertex
     };
 
-    vertColorPipeline_ = device_->createGraphicsPipelineUnique(nullptr, graphicsPipelineInfo).value;
+    vk::DescriptorSetLayoutCreateInfo descriptorLayoutInfo {
+        .bindingCount = 1,
+        .pBindings = &uboLayoutBinding
+    };
+
+    pipelineDescriptorLayout_ = device_->createDescriptorSetLayoutUnique(descriptorLayoutInfo);
+
+    // descriptor pools
+    vk::DescriptorPoolSize uboSize {
+        .type = vk::DescriptorType::eUniformBuffer,
+        .descriptorCount = sConcurrentFrames_
+    };
+
+    vk::DescriptorPoolCreateInfo pipelinePoolInfo {
+        .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+        .maxSets = sConcurrentFrames_,
+        .poolSizeCount = 1,
+        .pPoolSizes = &uboSize
+    };
+
+    pipelineDescriptorPool_ = device_->createDescriptorPoolUnique(pipelinePoolInfo);
 
     // uniform buffers
     vk::DeviceSize uniformBufferSize = sizeof(UniformBuffer);
@@ -512,11 +321,21 @@ Vulkan::Vulkan(bool enableValidation)
         device_->updateDescriptorSets(1, &uboWriteDescriptor, 0, nullptr);
     }
 
+    // pipeline
+    pl::PipelineHelperCreateInfo pipelineHelperInfo {
+        .device = *device_,
+        .extent = extent_,
+        .descriptorCount = sConcurrentFrames_,
+        .descriptorLayout = *pipelineDescriptorLayout_
+    };
+    pipelineHelper_ = createPipelineHelperUnique(pipelineHelperInfo);
+    vertColorPipeline_ = pipelineHelper_->createPipelineUnique(*renderPass_);
+
     // swapchain
     createSwapchain();
 
     // memory
-    pl::MemoryCreateInfo memoryInfo {
+    pl::MemoryHelperCreateInfo memoryInfo {
         .physicalDevice = physicalDevice_,
         .device = *device_,
         .instance = *instance_,
@@ -524,7 +343,7 @@ Vulkan::Vulkan(bool enableValidation)
         .graphicsQueue = graphicsQueue_
     };
 
-    memory_ = pl::createMemoryUnique(memoryInfo);
+    memoryHelper_ = createMemoryHelperUnique(memoryInfo);
 
     // imgui
     vk::DescriptorPoolSize imguiPoolSizes[] = {
@@ -565,9 +384,9 @@ Vulkan::Vulkan(bool enableValidation)
     };
 
     ImGui_ImplVulkan_Init(&imguiInfo, *renderPass_);
-    auto cmd = memory_->beginSingleUseCommandBuffer();
+    auto cmd = memoryHelper_->beginSingleUseCommandBuffer();
     ImGui_ImplVulkan_CreateFontsTexture(*cmd);
-    memory_->endSingleUseCommandBuffer(*cmd);
+    memoryHelper_->endSingleUseCommandBuffer(*cmd);
     ImGui_ImplVulkan_DestroyFontUploadObjects();
 
     // camera
@@ -587,7 +406,7 @@ Vulkan::~Vulkan()
 
 void Vulkan::loadGltfModel(const char* path)
 {
-    model_ = pl::createGltfModelUnique({ path, memory_.get() });
+    model_ = pl::createGltfModelUnique({ path, memoryHelper_.get() });
     isSceneLoaded_ = true;
 }
 

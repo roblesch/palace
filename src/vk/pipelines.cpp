@@ -23,9 +23,11 @@ std::vector<char> readSpirVFile(const std::string& spirVFile)
     return spirVBytes;
 }
 
-Pipelines::Pipelines(const PipelinesCreateInfo& createInfo)
+PipelineHelper::PipelineHelper(const PipelineHelperCreateInfo& createInfo)
     : device_(createInfo.device)
     , extent_(createInfo.extent)
+    , descriptorCount_(createInfo.descriptorCount)
+    , descriptorLayout_(createInfo.descriptorLayout)
 {
     // shaders
     std::vector<char> vertexShaderBytes = readSpirVFile("shaders/vertex.spv");
@@ -145,9 +147,43 @@ Pipelines::Pipelines(const PipelinesCreateInfo& createInfo)
         .attachmentCount = 1,
         .pAttachments = &colorBlendAttachment_
     };
+
+    // depth state
+    depthStencilStateInfo_ = {
+        .depthTestEnable = VK_TRUE,
+        .depthWriteEnable = VK_TRUE,
+        .depthCompareOp = vk::CompareOp::eLess,
+        .depthBoundsTestEnable = VK_FALSE,
+        .stencilTestEnable = VK_FALSE
+    };
+
+    // dynamic state
+    std::vector<vk::DynamicState> dynamicStates {
+        vk::DynamicState::eViewport,
+        vk::DynamicState::eScissor
+    };
+
+    dynamicStateInfo_ = {
+        .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
+        .pDynamicStates = dynamicStates.data()
+    };
+
+    // pipeline layout
+    vk::PushConstantRange pushConstantRange {
+        .stageFlags = vk::ShaderStageFlagBits::eVertex,
+        .offset = 0,
+        .size = sizeof(glm::mat4)
+    };
+    vk::PipelineLayoutCreateInfo pipelineLayoutInfo {
+        .setLayoutCount = 1,
+        .pSetLayouts = &descriptorLayout_,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &pushConstantRange
+    };
+    pipelineLayout_ = device_.createPipelineLayoutUnique(pipelineLayoutInfo);
 }
 
-vk::UniquePipeline Pipelines::createPipelineUnique(vk::RenderPass renderPass)
+vk::UniquePipeline PipelineHelper::createPipelineUnique(vk::RenderPass renderPass)
 {
     vk::GraphicsPipelineCreateInfo pipelineInfo {
         .stageCount = static_cast<uint32_t>(shaderStageInfos_.size()),
@@ -157,13 +193,18 @@ vk::UniquePipeline Pipelines::createPipelineUnique(vk::RenderPass renderPass)
         .pRasterizationState = &rasterStateInfo_,
         .pMultisampleState = &multisampleStateInfo_,
         .pColorBlendState = &colorBlendStateInfo_,
-        .layout = pipelineLayout_,
+        .layout = *pipelineLayout_,
         .renderPass = renderPass,
         .subpass = 0,
         .basePipelineHandle = VK_NULL_HANDLE
     };
 
-    return vk::UniquePipeline();
+    return device_.createGraphicsPipelineUnique(nullptr, pipelineInfo).value;
+}
+
+UniquePipelineHelper createPipelineHelperUnique(const PipelineHelperCreateInfo& createInfo)
+{
+    return std::make_unique<PipelineHelper>(createInfo);
 }
 
 }

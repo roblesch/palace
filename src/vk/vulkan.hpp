@@ -3,6 +3,7 @@
 #include "camera.hpp"
 #include "gltf.hpp"
 #include "memory.hpp"
+#include "pipelines.hpp"
 #include "types.hpp"
 #include <functional>
 #include <string>
@@ -67,6 +68,7 @@ private:
     std::vector<vk::UniqueFence> inFlightFences_;
 
     // pipelines
+    pl::UniquePipelineHelper pipelineHelper_;
     vk::UniqueDescriptorSetLayout pipelineDescriptorLayout_;
     vk::UniqueDescriptorPool pipelineDescriptorPool_;
     std::vector<vk::UniqueDescriptorSet> pipelineDescriptorSets_;
@@ -97,7 +99,7 @@ private:
     } ubo_;
 
     // memory
-    pl::UniqueMemory memory_;
+    pl::UniqueMemoryHelper memoryHelper_;
 
     // scene
     pl::UniqueGltfModel model_;

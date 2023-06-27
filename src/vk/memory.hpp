@@ -15,7 +15,7 @@ struct VmaImage {
     VmaAllocation allocation;
 };
 
-struct MemoryCreateInfo {
+struct MemoryHelperCreateInfo {
     vk::PhysicalDevice physicalDevice;
     vk::Device device;
     vk::Instance instance;
@@ -23,10 +23,10 @@ struct MemoryCreateInfo {
     vk::Queue graphicsQueue;
 };
 
-class Memory {
+class MemoryHelper {
 public:
-    Memory(const MemoryCreateInfo& createInfo);
-    ~Memory();
+    MemoryHelper(const MemoryHelperCreateInfo& createInfo);
+    ~MemoryHelper();
 
     vk::UniqueCommandBuffer beginSingleUseCommandBuffer();
     void endSingleUseCommandBuffer(vk::CommandBuffer& commandBuffer);
@@ -45,8 +45,8 @@ private:
     std::vector<VmaImage*> images_;
 };
 
-using UniqueMemory = std::unique_ptr<Memory>;
+using UniqueMemoryHelper = std::unique_ptr<MemoryHelper>;
 
-UniqueMemory createMemoryUnique(const MemoryCreateInfo& createInfo);
+UniqueMemoryHelper createMemoryHelperUnique(const MemoryHelperCreateInfo& createInfo);
 
 }
