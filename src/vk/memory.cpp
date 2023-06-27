@@ -55,23 +55,6 @@ void MemoryHelper::endSingleUseCommandBuffer(vk::CommandBuffer& commandBuffer)
     graphicsQueue_.waitIdle();
 }
 
-vk::UniqueImageView MemoryHelper::createImageViewUnique(vk::Image image, vk::Format format, vk::ImageAspectFlagBits aspectMask)
-{
-    vk::ImageViewCreateInfo imageViewInfo {
-        .image = image,
-        .viewType = vk::ImageViewType::e2D,
-        .format = format,
-        .subresourceRange {
-            .aspectMask = aspectMask,
-            .baseMipLevel = 0,
-            .levelCount = 1,
-            .baseArrayLayer = 0,
-            .layerCount = 1 }
-    };
-
-    return device_.createImageViewUnique(imageViewInfo);
-}
-
 VmaBuffer* MemoryHelper::createBuffer(size_t size, vk::BufferUsageFlags usage, VmaAllocationCreateFlags flags)
 {
     VkBufferCreateInfo bufferInfo {
@@ -89,22 +72,6 @@ VmaBuffer* MemoryHelper::createBuffer(size_t size, vk::BufferUsageFlags usage, V
     buffers_.push_back(buffer);
 
     return buffer;
-}
-
-VmaBuffer* MemoryHelper::createStagingBuffer(size_t size)
-{
-    VkBufferCreateInfo stagingBufferInfo {
-        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .size = size,
-        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT
-    };
-    VmaAllocationCreateInfo stagingAllocInfo {
-        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
-        .usage = VMA_MEMORY_USAGE_AUTO
-    };
-    auto staging = new VmaBuffer;
-    vmaCreateBuffer(allocator_, &stagingBufferInfo, &stagingAllocInfo, &staging->buffer, &staging->allocation, nullptr);
-    return staging;
 }
 
 void MemoryHelper::uploadToBuffer(VmaBuffer* buffer, void* src)
@@ -167,22 +134,22 @@ VmaImage* MemoryHelper::createTextureImage(const void* src, size_t size, vk::Ext
     vmaUnmapMemory(allocator_, staging->allocation);
 
     // create image
-    VkImageCreateInfo textureInfo {
-        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-        .imageType = VK_IMAGE_TYPE_2D,
-        .format = VK_FORMAT_R8G8B8A8_UNORM,
-        .extent = extent,
-        .mipLevels = 1,
-        .arrayLayers = 1,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .tiling = VK_IMAGE_TILING_OPTIMAL,
-        .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
-    };
-    VmaAllocationCreateInfo textureAllocInfo {
-        .usage = VMA_MEMORY_USAGE_AUTO
-    };
-    auto texture = new VmaImage;
-    vmaCreateImage(allocator_, &textureInfo, &textureAllocInfo, &texture->image, &texture->allocation, nullptr);
+    //VkImageCreateInfo textureInfo {
+    //    .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+    //    .imageType = VK_IMAGE_TYPE_2D,
+    //    .format = VK_FORMAT_R8G8B8A8_UNORM,
+    //    .extent = extent,
+    //    .mipLevels = 1,
+    //    .arrayLayers = 1,
+    //    .samples = VK_SAMPLE_COUNT_1_BIT,
+    //    .tiling = VK_IMAGE_TILING_OPTIMAL,
+    //    .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+    //};
+    //VmaAllocationCreateInfo textureAllocInfo {
+    //    .usage = VMA_MEMORY_USAGE_AUTO
+    //};
+    auto texture = createImage(extent, vk::Format::eR8G8B8A8Unorm, vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst);
+    //vmaCreateImage(allocator_, &textureInfo, &textureAllocInfo, &texture->image, &texture->allocation, nullptr);
 
     // transition staging format
     auto cmd = beginSingleUseCommandBuffer();
@@ -238,24 +205,41 @@ VmaImage* MemoryHelper::createTextureImage(const void* src, size_t size, vk::Ext
     endSingleUseCommandBuffer(*cmd);
     vmaDestroyBuffer(allocator_, staging->buffer, staging->allocation);
 
-    images_.push_back(texture);
+    //images_.push_back(texture);
     return texture;
 }
 
-vk::UniqueImageView MemoryHelper::createTextureViewUnique(vk::Image image)
+vk::UniqueImageView MemoryHelper::createImageViewUnique(vk::Image image, vk::Format format, vk::ImageAspectFlagBits aspectMask)
 {
     vk::ImageViewCreateInfo imageViewInfo {
         .image = image,
         .viewType = vk::ImageViewType::e2D,
-        .format = vk::Format::eR8G8B8A8Unorm,
-        .subresourceRange = {
-            .aspectMask = vk::ImageAspectFlagBits::eColor,
+        .format = format,
+        .subresourceRange {
+            .aspectMask = aspectMask,
             .baseMipLevel = 0,
             .levelCount = 1,
             .baseArrayLayer = 0,
             .layerCount = 1 }
     };
+
     return device_.createImageViewUnique(imageViewInfo);
+}
+
+VmaBuffer* MemoryHelper::createStagingBuffer(size_t size)
+{
+    VkBufferCreateInfo stagingBufferInfo {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = size,
+        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+    };
+    VmaAllocationCreateInfo stagingAllocInfo {
+        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+        .usage = VMA_MEMORY_USAGE_AUTO
+    };
+    auto staging = new VmaBuffer;
+    vmaCreateBuffer(allocator_, &stagingBufferInfo, &stagingAllocInfo, &staging->buffer, &staging->allocation, nullptr);
+    return staging;
 }
 
 UniqueMemoryHelper createMemoryHelperUnique(const MemoryHelperCreateInfo& createInfo)

@@ -32,14 +32,12 @@ public:
     vk::UniqueCommandBuffer beginSingleUseCommandBuffer();
     void endSingleUseCommandBuffer(vk::CommandBuffer& commandBuffer);
 
-    vk::UniqueImageView createImageViewUnique(vk::Image image, vk::Format format, vk::ImageAspectFlagBits aspectMask);
-
     VmaBuffer* createBuffer(size_t size, vk::BufferUsageFlags usage, VmaAllocationCreateFlags flags);
     void uploadToBuffer(VmaBuffer* buffer, void* src);
     void uploadToBufferDirect(VmaBuffer* buffer, void* src);
     VmaImage* createImage(vk::Extent3D extent, vk::Format format, vk::ImageUsageFlags usage);
     VmaImage* createTextureImage(const void* src, size_t size, vk::Extent3D extent);
-    vk::UniqueImageView createTextureViewUnique(vk::Image image);
+    vk::UniqueImageView createImageViewUnique(vk::Image image, vk::Format format, vk::ImageAspectFlagBits aspectMask);
 
 private:
     VmaBuffer* createStagingBuffer(size_t size);
