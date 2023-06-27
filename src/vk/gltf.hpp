@@ -62,9 +62,7 @@ struct GltfModelCreateInfo {
 
 class GltfModel {
 public:
-    GltfModel(const GltfModelCreateInfo& createInfo);
-    ~GltfModel() {
-    };
+    explicit GltfModel(const GltfModelCreateInfo& createInfo);
 
     std::vector<std::shared_ptr<Scene>> scenes;
     std::vector<std::shared_ptr<Mesh>> meshes;

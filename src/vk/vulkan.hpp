@@ -23,10 +23,10 @@ private:
     void drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node);
     void drawFrame();
 
-    vk::UniqueBuffer createBufferUnique(vk::DeviceSize& size, const vk::BufferUsageFlags usage);
-    vk::UniqueDeviceMemory createDeviceMemoryUnique(const vk::MemoryRequirements requirements, const vk::MemoryPropertyFlags memoryFlags);
-    vk::UniqueImage createImageUnique(vk::Extent2D& extent, const vk::Format format, const vk::ImageTiling tiling, const vk::ImageUsageFlags usage);
-    vk::UniqueImageView createImageViewUnique(vk::Image& image, const vk::Format format, vk::ImageAspectFlagBits aspectMask);
+    vk::UniqueBuffer createBufferUnique(vk::DeviceSize& size, vk::BufferUsageFlags usage);
+    vk::UniqueDeviceMemory createDeviceMemoryUnique(vk::MemoryRequirements requirements, vk::MemoryPropertyFlags memoryFlags);
+    vk::UniqueImage createImageUnique(vk::Extent2D& extent, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage);
+    vk::UniqueImageView createImageViewUnique(vk::Image& image, vk::Format format, vk::ImageAspectFlagBits aspectMask);
 
     void createSwapchain(vk::SwapchainKHR oldSwapchain = VK_NULL_HANDLE);
     void recreateSwapchain();
@@ -55,7 +55,7 @@ private:
     struct
     {
         uint32_t graphics;
-    } queueFamilyIndices_;
+    } queueFamilyIndices_{};
     vk::PhysicalDevice physicalDevice_;
     vk::UniqueDevice device_;
     vk::Queue graphicsQueue_;

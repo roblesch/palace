@@ -25,14 +25,14 @@ struct MemoryHelperCreateInfo {
 
 class MemoryHelper {
 public:
-    MemoryHelper(const MemoryHelperCreateInfo& createInfo);
+    explicit MemoryHelper(const MemoryHelperCreateInfo& createInfo);
     ~MemoryHelper();
 
     vk::UniqueCommandBuffer beginSingleUseCommandBuffer();
     void endSingleUseCommandBuffer(vk::CommandBuffer& commandBuffer);
 
     VmaBuffer* createBuffer(void* src, size_t size, vk::BufferUsageFlags usage);
-    VmaImage* createTextureImage(const void* src, size_t size, vk::Extent3D  extent);
+    VmaImage* createTextureImage(const void* src, size_t size, vk::Extent3D extent);
     vk::UniqueImageView createTextureViewUnique(vk::Image image);
 
 private:
@@ -40,7 +40,7 @@ private:
     vk::CommandPool commandPool_;
     vk::Queue graphicsQueue_;
 
-    VmaAllocator allocator_;
+    VmaAllocator allocator_{};
     std::vector<VmaBuffer*> buffers_;
     std::vector<VmaImage*> images_;
 };

@@ -17,7 +17,7 @@ std::vector<char> readSpirVFile(const std::string& spirVFile)
     size_t fileSize = file.tellg();
     file.seekg(std::ios::beg);
     std::vector<char> spirVBytes(fileSize);
-    file.read(spirVBytes.data(), fileSize);
+    file.read(spirVBytes.data(), static_cast<long>(fileSize));
     file.close();
 
     return spirVBytes;
@@ -26,7 +26,6 @@ std::vector<char> readSpirVFile(const std::string& spirVFile)
 PipelineHelper::PipelineHelper(const PipelineHelperCreateInfo& createInfo)
     : device_(createInfo.device)
     , extent_(createInfo.extent)
-    , descriptorCount_(createInfo.descriptorCount)
     , descriptorLayout_(createInfo.descriptorLayout)
 {
     // shaders

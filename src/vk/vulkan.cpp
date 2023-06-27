@@ -393,7 +393,7 @@ Vulkan::Vulkan(bool enableValidation)
     // camera
     camera_ = Camera { .fovy = 45.0f, .znear = 0.1f, .zfar = 100.0f };
     camera_.lookAt({ 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, -1.0f, 0.0f });
-    camera_.resize((float)extent_.width / extent_.height);
+    camera_.resize((float)extent_.width / (float)extent_.height);
 
     isInitialized_ = true;
 }
@@ -566,7 +566,7 @@ void Vulkan::run()
         drawFrame();
 
         Uint64 end = SDL_GetPerformanceCounter();
-        float elapsedMS = (end - start) / (float)SDL_GetPerformanceFrequency();
+        float elapsedMS = (float)(end - start) / (float)SDL_GetPerformanceFrequency();
 
         printf("\33[2KMS: %f\r", elapsedMS);
     }
@@ -576,7 +576,7 @@ void Vulkan::run()
 
 void Vulkan::drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node)
 {
-    if (node->mesh != nullptr && node->mesh->primitives.size() > 0) {
+    if (node->mesh != nullptr && !node->mesh->primitives.empty()) {
         glm::mat4 matrix = node->matrix;
         pl::Node* parent = node->parent;
         while (parent != nullptr) {
@@ -631,7 +631,7 @@ void Vulkan::drawFrame()
 
     commandBuffer.reset();
     vk::CommandBufferBeginInfo commandBufferInfo {};
-    vk::ClearValue clearColor { .color = std::array<float, 4> { 0.0f, 0.0f, 0.0f, 1.0f } };
+    vk::ClearValue clearColor { .color = { std::array<float, 4> { 0.0f, 0.0f, 0.0f, 1.0f } } };
     vk::ClearValue clearDepthValue { .depthStencil = vk::ClearDepthStencilValue { 1.0f } };
     std::array<vk::ClearValue, 2> clearValues { clearColor, clearDepthValue };
 
@@ -715,7 +715,7 @@ void Vulkan::drawFrame()
     currentFrame_ = (currentFrame_ + 1) % sConcurrentFrames_;
 }
 
-vk::UniqueBuffer Vulkan::createBufferUnique(vk::DeviceSize& size, const vk::BufferUsageFlags usage)
+vk::UniqueBuffer Vulkan::createBufferUnique(vk::DeviceSize& size, vk::BufferUsageFlags usage)
 {
     vk::BufferCreateInfo bufferInfo {
         .size = size,
@@ -726,7 +726,7 @@ vk::UniqueBuffer Vulkan::createBufferUnique(vk::DeviceSize& size, const vk::Buff
     return device_->createBufferUnique(bufferInfo);
 }
 
-vk::UniqueDeviceMemory Vulkan::createDeviceMemoryUnique(const vk::MemoryRequirements requirements, const vk::MemoryPropertyFlags memoryFlags)
+vk::UniqueDeviceMemory Vulkan::createDeviceMemoryUnique(vk::MemoryRequirements requirements, vk::MemoryPropertyFlags memoryFlags)
 {
     vk::PhysicalDeviceMemoryProperties memProperties = physicalDevice_.getMemoryProperties();
     uint32_t memoryTypeIndex = 0;
@@ -745,7 +745,7 @@ vk::UniqueDeviceMemory Vulkan::createDeviceMemoryUnique(const vk::MemoryRequirem
     return device_->allocateMemoryUnique(memoryInfo);
 }
 
-vk::UniqueImage Vulkan::createImageUnique(vk::Extent2D& extent, const vk::Format format, const vk::ImageTiling tiling, const vk::ImageUsageFlags usage)
+vk::UniqueImage Vulkan::createImageUnique(vk::Extent2D& extent, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage)
 {
     vk::ImageCreateInfo imageInfo {
         .imageType = vk::ImageType::e2D,
@@ -766,7 +766,7 @@ vk::UniqueImage Vulkan::createImageUnique(vk::Extent2D& extent, const vk::Format
     return device_->createImageUnique(imageInfo);
 }
 
-vk::UniqueImageView Vulkan::createImageViewUnique(vk::Image& image, const vk::Format format, vk::ImageAspectFlagBits aspectMask)
+vk::UniqueImageView Vulkan::createImageViewUnique(vk::Image& image, vk::Format format, vk::ImageAspectFlagBits aspectMask)
 {
     vk::ImageViewCreateInfo imageViewInfo {
         .image = image,
@@ -855,7 +855,7 @@ void Vulkan::recreateSwapchain()
     };
 
     createSwapchain(*swapchain_);
-    camera_.resize((float)extent_.width / extent_.height);
+    camera_.resize((float)extent_.width / (float)extent_.height);
 }
 
 } // namespace pl

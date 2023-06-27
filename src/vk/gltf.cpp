@@ -1,7 +1,6 @@
 #include "gltf.hpp"
 
 #include "util/log.hpp"
-#include "vulkan.hpp"
 #define TINYGLTF_IMPLEMENTATION
 #define TINYGLTF_NO_STB_IMAGE_WRITE
 #define STB_IMAGE_IMPLEMENTATION
@@ -17,7 +16,7 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
     auto path = createInfo.path;
     auto memory = createInfo.memory;
 
-    defaultScene = 0;
+    defaultScene = nullptr;
     vertexBuffer = nullptr;
     indexBuffer = nullptr;
 
@@ -106,11 +105,10 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
 
             // vertices
             for (size_t i = 0; i < primitive->vertexCount; i++) {
-                vertices.emplace_back(
-                    glm::make_vec3(&positions[i * 3]),
+                vertices.push_back({ glm::make_vec3(&positions[i * 3]),
                     glm::make_vec3(&normals[i * 3]),
                     glm::vec3(color),
-                    glm::make_vec2(&texCoords[i * 2]));
+                    glm::make_vec2(&texCoords[i * 2]) });
             }
 
             // indices

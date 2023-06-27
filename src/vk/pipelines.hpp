@@ -8,13 +8,13 @@ namespace pl {
 struct PipelineHelperCreateInfo {
     vk::Device device;
     vk::Extent2D extent;
-    uint32_t descriptorCount;
+    uint32_t descriptorCount{};
     vk::DescriptorSetLayout descriptorLayout;
 };
 
 class PipelineHelper {
 public:
-    PipelineHelper(const PipelineHelperCreateInfo& createInfo);
+    explicit PipelineHelper(const PipelineHelperCreateInfo& createInfo);
 
     vk::UniquePipelineLayout createPipelineLayoutUnique();
     vk::UniquePipeline createPipelineUnique(vk::RenderPass renderPass, vk::PipelineLayout layout);
@@ -22,7 +22,6 @@ public:
 private:
     vk::Device device_;
     vk::Extent2D extent_;
-    uint32_t descriptorCount_;
     vk::DescriptorSetLayout descriptorLayout_;
     vk::UniqueShaderModule vertexShaderModule_;
     vk::UniqueShaderModule fragmentShaderModule_;

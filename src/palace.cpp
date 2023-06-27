@@ -1,7 +1,4 @@
-#include <string>
-
 #include "util/parser.hpp"
-#include "vk/gltf.hpp"
 #include "vk/vulkan.hpp"
 
 using namespace pl;

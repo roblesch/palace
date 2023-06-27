@@ -66,7 +66,7 @@ VmaBuffer* MemoryHelper::createBuffer(void* src, size_t size, vk::BufferUsageFla
         .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
         .usage = VMA_MEMORY_USAGE_AUTO
     };
-    VmaBuffer staging;
+    VmaBuffer staging{};
     vmaCreateBuffer(allocator_, &stagingBufferInfo, &stagingAllocInfo, &staging.buffer, &staging.allocation, nullptr);
 
     void* data;
@@ -111,7 +111,7 @@ VmaImage* MemoryHelper::createTextureImage(const void* src, size_t size, vk::Ext
         .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
         .usage = VMA_MEMORY_USAGE_AUTO
     };
-    VmaBuffer staging;
+    VmaBuffer staging{};
     vmaCreateBuffer(allocator_, &stagingBufferInfo, &stagingAllocInfo, &staging.buffer, &staging.allocation, nullptr);
 
     void* data;
