@@ -16,18 +16,15 @@ struct Vertex {
 
 struct Texture {
     std::string name;
+    vk::Extent3D extent;
     VmaImage* image;
-    vk::ImageView view;
-    vk::DescriptorImageInfo descriptor;
-    vk::Sampler sampler;
-    uint32_t width;
-    uint32_t height;
+    vk::UniqueImageView view;
 };
 
 struct Material {
     Texture* baseColor;
     Texture* normal;
-    vk::DescriptorSet descriptorSet;
+    vk::UniquePipeline pipeline;
 };
 
 struct Primitive {
@@ -40,13 +37,13 @@ struct Primitive {
 
 struct Mesh {
     std::string name;
-    std::vector<uint32_t> primitives;
+    std::vector<Primitive*> primitives;
 };
 
 struct Node {
     Node* parent;
     Mesh* mesh;
-    std::vector<uint32_t> children;
+    std::vector<Node*> children;
     glm::vec3 translation;
     glm::quat rotation;
     glm::vec3 scale;
@@ -55,7 +52,7 @@ struct Node {
 
 struct Scene {
     std::string name;
-    std::vector<uint32_t> nodes;
+    std::vector<Node*> nodes;
 };
 
 struct GltfModelCreateInfo {
@@ -66,21 +63,23 @@ struct GltfModelCreateInfo {
 class GltfModel {
 public:
     GltfModel(const GltfModelCreateInfo& createInfo);
+    ~GltfModel() {
+    };
 
-    uint32_t defaultScene;
-    std::vector<Scene> scenes;
-    std::vector<Mesh> meshes;
-    std::vector<Primitive> primitives;
-    std::vector<Texture> textures;
-    std::vector<Material> materials;
-    std::vector<Node> nodes;
+    std::vector<std::shared_ptr<Scene>> scenes;
+    std::vector<std::shared_ptr<Mesh>> meshes;
+    std::vector<std::shared_ptr<Primitive>> primitives;
+    std::vector<std::shared_ptr<Texture>> textures;
+    std::vector<std::shared_ptr<Material>> materials;
+    std::vector<std::shared_ptr<Node>> nodes;
 
+    Scene* defaultScene;
     VmaBuffer* vertexBuffer;
     VmaBuffer* indexBuffer;
 };
 
-using UniqueGltfScene = std::unique_ptr<GltfModel>;
+using UniqueGltfModel = std::unique_ptr<GltfModel>;
 
-UniqueGltfScene createGltfModelUnique(const GltfModelCreateInfo& createInfo);
+UniqueGltfModel createGltfModelUnique(const GltfModelCreateInfo& createInfo);
 
 }

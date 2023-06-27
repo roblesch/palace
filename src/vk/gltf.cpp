@@ -41,31 +41,18 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
         return;
     }
 
-    // scenes
-    defaultScene = model.defaultScene;
-
-    for (const auto& _scene : model.scenes) {
-        std::vector<uint32_t> nodeIdxs;
-        std::copy(_scene.nodes.begin(), _scene.nodes.end(), std::back_inserter(nodeIdxs));
-        scenes.emplace_back(_scene.name, nodeIdxs);
-    }
-
     // textures
     for (const auto& _image : model.images) {
-        auto uri = fs::path(path).parent_path() / _image.uri;
-        auto extent = vk::Extent3D {
+        auto texture = std::make_shared<Texture>();
+        texture->name = (fs::path(path).parent_path() / _image.uri).string();
+        texture->extent = vk::Extent3D {
             .width = static_cast<uint32_t>(_image.width),
             .height = static_cast<uint32_t>(_image.height),
             .depth = 1
         };
-        auto size = extent.width * extent.height * 4 * sizeof(unsigned char);
-
-        Texture texture {
-            .name = _image.uri,
-            .image = memory->createTextureImage(_image.image.data(), size, extent),
-            .width = extent.width,
-            .height = extent.height
-        };
+        auto size = texture->extent.width * texture->extent.height * 4 * sizeof(unsigned char);
+        texture->image = memory->createTextureImage(_image.image.data(), size, texture->extent);
+        texture->view = memory->createTextureViewUnique(texture->image->image);
         textures.push_back(texture);
     }
 
@@ -74,16 +61,16 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
     std::vector<uint32_t> indices;
 
     for (const auto& _mesh : model.meshes) {
-        Mesh mesh { .name = _mesh.name };
+        auto mesh = std::make_shared<Mesh>();
+        mesh->name = _mesh.name;
 
         for (const auto& _primitive : _mesh.primitives) {
             if (_primitive.indices < 0)
                 continue;
 
-            uint32_t firstVertex = static_cast<uint32_t>(vertices.size());
-            uint32_t vertexCount;
-            uint32_t firstIndex = static_cast<uint32_t>(indices.size());
-            uint32_t indexCount;
+            auto primitive = std::make_shared<Primitive>();
+            primitive->firstVertex = static_cast<uint32_t>(vertices.size());
+            primitive->firstIndex = static_cast<uint32_t>(indices.size());
 
             const float* positions;
             const float* normals;
@@ -94,7 +81,7 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
                 const auto& accessor = model.accessors[_primitive.attributes.at("POSITION")];
                 const auto& bufferView = model.bufferViews[accessor.bufferView];
                 const auto& buffer = model.buffers[bufferView.buffer];
-                vertexCount = static_cast<uint32_t>(accessor.count);
+                primitive->vertexCount = static_cast<uint32_t>(accessor.count);
                 positions = reinterpret_cast<const float*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
             }
 
@@ -118,7 +105,7 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
             auto color = glm::make_vec4(model.materials[_primitive.material].pbrMetallicRoughness.baseColorFactor.data());
 
             // vertices
-            for (size_t i = 0; i < vertexCount; i++) {
+            for (size_t i = 0; i < primitive->vertexCount; i++) {
                 vertices.emplace_back(
                     glm::make_vec3(&positions[i * 3]),
                     glm::make_vec3(&normals[i * 3]),
@@ -131,13 +118,13 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
                 const auto& accessor = model.accessors[_primitive.indices];
                 const auto& bufferView = model.bufferViews[accessor.bufferView];
                 const auto& buffer = model.buffers[bufferView.buffer];
-                indexCount = accessor.count;
+                primitive->indexCount = accessor.count;
 
                 auto readIndexBuffer = [&]<typename T>(T dummy) {
                     T* buf = new T[accessor.count];
                     memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(T));
                     for (size_t i = 0; i < accessor.count; i++) {
-                        indices.push_back(buf[i] + firstVertex);
+                        indices.push_back(buf[i] + primitive->firstVertex);
                     }
                     delete[] buf;
                 };
@@ -156,19 +143,12 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
             }
 
             // texture
-            auto texture = model.materials[_primitive.material].pbrMetallicRoughness.baseColorTexture.index;
-            auto image = texture > -1 ? model.textures[texture].source : -1;
-
-            Primitive primitive {
-                .firstVertex = firstVertex,
-                .vertexCount = vertexCount,
-                .firstIndex = firstIndex,
-                .indexCount = indexCount,
-                .texture = image > -1 ? &textures[image] : nullptr
-            };
+            int texture = model.materials[_primitive.material].pbrMetallicRoughness.baseColorTexture.index;
+            texture = texture > -1 ? model.textures[texture].source : -1;
+            primitive->texture = texture > -1 ? textures[texture].get() : nullptr;
 
             primitives.push_back(primitive);
-            mesh.primitives.push_back(primitives.size() - 1);
+            mesh->primitives.push_back(primitive.get());
         }
         meshes.push_back(mesh);
     }
@@ -178,34 +158,50 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
     indexBuffer = memory->createBuffer(indices.data(), indices.size() * sizeof(uint32_t), vk::BufferUsageFlagBits::eIndexBuffer);
 
     // nodes
-    nodes.resize(model.nodes.size());
     for (size_t i = 0; i < model.nodes.size(); i++) {
-        const auto& _node = model.nodes[i];
-        for (const auto& _child : _node.children) {
-            nodes[_child].parent = &nodes[i];
+        auto node = std::make_shared<Node>();
+        node->parent = nullptr;
+        nodes.push_back(node);
+    }
+    for (size_t i = 0; i < model.nodes.size(); i++) {
+        auto _node = model.nodes[i];
+
+        for (int child : _node.children) {
+            nodes[child]->parent = nodes[i].get();
+            nodes[i]->children.push_back(nodes[child].get());
         }
 
-        nodes[i].matrix = glm::mat4(1.0f);
+        nodes[i]->matrix = glm::mat4(1.0f);
         if (_node.translation.size() == 3)
-            nodes[i].matrix = glm::translate(nodes[i].matrix, glm::vec3(glm::make_vec3(_node.translation.data())));
+            nodes[i]->matrix = glm::translate(nodes[i]->matrix, glm::vec3(glm::make_vec3(_node.translation.data())));
 
         if (_node.rotation.size() == 4) {
             glm::quat q = glm::make_quat(_node.rotation.data());
-            nodes[i].matrix *= glm::mat4(q);
+            nodes[i]->matrix *= glm::mat4(q);
         }
 
         if (_node.scale.size() == 3)
-            nodes[i].matrix = glm::scale(nodes[i].matrix, glm::vec3(glm::make_vec3(_node.scale.data())));
+            nodes[i]->matrix = glm::scale(nodes[i]->matrix, glm::vec3(glm::make_vec3(_node.scale.data())));
 
         if (_node.matrix.size() == 16)
-            nodes[i].matrix = glm::make_mat4(_node.matrix.data());
+            nodes[i]->matrix = glm::make_mat4(_node.matrix.data());
 
-        std::copy(_node.children.begin(), _node.children.end(), std::back_inserter(nodes[i].children));
-        nodes[i].mesh = _node.mesh > -1 ? &meshes[_node.mesh] : nullptr;
+        nodes[i]->mesh = _node.mesh > -1 ? meshes[_node.mesh].get() : nullptr;
     }
+
+    // scenes
+    for (const auto& _scene : model.scenes) {
+        auto scene = std::make_shared<Scene>();
+        scene->name = _scene.name;
+        for (int i : _scene.nodes) {
+            scene->nodes.push_back(nodes[i].get());
+        }
+        scenes.push_back(scene);
+    }
+    defaultScene = scenes[model.defaultScene].get();
 }
 
-UniqueGltfScene createGltfModelUnique(const GltfModelCreateInfo& createInfo)
+UniqueGltfModel createGltfModelUnique(const GltfModelCreateInfo& createInfo)
 {
     return std::make_unique<GltfModel>(createInfo);
 }

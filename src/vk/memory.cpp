@@ -5,11 +5,10 @@
 namespace pl {
 
 Memory::Memory(const MemoryCreateInfo& createInfo)
+    : device_(createInfo.device)
+    , commandPool_(createInfo.commandPool)
+    , graphicsQueue_(createInfo.graphicsQueue)
 {
-    device_ = createInfo.device;
-    commandPool_ = createInfo.commandPool;
-    graphicsQueue_ = createInfo.graphicsQueue;
-
     VmaAllocatorCreateInfo allocatorInfo {
         .physicalDevice = createInfo.physicalDevice,
         .device = createInfo.device,
@@ -194,6 +193,22 @@ VmaImage* Memory::createTextureImage(const void* src, size_t size, vk::Extent3D 
 
     images_.push_back(texture);
     return texture;
+}
+
+vk::UniqueImageView Memory::createTextureViewUnique(vk::Image image)
+{
+    vk::ImageViewCreateInfo imageViewInfo {
+        .image = image,
+        .viewType = vk::ImageViewType::e2D,
+        .format = vk::Format::eR8G8B8A8Unorm,
+        .subresourceRange = {
+            .aspectMask = vk::ImageAspectFlagBits::eColor,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1 }
+    };
+    return device_.createImageViewUnique(imageViewInfo);
 }
 
 UniqueMemory createMemoryUnique(const MemoryCreateInfo& createInfo)

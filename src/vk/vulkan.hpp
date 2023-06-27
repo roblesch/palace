@@ -30,7 +30,7 @@ private:
     void createSwapchain(vk::SwapchainKHR oldSwapchain = VK_NULL_HANDLE);
     void recreateSwapchain();
 
-    static constexpr int sWidth_ = 800;
+    static constexpr int sWidth_ = 1800;
     static constexpr int sHeight_ = 600;
     static constexpr const std::string_view sSpirVDir_ = "/shaders";
     static constexpr uint32_t sConcurrentFrames_ = 2;
@@ -40,7 +40,7 @@ private:
     bool isSceneLoaded_ = false;
     bool isResized_ = false;
 
-    vk::Extent2D extents_;
+    vk::Extent2D extent_;
     size_t currentFrame_ = 0;
     size_t indicesCount_ = 0;
 
@@ -66,13 +66,14 @@ private:
     std::vector<vk::UniqueSemaphore> renderFinishedSemaphores_;
     std::vector<vk::UniqueFence> inFlightFences_;
 
-    // pipeline
+    // pipelines
     vk::UniqueDescriptorSetLayout pipelineDescriptorLayout_;
     vk::UniqueDescriptorPool pipelineDescriptorPool_;
     std::vector<vk::UniqueDescriptorSet> pipelineDescriptorSets_;
     vk::UniqueRenderPass renderPass_;
     vk::UniquePipelineLayout pipelineLayout_;
-    vk::UniquePipeline pipeline_;
+    vk::UniquePipeline vertColorPipeline_;
+    vk::UniquePipeline texturePipeline_;
 
     // swapchain
     vk::UniqueSwapchainKHR swapchain_;
@@ -99,7 +100,7 @@ private:
     pl::UniqueMemory memory_;
 
     // scene
-    pl::UniqueGltfScene scene_;
+    pl::UniqueGltfModel model_;
 
     // imgui
     vk::UniqueDescriptorPool imguiDescriptorPool_;

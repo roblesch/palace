@@ -68,7 +68,7 @@ Vulkan::Vulkan(bool enableValidation)
     window_ = SDL_CreateWindow("palace", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         sWidth_, sHeight_, SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | SDL_WINDOW_VULKAN);
     SDL_SetWindowMinimumSize(window_, 400, 300);
-    extents_ = vk::Extent2D {
+    extent_ = vk::Extent2D {
         .width = sWidth_,
         .height = sHeight_
     };
@@ -203,6 +203,7 @@ Vulkan::Vulkan(bool enableValidation)
         inFlightFences_.push_back(device_->createFenceUnique({ .flags = vk::FenceCreateFlagBits::eSignaled }));
     }
 
+    // TODO: descriptor sets
     // uniform modelview transforms
     vk::DescriptorSetLayoutBinding uboLayoutBinding {
         .binding = 0,
@@ -232,17 +233,6 @@ Vulkan::Vulkan(bool enableValidation)
     };
 
     pipelineDescriptorPool_ = device_->createDescriptorPoolUnique(pipelinePoolInfo);
-
-    // descriptor sets
-    std::vector<vk::DescriptorSetLayout> layouts(sConcurrentFrames_, *pipelineDescriptorLayout_);
-
-    vk::DescriptorSetAllocateInfo descriptorSetInfo {
-        .descriptorPool = *pipelineDescriptorPool_,
-        .descriptorSetCount = sConcurrentFrames_,
-        .pSetLayouts = layouts.data()
-    };
-
-    pipelineDescriptorSets_ = device_->allocateDescriptorSetsUnique(descriptorSetInfo);
 
     // shaders
     std::vector<char> vertexShaderBytes = readSpirVFile("shaders/vertex.spv");
@@ -313,15 +303,15 @@ Vulkan::Vulkan(bool enableValidation)
     vk::Viewport viewport {
         .x = 0.0f,
         .y = 0.0f,
-        .width = static_cast<float>(extents_.width),
-        .height = static_cast<float>(extents_.height),
+        .width = static_cast<float>(extent_.width),
+        .height = static_cast<float>(extent_.height),
         .minDepth = 0.0f,
         .maxDepth = 1.0f
     };
 
     vk::Rect2D scissor {
         .offset = { 0, 0 },
-        .extent = extents_
+        .extent = extent_
     };
 
     vk::PipelineViewportStateCreateInfo viewportStateInfo {
@@ -476,7 +466,7 @@ Vulkan::Vulkan(bool enableValidation)
         .subpass = 0
     };
 
-    pipeline_ = device_->createGraphicsPipelineUnique(nullptr, graphicsPipelineInfo).value;
+    vertColorPipeline_ = device_->createGraphicsPipelineUnique(nullptr, graphicsPipelineInfo).value;
 
     // uniform buffers
     vk::DeviceSize uniformBufferSize = sizeof(UniformBuffer);
@@ -493,7 +483,15 @@ Vulkan::Vulkan(bool enableValidation)
     }
 
     // descriptor sets
-    pipelineDescriptorSets_.resize(sConcurrentFrames_);
+    std::vector<vk::DescriptorSetLayout> layouts(sConcurrentFrames_, *pipelineDescriptorLayout_);
+
+    vk::DescriptorSetAllocateInfo descriptorSetInfo {
+        .descriptorPool = *pipelineDescriptorPool_,
+        .descriptorSetCount = sConcurrentFrames_,
+        .pSetLayouts = layouts.data()
+    };
+
+    pipelineDescriptorSets_ = device_->allocateDescriptorSetsUnique(descriptorSetInfo);
 
     for (size_t i = 0; i < sConcurrentFrames_; i++) {
         vk::DescriptorBufferInfo uboInfo {
@@ -573,9 +571,9 @@ Vulkan::Vulkan(bool enableValidation)
     ImGui_ImplVulkan_DestroyFontUploadObjects();
 
     // camera
-    camera_ = Camera { .fovy = 45.0f, .znear = 0.001f, .zfar = 1000.0f };
+    camera_ = Camera { .fovy = 45.0f, .znear = 0.1f, .zfar = 100.0f };
     camera_.lookAt({ 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, -1.0f, 0.0f });
-    camera_.resize((float)extents_.width / extents_.height);
+    camera_.resize((float)extent_.width / extent_.height);
 
     isInitialized_ = true;
 }
@@ -589,7 +587,7 @@ Vulkan::~Vulkan()
 
 void Vulkan::loadGltfModel(const char* path)
 {
-    scene_ = pl::createGltfModelUnique({ path, memory_.get() });
+    model_ = pl::createGltfModelUnique({ path, memory_.get() });
     isSceneLoaded_ = true;
 }
 
@@ -622,7 +620,7 @@ void Vulkan::run()
         dt = SDL_GetTicks64() - ticks;
         ticks += dt;
 
-        center = { extents_.width / 2, extents_.height / 2 };
+        center = { extent_.width / 2, extent_.height / 2 };
 
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -766,15 +764,14 @@ void Vulkan::drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node)
             parent = parent->parent;
         }
         commandBuffer.pushConstants(*pipelineLayout_, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), &matrix);
-        for (const auto& i : node->mesh->primitives) {
-            const auto& _primitive = scene_->primitives[i];
-            if (_primitive.indexCount > 0) {
-                commandBuffer.drawIndexed(_primitive.indexCount, 1, _primitive.firstIndex, 0, 0);
+        for (const auto& _primitive : node->mesh->primitives) {
+            if (_primitive->indexCount > 0) {
+                commandBuffer.drawIndexed(_primitive->indexCount, 1, _primitive->firstIndex, 0, 0);
             }
         }
     }
-    for (const auto& i : node->children) {
-        drawNode(commandBuffer, &scene_->nodes[i]);
+    for (const auto& _node : node->children) {
+        drawNode(commandBuffer, _node);
     }
 }
 
@@ -823,7 +820,7 @@ void Vulkan::drawFrame()
         .framebuffer = *swapchainFramebuffers_[imageIndex],
         .renderArea = {
             .offset = { 0, 0 },
-            .extent = extents_ },
+            .extent = extent_ },
         .clearValueCount = static_cast<uint32_t>(clearValues.size()),
         .pClearValues = clearValues.data()
     };
@@ -831,13 +828,13 @@ void Vulkan::drawFrame()
     commandBuffer.begin(commandBufferInfo);
     commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
     {
-        commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline_);
+        commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *vertColorPipeline_);
 
         vk::Viewport viewport {
             .x = 0.0f,
             .y = 0.0f,
-            .width = static_cast<float>(extents_.width),
-            .height = static_cast<float>(extents_.height),
+            .width = static_cast<float>(extent_.width),
+            .height = static_cast<float>(extent_.height),
             .minDepth = 0.0f,
             .maxDepth = 1.0f
         };
@@ -845,16 +842,16 @@ void Vulkan::drawFrame()
 
         vk::Rect2D scissor {
             .offset = { 0, 0 },
-            .extent = extents_
+            .extent = extent_
         };
         commandBuffer.setScissor(0, 1, &scissor);
 
-        commandBuffer.bindVertexBuffers(0, vk::Buffer(scene_->vertexBuffer->buffer), { 0 });
-        commandBuffer.bindIndexBuffer(vk::Buffer(scene_->indexBuffer->buffer), 0, vk::IndexType::eUint32);
+        commandBuffer.bindVertexBuffers(0, vk::Buffer(model_->vertexBuffer->buffer), { 0 });
+        commandBuffer.bindIndexBuffer(vk::Buffer(model_->indexBuffer->buffer), 0, vk::IndexType::eUint32);
         commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *pipelineLayout_, 0, 1, &pipelineDescriptorSets_[currentFrame_].get(), 0, nullptr);
 
-        for (const auto& i : scene_->scenes[scene_->defaultScene].nodes) {
-            drawNode(commandBuffer, &scene_->nodes[i]);
+        for (const auto& _node : model_->defaultScene->nodes) {
+            drawNode(commandBuffer, _node);
         }
 
         ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
@@ -971,8 +968,8 @@ void Vulkan::createSwapchain(vk::SwapchainKHR oldSwapchain)
     // swapchain
     vk::SurfaceCapabilitiesKHR capabilities = physicalDevice_.getSurfaceCapabilitiesKHR(*surface_);
     vk::Extent2D swapchainExtent {
-        std::clamp(extents_.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
-        std::clamp(extents_.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
+        std::clamp(extent_.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
+        std::clamp(extent_.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
     };
 
     auto imageFormat = vk::Format::eB8G8R8A8Unorm;
@@ -1032,13 +1029,13 @@ void Vulkan::recreateSwapchain()
     int width, height;
     SDL_GetWindowSize(window_, &width, &height);
 
-    extents_ = vk::Extent2D {
+    extent_ = vk::Extent2D {
         .width = static_cast<uint32_t>(width),
         .height = static_cast<uint32_t>(height)
     };
 
     createSwapchain(*swapchain_);
-    camera_.resize((float)extents_.width / extents_.height);
+    camera_.resize((float)extent_.width / extent_.height);
 }
 
 } // namespace pl

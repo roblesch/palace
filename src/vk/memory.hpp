@@ -33,6 +33,7 @@ public:
 
     VmaBuffer* createBuffer(void* src, size_t size, vk::BufferUsageFlags usage);
     VmaImage* createTextureImage(const void* src, size_t size, vk::Extent3D  extent);
+    vk::UniqueImageView createTextureViewUnique(vk::Image image);
 
 private:
     vk::Device device_;
