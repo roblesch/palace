@@ -329,7 +329,8 @@ Vulkan::Vulkan(bool enableValidation)
         .descriptorLayout = *pipelineDescriptorLayout_
     };
     pipelineHelper_ = createPipelineHelperUnique(pipelineHelperInfo);
-    vertColorPipeline_ = pipelineHelper_->createPipelineUnique(*renderPass_);
+    pipelineLayout_ = pipelineHelper_->createPipelineLayoutUnique();
+    vertColorPipeline_ = pipelineHelper_->createPipelineUnique(*renderPass_, *pipelineLayout_);
 
     // swapchain
     createSwapchain();

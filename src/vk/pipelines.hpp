@@ -16,13 +16,16 @@ class PipelineHelper {
 public:
     PipelineHelper(const PipelineHelperCreateInfo& createInfo);
 
-    vk::UniquePipeline createPipelineUnique(vk::RenderPass renderPass);
+    vk::UniquePipelineLayout createPipelineLayoutUnique();
+    vk::UniquePipeline createPipelineUnique(vk::RenderPass renderPass, vk::PipelineLayout layout);
 
 private:
     vk::Device device_;
     vk::Extent2D extent_;
     uint32_t descriptorCount_;
     vk::DescriptorSetLayout descriptorLayout_;
+    vk::UniqueShaderModule vertexShaderModule_;
+    vk::UniqueShaderModule fragmentShaderModule_;
     std::vector<vk::PipelineShaderStageCreateInfo> shaderStageInfos_;
     vk::PipelineVertexInputStateCreateInfo vertexInputStateInfo_;
     vk::PipelineInputAssemblyStateCreateInfo inputAssemblyStateInfo_;
@@ -35,7 +38,6 @@ private:
     vk::PipelineColorBlendStateCreateInfo colorBlendStateInfo_;
     vk::PipelineDepthStencilStateCreateInfo depthStencilStateInfo_;
     vk::PipelineDynamicStateCreateInfo dynamicStateInfo_;
-    vk::UniquePipelineLayout pipelineLayout_;
 };
 
 using UniquePipelineHelper = std::unique_ptr<PipelineHelper>;

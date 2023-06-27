@@ -1,7 +1,7 @@
 #include "pipelines.hpp"
 
-#include <fstream>
 #include "gltf.hpp"
+#include <fstream>
 
 namespace pl {
 
@@ -33,18 +33,39 @@ PipelineHelper::PipelineHelper(const PipelineHelperCreateInfo& createInfo)
     std::vector<char> vertexShaderBytes = readSpirVFile("shaders/vertex.spv");
     std::vector<char> fragmentShaderBytes = readSpirVFile("shaders/fragment.spv");
 
-    auto vertexShaderModule = device_.createShaderModuleUnique({ .codeSize = vertexShaderBytes.size(),
+    vertexShaderModule_ = device_.createShaderModuleUnique({ .codeSize = vertexShaderBytes.size(),
         .pCode = reinterpret_cast<const uint32_t*>(vertexShaderBytes.data()) });
 
-    auto fragmentShaderModule = device_.createShaderModuleUnique({ .codeSize = fragmentShaderBytes.size(),
+    fragmentShaderModule_ = device_.createShaderModuleUnique({ .codeSize = fragmentShaderBytes.size(),
         .pCode = reinterpret_cast<const uint32_t*>(fragmentShaderBytes.data()) });
+}
 
+vk::UniquePipelineLayout PipelineHelper::createPipelineLayoutUnique()
+{
+    // pipeline layout
+    vk::PushConstantRange pushConstantRange {
+        .stageFlags = vk::ShaderStageFlagBits::eVertex,
+        .offset = 0,
+        .size = sizeof(glm::mat4)
+    };
+    vk::PipelineLayoutCreateInfo pipelineLayoutInfo {
+        .setLayoutCount = 1,
+        .pSetLayouts = &descriptorLayout_,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &pushConstantRange
+    };
+
+    return device_.createPipelineLayoutUnique(pipelineLayoutInfo);
+}
+
+vk::UniquePipeline PipelineHelper::createPipelineUnique(vk::RenderPass renderPass, vk::PipelineLayout layout)
+{
     shaderStageInfos_ = {
         { .stage = vk::ShaderStageFlagBits::eVertex,
-            .module = *vertexShaderModule,
+            .module = *vertexShaderModule_,
             .pName = "main" },
         { .stage = vk::ShaderStageFlagBits::eFragment,
-            .module = *fragmentShaderModule,
+            .module = *fragmentShaderModule_,
             .pName = "main" }
     };
 
@@ -168,35 +189,20 @@ PipelineHelper::PipelineHelper(const PipelineHelperCreateInfo& createInfo)
         .pDynamicStates = dynamicStates.data()
     };
 
-    // pipeline layout
-    vk::PushConstantRange pushConstantRange {
-        .stageFlags = vk::ShaderStageFlagBits::eVertex,
-        .offset = 0,
-        .size = sizeof(glm::mat4)
-    };
-    vk::PipelineLayoutCreateInfo pipelineLayoutInfo {
-        .setLayoutCount = 1,
-        .pSetLayouts = &descriptorLayout_,
-        .pushConstantRangeCount = 1,
-        .pPushConstantRanges = &pushConstantRange
-    };
-    pipelineLayout_ = device_.createPipelineLayoutUnique(pipelineLayoutInfo);
-}
-
-vk::UniquePipeline PipelineHelper::createPipelineUnique(vk::RenderPass renderPass)
-{
     vk::GraphicsPipelineCreateInfo pipelineInfo {
         .stageCount = static_cast<uint32_t>(shaderStageInfos_.size()),
+        .pStages = shaderStageInfos_.data(),
         .pVertexInputState = &vertexInputStateInfo_,
         .pInputAssemblyState = &inputAssemblyStateInfo_,
         .pViewportState = &viewportStateInfo_,
         .pRasterizationState = &rasterStateInfo_,
         .pMultisampleState = &multisampleStateInfo_,
+        .pDepthStencilState = &depthStencilStateInfo_,
         .pColorBlendState = &colorBlendStateInfo_,
-        .layout = *pipelineLayout_,
+        .pDynamicState = &dynamicStateInfo_,
+        .layout = layout,
         .renderPass = renderPass,
-        .subpass = 0,
-        .basePipelineHandle = VK_NULL_HANDLE
+        .subpass = 0
     };
 
     return device_.createGraphicsPipelineUnique(nullptr, pipelineInfo).value;
