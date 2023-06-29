@@ -35,7 +35,7 @@ struct Primitive {
     uint32_t vertexCount;
     uint32_t firstIndex;
     uint32_t indexCount;
-    Texture* texture;
+    Material* material;
 };
 
 struct Mesh {
