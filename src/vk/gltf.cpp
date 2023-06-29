@@ -40,37 +40,35 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
         return;
     }
 
+    // textures
+    for (const auto& _image : model.images) {
+        auto texture = std::make_shared<Texture>();
+        texture->name = (fs::path(path).parent_path() / _image.uri).string();
+        texture->extent = vk::Extent3D {
+            .width = static_cast<uint32_t>(_image.width),
+            .height = static_cast<uint32_t>(_image.height),
+            .depth = 1
+        };
+        auto size = texture->extent.width * texture->extent.height * 4 * sizeof(unsigned char);
+        texture->image = memory->createTextureImage(_image.image.data(), size, texture->extent);
+        texture->view = memory->createImageViewUnique(texture->image->image, vk::Format::eR8G8B8A8Unorm);
+        texture->sampler = memory->createImageSamplerUnique();
+        textures.push_back(texture);
+    }
+
     // materials
     for (const auto& _material : model.materials) {
         auto material = std::make_shared<Material>();
+        materials.push_back(material);
         material->name = _material.name;
 
         // base color
         if (_material.pbrMetallicRoughness.baseColorTexture.index > -1) {
-            auto texture = std::make_shared<Texture>();
-            auto image = model.images[_material.pbrMetallicRoughness.baseColorTexture.index];
-            auto size = image.width * image.height * 4 * sizeof(unsigned char);
-            texture->name = (fs::path(path).parent_path() / image.uri).string();
-            texture->extent = vk::Extent3D { static_cast<uint32_t>(image.width), static_cast<uint32_t>(image.height), 1 };
-            texture->image = memory->createTextureImage(image.image.data(), size, texture->extent);
-            texture->sampler = memory->createImageSamplerUnique();
-            textures.push_back(texture);
-            material->baseColor = texture.get();
+            material->baseColor = textures[model.textures[_material.pbrMetallicRoughness.baseColorTexture.index].source].get();
         }
-        // normal
         if (_material.normalTexture.index > -1) {
-            auto texture = std::make_shared<Texture>();
-            auto image = model.images[_material.normalTexture.index];
-            auto size = image.width * image.height * 4 * sizeof(unsigned char);
-            texture->name = (fs::path(path).parent_path() / image.uri).string();
-            texture->extent = vk::Extent3D { static_cast<uint32_t>(image.width), static_cast<uint32_t>(image.height), 1 };
-            texture->image = memory->createTextureImage(image.image.data(), size, texture->extent);
-            texture->sampler = memory->createImageSamplerUnique();
-            textures.push_back(texture);
-            material->normal = texture.get();
+            material->normal = textures[model.textures[_material.normalTexture.index].source].get();
         }
-
-        materials.push_back(material);
     }
 
     // meshes

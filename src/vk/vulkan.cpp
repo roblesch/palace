@@ -189,7 +189,36 @@ Vulkan::Vulkan(bool enableValidation)
 
     memoryHelper_ = createMemoryHelperUnique(memoryInfo);
 
-    // subpass attachments
+    // descriptors
+    vk::DescriptorSetLayoutBinding uboLayoutBinding {
+        .binding = 0,
+        .descriptorType = vk::DescriptorType::eUniformBuffer,
+        .descriptorCount = 1,
+        .stageFlags = vk::ShaderStageFlagBits::eVertex
+    };
+
+    vk::DescriptorSetLayoutCreateInfo uboDescriptorLayoutInfo {
+        .bindingCount = 1,
+        .pBindings = &uboLayoutBinding
+    };
+
+    descriptorLayouts_.ubo = device_->createDescriptorSetLayoutUnique(uboDescriptorLayoutInfo);
+
+    vk::DescriptorSetLayoutBinding samplerLayoutBinding {
+        .binding = 0,
+        .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+        .descriptorCount = 1,
+        .stageFlags = vk::ShaderStageFlagBits::eFragment
+    };
+
+    vk::DescriptorSetLayoutCreateInfo textureDescriptorLayoutInfo {
+        .bindingCount = 1,
+        .pBindings = &samplerLayoutBinding
+    };
+
+    descriptorLayouts_.material = device_->createDescriptorSetLayoutUnique(textureDescriptorLayoutInfo);
+
+    // renderpass
     vk::AttachmentDescription colorAttachment {
         .format = vk::Format::eB8G8R8A8Unorm,
         .samples = vk::SampleCountFlagBits::e1,
@@ -221,7 +250,6 @@ Vulkan::Vulkan(bool enableValidation)
         .layout = vk::ImageLayout::eDepthStencilAttachmentOptimal
     };
 
-    // subpass
     vk::SubpassDescription subpass {
         .pipelineBindPoint = vk::PipelineBindPoint::eGraphics,
         .colorAttachmentCount = 1,
@@ -237,7 +265,6 @@ Vulkan::Vulkan(bool enableValidation)
         .dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite | vk::AccessFlagBits::eDepthStencilAttachmentWrite
     };
 
-    // renderpass
     std::array<vk::AttachmentDescription, 2> attachments = { colorAttachment, depthAttachment };
 
     vk::RenderPassCreateInfo renderPassInfo {
@@ -251,13 +278,7 @@ Vulkan::Vulkan(bool enableValidation)
 
     renderPass_ = device_->createRenderPassUnique(renderPassInfo);
 
-    // uniform buffers
-    uniformBuffers_.resize(sConcurrentFrames_);
-    for (size_t i = 0; i < sConcurrentFrames_; i++) {
-        uniformBuffers_[i] = memoryHelper_->createBuffer(sizeof(UniformBuffer), vk::BufferUsageFlagBits::eUniformBuffer, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
-    }
-
-    // pipeline
+    // pipelines
     pl::PipelineHelperCreateInfo pipelineHelperInfo {
         .device = *device_,
         .extent = extent_,
@@ -265,40 +286,13 @@ Vulkan::Vulkan(bool enableValidation)
     };
     pipelineHelper_ = createPipelineHelperUnique(pipelineHelperInfo);
 
-    colorPipeline_ = pipelineHelper_->createPipeline(sConcurrentFrames_, *renderPass_,
-        { vk::DescriptorType::eUniformBuffer },
-        { vk::ShaderStageFlagBits::eVertex });
+    //colorPipeline_ = pipelineHelper_->createPipeline({ *descriptorLayouts_.ubo }, *renderPass_);
+    texturePipeline_ = pipelineHelper_->createPipeline({ *descriptorLayouts_.ubo, *descriptorLayouts_.material }, *renderPass_);
 
-    texturePipeline_ = pipelineHelper_->createPipeline(sConcurrentFrames_, *renderPass_,
-        { vk::DescriptorType::eUniformBuffer, vk::DescriptorType::eCombinedImageSampler },
-        { vk::ShaderStageFlagBits::eVertex, vk::ShaderStageFlagBits::eFragment });
-
-    // descriptor sets
-    std::vector<vk::DescriptorSetLayout> layouts(sConcurrentFrames_, *colorPipeline_->descriptorLayout);
-
-    vk::DescriptorSetAllocateInfo descriptorSetInfo {
-        .descriptorPool = *colorPipeline_->descriptorPool,
-        .descriptorSetCount = sConcurrentFrames_,
-        .pSetLayouts = layouts.data()
-    };
-
-    colorPipelineDescriptorSets_ = device_->allocateDescriptorSetsUnique(descriptorSetInfo);
-
+    // uniform buffers
+    uniformBuffers_.resize(sConcurrentFrames_);
     for (size_t i = 0; i < sConcurrentFrames_; i++) {
-        vk::DescriptorBufferInfo uboInfo {
-            .buffer = uniformBuffers_[i]->buffer,
-            .offset = 0,
-            .range = sizeof(UniformBuffer)
-        };
-        vk::WriteDescriptorSet uboWriteDescriptor {
-            .dstSet = *colorPipelineDescriptorSets_[i],
-            .dstBinding = 0,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = vk::DescriptorType::eUniformBuffer,
-            .pBufferInfo = &uboInfo
-        };
-        device_->updateDescriptorSets(1, &uboWriteDescriptor, 0, nullptr);
+        uniformBuffers_[i] = memoryHelper_->createBuffer(sizeof(UniformBuffer), vk::BufferUsageFlagBits::eUniformBuffer, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
     }
 
     // swapchain
@@ -373,6 +367,84 @@ Vulkan::~Vulkan()
 void Vulkan::loadGltfModel(const char* path)
 {
     model_ = pl::createGltfModelUnique({ path, memoryHelper_.get() });
+    uint32_t textureCount = static_cast<uint32_t>(model_->textures.size());
+
+    // descriptor pool
+    vk::DescriptorPoolSize uboSize {
+        .type = vk::DescriptorType::eUniformBuffer,
+        .descriptorCount = sConcurrentFrames_
+    };
+    vk::DescriptorPoolSize samplerSize {
+        .type = vk::DescriptorType::eCombinedImageSampler,
+        .descriptorCount = textureCount
+    };
+    std::array<vk::DescriptorPoolSize, 2> pipelinePoolSizes { uboSize, samplerSize };
+
+    vk::DescriptorPoolCreateInfo pipelinePoolInfo {
+        .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+        .maxSets = sConcurrentFrames_ + textureCount,
+        .poolSizeCount = 2,
+        .pPoolSizes = pipelinePoolSizes.data()
+    };
+
+    descriptorPool_ = device_->createDescriptorPoolUnique(pipelinePoolInfo);
+
+    // material descriptor sets
+    for (auto& _material : model_->materials) {
+        vk::DescriptorSetAllocateInfo descriptorSetInfo {
+            .descriptorPool = *descriptorPool_,
+            .descriptorSetCount = 1,
+            .pSetLayouts = &descriptorLayouts_.material.get()
+        };
+
+        _material->descriptorSet = std::move(device_->allocateDescriptorSetsUnique(descriptorSetInfo)[0]);
+
+        vk::DescriptorImageInfo samplerInfo {
+            .sampler = _material->baseColor->sampler.get(),
+            .imageView = _material->baseColor->view.get(),
+            .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
+        };
+
+        vk::WriteDescriptorSet samplerWriteDescriptor {
+            .dstSet = _material->descriptorSet.get(),
+            .dstBinding = 0,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+            .pImageInfo = &samplerInfo
+        };
+
+        device_->updateDescriptorSets(1, &samplerWriteDescriptor, 0, nullptr);
+    }
+
+    // ubo descriptor sets
+    std::vector<vk::DescriptorSetLayout> layouts(sConcurrentFrames_, *descriptorLayouts_.ubo);
+
+    vk::DescriptorSetAllocateInfo descriptorSetInfo {
+        .descriptorPool = *descriptorPool_,
+        .descriptorSetCount = sConcurrentFrames_,
+        .pSetLayouts = layouts.data()
+    };
+
+    uboDescriptorSets_ = device_->allocateDescriptorSetsUnique(descriptorSetInfo);
+
+    for (size_t i = 0; i < sConcurrentFrames_; i++) {
+        vk::DescriptorBufferInfo uboInfo {
+            .buffer = uniformBuffers_[i]->buffer,
+            .offset = 0,
+            .range = sizeof(UniformBuffer)
+        };
+        vk::WriteDescriptorSet uboWriteDescriptor {
+            .dstSet = *uboDescriptorSets_[i],
+            .dstBinding = 0,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = vk::DescriptorType::eUniformBuffer,
+            .pBufferInfo = &uboInfo
+        };
+        device_->updateDescriptorSets(1, &uboWriteDescriptor, 0, nullptr);
+    }
+
     isSceneLoaded_ = true;
 }
 
@@ -464,9 +536,20 @@ void Vulkan::drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node)
             matrix = parent->matrix * matrix;
             parent = parent->parent;
         }
-        commandBuffer.pushConstants(*colorPipeline_->pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), &matrix);
+        commandBuffer.pushConstants(*texturePipeline_->pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), &matrix);
         for (const auto& _primitive : node->mesh->primitives) {
             if (_primitive->indexCount > 0) {
+                if (_primitive->material->baseColor) {
+                    std::array<vk::DescriptorSet, 2> descriptorSets {
+                        uboDescriptorSets_[currentFrame_].get(),
+                        _primitive->material->descriptorSet.get()
+                    };
+                    commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *texturePipeline_->pipeline);
+                    commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *texturePipeline_->pipelineLayout, 0, 2, descriptorSets.data(), 0, nullptr);
+                } else {
+                    //commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *colorPipeline_->pipeline);
+                    //commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *colorPipeline_->pipelineLayout, 0, 1, &uboDescriptorSets_[currentFrame_].get(), 0, nullptr);
+                }
                 commandBuffer.drawIndexed(_primitive->indexCount, 1, _primitive->firstIndex, 0, 0);
             }
         }
@@ -520,8 +603,6 @@ void Vulkan::drawFrame()
     commandBuffer.begin(commandBufferInfo);
     commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
     {
-        commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *colorPipeline_->pipeline);
-
         vk::Viewport viewport {
             .x = 0.0f,
             .y = 0.0f,
@@ -540,7 +621,6 @@ void Vulkan::drawFrame()
 
         commandBuffer.bindVertexBuffers(0, vk::Buffer(model_->vertexBuffer->buffer), { 0 });
         commandBuffer.bindIndexBuffer(vk::Buffer(model_->indexBuffer->buffer), 0, vk::IndexType::eUint32);
-        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *colorPipeline_->pipelineLayout, 0, 1, &colorPipelineDescriptorSets_[currentFrame_].get(), 0, nullptr);
 
         for (const auto& _node : model_->defaultScene->nodes) {
             drawNode(commandBuffer, _node);

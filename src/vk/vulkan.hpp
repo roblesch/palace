@@ -21,7 +21,6 @@ public:
 private:
     void createSwapchain(vk::SwapchainKHR oldSwapchain = VK_NULL_HANDLE);
     void recreateSwapchain();
-
     void updateUniformBuffers(int dx);
     void drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node);
     void drawFrame();
@@ -50,22 +49,43 @@ private:
     struct
     {
         uint32_t graphics;
-    } queueFamilyIndices_{};
+    } queueFamilyIndices_ {};
     vk::PhysicalDevice physicalDevice_;
     vk::UniqueDevice device_;
+
+    // command buffers
     vk::Queue graphicsQueue_;
     vk::UniqueCommandPool commandPool_;
     std::vector<vk::UniqueCommandBuffer> commandBuffers_;
 
-    // pipelines
+    // memory
+    pl::UniqueMemoryHelper memoryHelper_;
+
+    // descriptors
+    struct DescriptorSetLayouts {
+        vk::UniqueDescriptorSetLayout ubo;
+        vk::UniqueDescriptorSetLayout material;
+    } descriptorLayouts_;
+    vk::UniqueDescriptorPool descriptorPool_;
+
+    // renderpass
     vk::UniqueRenderPass renderPass_;
+
+    // pipelines
     pl::UniquePipelineHelper pipelineHelper_;
     pl::UniqueHelperPipeline colorPipeline_;
     pl::UniqueHelperPipeline texturePipeline_;
-    std::vector<vk::UniqueDescriptorSet> colorPipelineDescriptorSets_;
 
-    // memory
-    pl::UniqueMemoryHelper memoryHelper_;
+    // uniforms
+    std::vector<VmaBuffer*> uniformBuffers_;
+    std::vector<vk::UniqueDescriptorSet> uboDescriptorSets_;
+
+    // ubo
+    struct UniformBuffer {
+        glm::mat4 model { 1.0f };
+        glm::mat4 view { 1.0f };
+        glm::mat4 proj { 1.0f };
+    } ubo_;
 
     // swapchain
     vk::UniqueSwapchainKHR swapchain_;
@@ -79,16 +99,6 @@ private:
     std::vector<vk::UniqueSemaphore> imageAvailableSemaphores_;
     std::vector<vk::UniqueSemaphore> renderFinishedSemaphores_;
     std::vector<vk::UniqueFence> inFlightFences_;
-
-    // buffers
-    std::vector<VmaBuffer*> uniformBuffers_;
-
-    // ubo
-    struct UniformBuffer {
-        glm::mat4 model { 1.0f };
-        glm::mat4 view { 1.0f };
-        glm::mat4 proj { 1.0f };
-    } ubo_;
 
     // scene
     pl::UniqueGltfModel model_;

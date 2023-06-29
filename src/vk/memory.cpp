@@ -246,7 +246,8 @@ vk::ImageMemoryBarrier MemoryHelper::imageTransitionBarrier(vk::Image image, vk:
 
 UniqueMemoryHelper createMemoryHelperUnique(const MemoryHelperCreateInfo& createInfo)
 {
-    return std::make_unique<MemoryHelper>(createInfo);
+    auto memoryHelper = new MemoryHelper(createInfo);
+    return UniqueMemoryHelper(std::move(memoryHelper));
 }
 
 }

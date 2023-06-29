@@ -38,68 +38,15 @@ PipelineHelper::PipelineHelper(const PipelineHelperCreateInfo& createInfo)
         .pCode = reinterpret_cast<const uint32_t*>(fragmentShaderBytes.data()) });
 }
 
-UniqueHelperPipeline PipelineHelper::createPipeline(uint32_t frames, vk::RenderPass renderPass, std::vector<vk::DescriptorType> descriptorTypes, std::vector<vk::ShaderStageFlags> shaderStageFlags)
+UniqueHelperPipeline PipelineHelper::createPipeline(std::vector<vk::DescriptorSetLayout> setLayouts, vk::RenderPass renderPass)
 {
-    std::vector<vk::DescriptorSetLayoutBinding> layoutBindings;
-    std::vector<vk::DescriptorPoolSize> poolSizes;
-
-    for (size_t i = 0; i < descriptorTypes.size(); i++)
-    {
-        layoutBindings.push_back(createDescriptorSetLayoutBinding(i, descriptorTypes[i], shaderStageFlags[i]));
-        poolSizes.push_back(createDescriptorPoolSize(descriptorTypes[i], frames));
-    }
-
     auto helperPipeline = new HelperPipeline;
-
-    helperPipeline->descriptorLayout = createDescriptorSetLayoutUnique(layoutBindings);
-    helperPipeline->descriptorPool = createDescriptorPoolUnique(frames, poolSizes);
-    helperPipeline->pipelineLayout = createPipelineLayoutUnique(*helperPipeline->descriptorLayout);
+    helperPipeline->pipelineLayout = createPipelineLayoutUnique(setLayouts);
     helperPipeline->pipeline = createPipelineUnique(renderPass, *helperPipeline->pipelineLayout);
-
-    return std::unique_ptr<HelperPipeline>(std::move(helperPipeline));
+    return UniqueHelperPipeline(std::move(helperPipeline));
 }
 
-vk::DescriptorSetLayoutBinding PipelineHelper::createDescriptorSetLayoutBinding(uint32_t binding, vk::DescriptorType type, vk::ShaderStageFlags stageFlags)
-{
-    return {
-        .binding = binding,
-        .descriptorType = type,
-        .descriptorCount = 1,
-        .stageFlags = stageFlags
-    };
-}
-
-vk::UniqueDescriptorSetLayout PipelineHelper::createDescriptorSetLayoutUnique(std::vector<vk::DescriptorSetLayoutBinding> bindings)
-{
-    vk::DescriptorSetLayoutCreateInfo descriptorLayoutInfo {
-        .bindingCount = static_cast<uint32_t>(bindings.size()),
-        .pBindings = bindings.data()
-    };
-
-    return device_.createDescriptorSetLayoutUnique(descriptorLayoutInfo);
-}
-
-vk::DescriptorPoolSize PipelineHelper::createDescriptorPoolSize(vk::DescriptorType type, uint32_t descriptorCount)
-{
-    return {
-        .type = type,
-        .descriptorCount = descriptorCount
-    };
-}
-
-vk::UniqueDescriptorPool PipelineHelper::createDescriptorPoolUnique(uint32_t maxSets, std::vector<vk::DescriptorPoolSize> poolSizes)
-{
-    vk::DescriptorPoolCreateInfo descriptorPoolInfo {
-        .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-        .maxSets = maxSets,
-        .poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
-        .pPoolSizes = poolSizes.data()
-    };
-
-    return device_.createDescriptorPoolUnique(descriptorPoolInfo);
-}
-
-vk::UniquePipelineLayout PipelineHelper::createPipelineLayoutUnique(vk::DescriptorSetLayout descriptorLayout)
+vk::UniquePipelineLayout PipelineHelper::createPipelineLayoutUnique(std::vector<vk::DescriptorSetLayout> setLayouts)
 {
     // pipeline layout
     vk::PushConstantRange pushConstantRange {
@@ -108,8 +55,8 @@ vk::UniquePipelineLayout PipelineHelper::createPipelineLayoutUnique(vk::Descript
         .size = sizeof(glm::mat4)
     };
     vk::PipelineLayoutCreateInfo pipelineLayoutInfo {
-        .setLayoutCount = 1,
-        .pSetLayouts = &descriptorLayout,
+        .setLayoutCount = static_cast<uint32_t>(setLayouts.size()),
+        .pSetLayouts = setLayouts.data(),
         .pushConstantRangeCount = 1,
         .pPushConstantRanges = &pushConstantRange
     };
