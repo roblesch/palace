@@ -57,20 +57,12 @@ private:
     vk::UniqueCommandPool commandPool_;
     std::vector<vk::UniqueCommandBuffer> commandBuffers_;
 
-    // sync
-    std::vector<vk::UniqueSemaphore> imageAvailableSemaphores_;
-    std::vector<vk::UniqueSemaphore> renderFinishedSemaphores_;
-    std::vector<vk::UniqueFence> inFlightFences_;
-
     // pipelines
-    pl::UniquePipelineHelper pipelineHelper_;
-    vk::UniqueDescriptorSetLayout pipelineDescriptorLayout_;
-    vk::UniqueDescriptorPool pipelineDescriptorPool_;
-    std::vector<vk::UniqueDescriptorSet> pipelineDescriptorSets_;
     vk::UniqueRenderPass renderPass_;
-    vk::UniquePipelineLayout pipelineLayout_;
-    vk::UniquePipeline vertColorPipeline_;
-    vk::UniquePipeline texturePipeline_;
+    pl::UniquePipelineHelper pipelineHelper_;
+    pl::UniqueHelperPipeline colorPipeline_;
+    pl::UniqueHelperPipeline texturePipeline_;
+    std::vector<vk::UniqueDescriptorSet> colorPipelineDescriptorSets_;
 
     // memory
     pl::UniqueMemoryHelper memoryHelper_;
@@ -82,6 +74,11 @@ private:
     std::vector<vk::UniqueFramebuffer> swapchainFramebuffers_;
     pl::VmaImage* depthImage_;
     vk::UniqueImageView depthView_;
+
+    // sync
+    std::vector<vk::UniqueSemaphore> imageAvailableSemaphores_;
+    std::vector<vk::UniqueSemaphore> renderFinishedSemaphores_;
+    std::vector<vk::UniqueFence> inFlightFences_;
 
     // buffers
     std::vector<VmaBuffer*> uniformBuffers_;

@@ -251,73 +251,10 @@ Vulkan::Vulkan(bool enableValidation)
 
     renderPass_ = device_->createRenderPassUnique(renderPassInfo);
 
-    // descriptor set layout
-    vk::DescriptorSetLayoutBinding uboLayoutBinding {
-        .binding = 0,
-        .descriptorType = vk::DescriptorType::eUniformBuffer,
-        .descriptorCount = 1,
-        .stageFlags = vk::ShaderStageFlagBits::eVertex
-    };
-
-    vk::DescriptorSetLayoutCreateInfo descriptorLayoutInfo {
-        .bindingCount = 1,
-        .pBindings = &uboLayoutBinding
-    };
-
-    pipelineDescriptorLayout_ = device_->createDescriptorSetLayoutUnique(descriptorLayoutInfo);
-
-    // descriptor pools
-    vk::DescriptorPoolSize uboSize {
-        .type = vk::DescriptorType::eUniformBuffer,
-        .descriptorCount = sConcurrentFrames_
-    };
-
-    vk::DescriptorPoolCreateInfo pipelinePoolInfo {
-        .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-        .maxSets = sConcurrentFrames_,
-        .poolSizeCount = 1,
-        .pPoolSizes = &uboSize
-    };
-
-    pipelineDescriptorPool_ = device_->createDescriptorPoolUnique(pipelinePoolInfo);
-
     // uniform buffers
-    vk::DeviceSize uniformBufferSize = sizeof(UniformBuffer);
-
     uniformBuffers_.resize(sConcurrentFrames_);
-
     for (size_t i = 0; i < sConcurrentFrames_; i++) {
         uniformBuffers_[i] = memoryHelper_->createBuffer(sizeof(UniformBuffer), vk::BufferUsageFlagBits::eUniformBuffer, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
-    }
-
-    // descriptor sets
-    std::vector<vk::DescriptorSetLayout> layouts(sConcurrentFrames_, *pipelineDescriptorLayout_);
-
-    vk::DescriptorSetAllocateInfo descriptorSetInfo {
-        .descriptorPool = *pipelineDescriptorPool_,
-        .descriptorSetCount = sConcurrentFrames_,
-        .pSetLayouts = layouts.data()
-    };
-
-    pipelineDescriptorSets_ = device_->allocateDescriptorSetsUnique(descriptorSetInfo);
-
-    for (size_t i = 0; i < sConcurrentFrames_; i++) {
-        vk::DescriptorBufferInfo uboInfo {
-            .buffer = uniformBuffers_[i]->buffer,
-            .offset = 0,
-            .range = sizeof(UniformBuffer)
-        };
-
-        vk::WriteDescriptorSet uboWriteDescriptor {
-            .dstSet = *pipelineDescriptorSets_[i],
-            .dstBinding = 0,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = vk::DescriptorType::eUniformBuffer,
-            .pBufferInfo = &uboInfo
-        };
-
-        device_->updateDescriptorSets(1, &uboWriteDescriptor, 0, nullptr);
     }
 
     // pipeline
@@ -325,11 +262,44 @@ Vulkan::Vulkan(bool enableValidation)
         .device = *device_,
         .extent = extent_,
         .descriptorCount = sConcurrentFrames_,
-        .descriptorLayout = *pipelineDescriptorLayout_
     };
     pipelineHelper_ = createPipelineHelperUnique(pipelineHelperInfo);
-    pipelineLayout_ = pipelineHelper_->createPipelineLayoutUnique();
-    vertColorPipeline_ = pipelineHelper_->createPipelineUnique(*renderPass_, *pipelineLayout_);
+
+    colorPipeline_ = pipelineHelper_->createPipeline(sConcurrentFrames_, *renderPass_,
+        { vk::DescriptorType::eUniformBuffer },
+        { vk::ShaderStageFlagBits::eVertex });
+
+    texturePipeline_ = pipelineHelper_->createPipeline(sConcurrentFrames_, *renderPass_,
+        { vk::DescriptorType::eUniformBuffer, vk::DescriptorType::eCombinedImageSampler },
+        { vk::ShaderStageFlagBits::eVertex, vk::ShaderStageFlagBits::eFragment });
+
+    // descriptor sets
+    std::vector<vk::DescriptorSetLayout> layouts(sConcurrentFrames_, *colorPipeline_->descriptorLayout);
+
+    vk::DescriptorSetAllocateInfo descriptorSetInfo {
+        .descriptorPool = *colorPipeline_->descriptorPool,
+        .descriptorSetCount = sConcurrentFrames_,
+        .pSetLayouts = layouts.data()
+    };
+
+    colorPipelineDescriptorSets_ = device_->allocateDescriptorSetsUnique(descriptorSetInfo);
+
+    for (size_t i = 0; i < sConcurrentFrames_; i++) {
+        vk::DescriptorBufferInfo uboInfo {
+            .buffer = uniformBuffers_[i]->buffer,
+            .offset = 0,
+            .range = sizeof(UniformBuffer)
+        };
+        vk::WriteDescriptorSet uboWriteDescriptor {
+            .dstSet = *colorPipelineDescriptorSets_[i],
+            .dstBinding = 0,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = vk::DescriptorType::eUniformBuffer,
+            .pBufferInfo = &uboInfo
+        };
+        device_->updateDescriptorSets(1, &uboWriteDescriptor, 0, nullptr);
+    }
 
     // swapchain
     createSwapchain();
@@ -494,7 +464,7 @@ void Vulkan::drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node)
             matrix = parent->matrix * matrix;
             parent = parent->parent;
         }
-        commandBuffer.pushConstants(*pipelineLayout_, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), &matrix);
+        commandBuffer.pushConstants(*colorPipeline_->pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), &matrix);
         for (const auto& _primitive : node->mesh->primitives) {
             if (_primitive->indexCount > 0) {
                 commandBuffer.drawIndexed(_primitive->indexCount, 1, _primitive->firstIndex, 0, 0);
@@ -550,7 +520,7 @@ void Vulkan::drawFrame()
     commandBuffer.begin(commandBufferInfo);
     commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
     {
-        commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *vertColorPipeline_);
+        commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *colorPipeline_->pipeline);
 
         vk::Viewport viewport {
             .x = 0.0f,
@@ -570,7 +540,7 @@ void Vulkan::drawFrame()
 
         commandBuffer.bindVertexBuffers(0, vk::Buffer(model_->vertexBuffer->buffer), { 0 });
         commandBuffer.bindIndexBuffer(vk::Buffer(model_->indexBuffer->buffer), 0, vk::IndexType::eUint32);
-        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *pipelineLayout_, 0, 1, &pipelineDescriptorSets_[currentFrame_].get(), 0, nullptr);
+        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *colorPipeline_->pipelineLayout, 0, 1, &colorPipelineDescriptorSets_[currentFrame_].get(), 0, nullptr);
 
         for (const auto& _node : model_->defaultScene->nodes) {
             drawNode(commandBuffer, _node);

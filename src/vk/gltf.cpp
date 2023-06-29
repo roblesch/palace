@@ -51,8 +51,16 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
         };
         auto size = texture->extent.width * texture->extent.height * 4 * sizeof(unsigned char);
         texture->image = memory->createTextureImage(_image.image.data(), size, texture->extent);
-        texture->view = memory->createImageViewUnique(texture->image->image, vk::Format::eR8G8B8A8Unorm, vk::ImageAspectFlagBits::eColor);
+        texture->view = memory->createImageViewUnique(texture->image->image, vk::Format::eR8G8B8A8Unorm);
+        texture->sampler = memory->createImageSamplerUnique();
         textures.push_back(texture);
+    }
+
+    // materials
+    for (const auto& _material : model.materials) {
+        auto material = std::make_shared<Material>();
+        material->name = _material.name;
+
     }
 
     // meshes

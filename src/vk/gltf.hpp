@@ -19,12 +19,15 @@ struct Texture {
     vk::Extent3D extent;
     VmaImage* image;
     vk::UniqueImageView view;
+    vk::UniqueSampler sampler;
+    vk::DescriptorImageInfo descriptor;
 };
 
 struct Material {
+    std::string name;
     Texture* baseColor;
     Texture* normal;
-    vk::UniquePipeline pipeline;
+    vk::UniqueDescriptorSet descriptorSet;
 };
 
 struct Primitive {

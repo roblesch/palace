@@ -37,16 +37,19 @@ public:
     void uploadToBufferDirect(VmaBuffer* buffer, void* src);
     VmaImage* createImage(vk::Extent3D extent, vk::Format format, vk::ImageUsageFlags usage);
     VmaImage* createTextureImage(const void* src, size_t size, vk::Extent3D extent);
-    vk::UniqueImageView createImageViewUnique(vk::Image image, vk::Format format, vk::ImageAspectFlagBits aspectMask);
+    vk::UniqueImageView createImageViewUnique(vk::Image image, vk::Format format, vk::ImageAspectFlagBits aspectMask = vk::ImageAspectFlagBits::eColor);
+    vk::UniqueSampler createImageSamplerUnique();
 
 private:
     VmaBuffer* createStagingBuffer(size_t size);
+    vk::ImageMemoryBarrier imageTransitionBarrier(vk::Image image, vk::AccessFlags srcAccessMask, vk::AccessFlags dstAccessMask, vk::ImageLayout oldLayout, vk::ImageLayout newLayout);
 
+    vk::PhysicalDevice physicalDevice_;
     vk::Device device_;
     vk::CommandPool commandPool_;
     vk::Queue graphicsQueue_;
 
-    VmaAllocator allocator_{};
+    VmaAllocator allocator_ {};
     std::vector<VmaBuffer*> buffers_;
     std::vector<VmaImage*> images_;
 };

@@ -26,7 +26,6 @@ std::vector<char> readSpirVFile(const std::string& spirVFile)
 PipelineHelper::PipelineHelper(const PipelineHelperCreateInfo& createInfo)
     : device_(createInfo.device)
     , extent_(createInfo.extent)
-    , descriptorLayout_(createInfo.descriptorLayout)
 {
     // shaders
     std::vector<char> vertexShaderBytes = readSpirVFile("shaders/vertex.spv");
@@ -39,7 +38,68 @@ PipelineHelper::PipelineHelper(const PipelineHelperCreateInfo& createInfo)
         .pCode = reinterpret_cast<const uint32_t*>(fragmentShaderBytes.data()) });
 }
 
-vk::UniquePipelineLayout PipelineHelper::createPipelineLayoutUnique()
+UniqueHelperPipeline PipelineHelper::createPipeline(uint32_t frames, vk::RenderPass renderPass, std::vector<vk::DescriptorType> descriptorTypes, std::vector<vk::ShaderStageFlags> shaderStageFlags)
+{
+    std::vector<vk::DescriptorSetLayoutBinding> layoutBindings;
+    std::vector<vk::DescriptorPoolSize> poolSizes;
+
+    for (size_t i = 0; i < descriptorTypes.size(); i++)
+    {
+        layoutBindings.push_back(createDescriptorSetLayoutBinding(i, descriptorTypes[i], shaderStageFlags[i]));
+        poolSizes.push_back(createDescriptorPoolSize(descriptorTypes[i], frames));
+    }
+
+    auto helperPipeline = new HelperPipeline;
+
+    helperPipeline->descriptorLayout = createDescriptorSetLayoutUnique(layoutBindings);
+    helperPipeline->descriptorPool = createDescriptorPoolUnique(frames, poolSizes);
+    helperPipeline->pipelineLayout = createPipelineLayoutUnique(*helperPipeline->descriptorLayout);
+    helperPipeline->pipeline = createPipelineUnique(renderPass, *helperPipeline->pipelineLayout);
+
+    return std::unique_ptr<HelperPipeline>(std::move(helperPipeline));
+}
+
+vk::DescriptorSetLayoutBinding PipelineHelper::createDescriptorSetLayoutBinding(uint32_t binding, vk::DescriptorType type, vk::ShaderStageFlags stageFlags)
+{
+    return {
+        .binding = binding,
+        .descriptorType = type,
+        .descriptorCount = 1,
+        .stageFlags = stageFlags
+    };
+}
+
+vk::UniqueDescriptorSetLayout PipelineHelper::createDescriptorSetLayoutUnique(std::vector<vk::DescriptorSetLayoutBinding> bindings)
+{
+    vk::DescriptorSetLayoutCreateInfo descriptorLayoutInfo {
+        .bindingCount = static_cast<uint32_t>(bindings.size()),
+        .pBindings = bindings.data()
+    };
+
+    return device_.createDescriptorSetLayoutUnique(descriptorLayoutInfo);
+}
+
+vk::DescriptorPoolSize PipelineHelper::createDescriptorPoolSize(vk::DescriptorType type, uint32_t descriptorCount)
+{
+    return {
+        .type = type,
+        .descriptorCount = descriptorCount
+    };
+}
+
+vk::UniqueDescriptorPool PipelineHelper::createDescriptorPoolUnique(uint32_t maxSets, std::vector<vk::DescriptorPoolSize> poolSizes)
+{
+    vk::DescriptorPoolCreateInfo descriptorPoolInfo {
+        .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+        .maxSets = maxSets,
+        .poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
+        .pPoolSizes = poolSizes.data()
+    };
+
+    return device_.createDescriptorPoolUnique(descriptorPoolInfo);
+}
+
+vk::UniquePipelineLayout PipelineHelper::createPipelineLayoutUnique(vk::DescriptorSetLayout descriptorLayout)
 {
     // pipeline layout
     vk::PushConstantRange pushConstantRange {
@@ -49,7 +109,7 @@ vk::UniquePipelineLayout PipelineHelper::createPipelineLayoutUnique()
     };
     vk::PipelineLayoutCreateInfo pipelineLayoutInfo {
         .setLayoutCount = 1,
-        .pSetLayouts = &descriptorLayout_,
+        .pSetLayouts = &descriptorLayout,
         .pushConstantRangeCount = 1,
         .pPushConstantRanges = &pushConstantRange
     };
@@ -74,7 +134,6 @@ vk::UniquePipeline PipelineHelper::createPipelineUnique(vk::RenderPass renderPas
         .stride = sizeof(pl::Vertex),
         .inputRate = vk::VertexInputRate::eVertex
     };
-
     vk::VertexInputAttributeDescription posDescription {
         .location = 0,
         .binding = 0,
@@ -100,7 +159,6 @@ vk::UniquePipeline PipelineHelper::createPipelineUnique(vk::RenderPass renderPas
         .offset = offsetof(pl::Vertex, uv)
     };
     std::array<vk::VertexInputAttributeDescription, 4> vertexAttributeDescriptions { posDescription, normalDescription, colorDescription, uvDescription };
-
     vertexInputStateInfo_ = {
         .vertexBindingDescriptionCount = 1,
         .pVertexBindingDescriptions = &vertexBindingDescription,
@@ -123,12 +181,10 @@ vk::UniquePipeline PipelineHelper::createPipelineUnique(vk::RenderPass renderPas
         .minDepth = 0.0f,
         .maxDepth = 1.0f
     };
-
     scissor_ = {
         .offset = { 0, 0 },
         .extent = extent_
     };
-
     viewportStateInfo_ = {
         .viewportCount = 1,
         .pViewports = &viewport_,
@@ -182,12 +238,12 @@ vk::UniquePipeline PipelineHelper::createPipelineUnique(vk::RenderPass renderPas
         vk::DynamicState::eViewport,
         vk::DynamicState::eScissor
     };
-
     dynamicStateInfo_ = {
         .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
         .pDynamicStates = dynamicStates.data()
     };
 
+    // pipeline
     vk::GraphicsPipelineCreateInfo pipelineInfo {
         .stageCount = static_cast<uint32_t>(shaderStageInfos_.size()),
         .pStages = shaderStageInfos_.data(),
