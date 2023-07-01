@@ -96,7 +96,7 @@ vk::UniquePipeline PipelineHelper::createPipelineUnique(vk::RenderPass renderPas
     vk::VertexInputAttributeDescription colorDescription {
         .location = 2,
         .binding = 0,
-        .format = vk::Format::eR32G32B32Sfloat,
+        .format = vk::Format::eR32G32B32A32Sfloat,
         .offset = offsetof(pl::Vertex, color)
     };
     vk::VertexInputAttributeDescription uvDescription {
@@ -161,7 +161,9 @@ vk::UniquePipeline PipelineHelper::createPipelineUnique(vk::RenderPass renderPas
         .blendEnable = VK_TRUE,
         .srcColorBlendFactor = vk::BlendFactor::eSrcAlpha,
         .dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
+        .colorBlendOp = vk::BlendOp::eAdd,
         .srcAlphaBlendFactor = vk::BlendFactor::eOne,
+        .dstAlphaBlendFactor = vk::BlendFactor::eZero,
         .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA
     };
 

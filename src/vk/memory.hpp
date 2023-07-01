@@ -14,6 +14,7 @@ struct VmaBuffer {
 struct VmaImage {
     VkImage image;
     VmaAllocation allocation;
+    uint32_t mipLevels;
 };
 
 struct MemoryHelperCreateInfo {
@@ -35,14 +36,14 @@ public:
     VmaBuffer* createBuffer(size_t size, vk::BufferUsageFlags usage, VmaAllocationCreateFlags flags);
     void uploadToBuffer(VmaBuffer* buffer, void* src);
     void uploadToBufferDirect(VmaBuffer* buffer, void* src);
-    VmaImage* createImage(vk::Extent3D extent, vk::Format format, vk::ImageUsageFlags usage);
-    VmaImage* createTextureImage(const void* src, size_t size, vk::Extent3D extent);
-    vk::UniqueImageView createImageViewUnique(vk::Image image, vk::Format format, vk::ImageAspectFlagBits aspectMask = vk::ImageAspectFlagBits::eColor);
-    vk::UniqueSampler createImageSamplerUnique();
+    VmaImage* createImage(vk::Extent3D extent, vk::Format format, vk::ImageUsageFlags usage, uint32_t mipLevels = 1);
+    VmaImage* createTextureImage(const void* src, size_t size, vk::Extent3D extent, uint32_t mipLevels);
+    vk::UniqueImageView createImageViewUnique(vk::Image image, vk::Format format, vk::ImageAspectFlagBits aspectMask = vk::ImageAspectFlagBits::eColor, uint32_t mipLevels = 1);
+    vk::UniqueSampler createImageSamplerUnique(uint32_t mipLevels);
 
 private:
     VmaBuffer* createStagingBuffer(size_t size);
-    vk::ImageMemoryBarrier imageTransitionBarrier(vk::Image image, vk::AccessFlags srcAccessMask, vk::AccessFlags dstAccessMask, vk::ImageLayout oldLayout, vk::ImageLayout newLayout);
+    vk::ImageMemoryBarrier imageTransitionBarrier(vk::Image image, vk::AccessFlags srcAccessMask, vk::AccessFlags dstAccessMask, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, uint32_t mipLevels = 1);
 
     vk::PhysicalDevice physicalDevice_;
     vk::Device device_;

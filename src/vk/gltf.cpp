@@ -50,9 +50,10 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
             .depth = 1
         };
         auto size = texture->extent.width * texture->extent.height * 4 * sizeof(unsigned char);
-        texture->image = memory->createTextureImage(_image.image.data(), size, texture->extent);
+        auto mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(_image.width, _image.height)))) + 1;
+        texture->image = memory->createTextureImage(_image.image.data(), size, texture->extent, mipLevels);
         texture->view = memory->createImageViewUnique(texture->image->image, vk::Format::eR8G8B8A8Unorm);
-        texture->sampler = memory->createImageSamplerUnique();
+        texture->sampler = memory->createImageSamplerUnique(mipLevels);
         textures.push_back(texture);
     }
 
@@ -124,7 +125,7 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
             for (size_t i = 0; i < primitive->vertexCount; i++) {
                 vertices.push_back({ glm::make_vec3(&positions[i * 3]),
                     glm::make_vec3(&normals[i * 3]),
-                    glm::vec3(color),
+                    color,
                     glm::make_vec2(&texCoords[i * 2]) });
             }
 
