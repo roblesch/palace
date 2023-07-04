@@ -3,7 +3,6 @@
 #include "camera.hpp"
 #include "gltf.hpp"
 #include "memory.hpp"
-#include "pipelines.hpp"
 #include "types.hpp"
 #include <functional>
 #include <string>
@@ -75,7 +74,6 @@ private:
     vk::UniqueRenderPass renderPass_;
 
     // pipelines
-    pl::UniquePipelineHelper pipelineHelper_;
     struct {
         vk::UniquePipelineLayout layout;
         vk::UniquePipeline pipeline;

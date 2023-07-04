@@ -13,7 +13,7 @@ std::vector<char> readSpirVFile(const std::string& spirVFile)
     std::ifstream file(spirVFile, std::ios::binary | std::ios::in | std::ios::ate);
 
     if (!file.is_open()) {
-        printf("(VK_:ERROR) Pipeline failed to open spir-v file for reading: %s", spirVFile.c_str());
+        printf("(VK_:ERROR) Failed to open spir-v file for reading: %s", spirVFile.c_str());
         exit(1);
     }
 
