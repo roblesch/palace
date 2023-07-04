@@ -104,7 +104,7 @@ void MemoryHelper::uploadToBufferDirect(VmaBuffer* buffer, void* src)
     vmaUnmapMemory(allocator_, buffer->allocation);
 }
 
-VmaImage* MemoryHelper::createImage(vk::Extent3D extent, vk::Format format, vk::ImageUsageFlags usage, uint32_t mipLevels)
+VmaImage* MemoryHelper::createImage(vk::Extent3D extent, vk::Format format, vk::ImageUsageFlags usage, uint32_t mipLevels, vk::SampleCountFlagBits samples)
 {
     VkImageCreateInfo imageInfo {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -113,7 +113,7 @@ VmaImage* MemoryHelper::createImage(vk::Extent3D extent, vk::Format format, vk::
         .extent = extent,
         .mipLevels = mipLevels,
         .arrayLayers = 1,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .samples = (VkSampleCountFlagBits)samples,
         .tiling = VK_IMAGE_TILING_OPTIMAL,
         .usage = (VkImageUsageFlags)usage
     };
@@ -137,7 +137,7 @@ VmaImage* MemoryHelper::createTextureImage(const void* src, size_t size, vk::Ext
     vmaUnmapMemory(allocator_, staging->allocation);
 
     // create image
-    auto texture = createImage(extent, vk::Format::eR8G8B8A8Unorm, vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled, mipLevels);
+    auto texture = createImage(extent, vk::Format::eR8G8B8A8Unorm, vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled, mipLevels, vk::SampleCountFlagBits::e1);
 
     // transition staging format
     auto cmd = beginSingleUseCommandBuffer();
@@ -221,9 +221,6 @@ VmaImage* MemoryHelper::createTextureImage(const void* src, size_t size, vk::Ext
 
     cmd->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader, {}, {}, {}, barrier);
 
-    // transition image format
-    // auto readableBarrier = imageTransitionBarrier(texture->image, vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal, mipLevels);
-    // cmd->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader, {}, {}, {}, readableBarrier);
     endSingleUseCommandBuffer(*cmd);
     vmaDestroyBuffer(allocator_, staging->buffer, staging->allocation);
 
@@ -253,7 +250,7 @@ vk::UniqueSampler MemoryHelper::createImageSamplerUnique(uint32_t mipLevels)
     {
         .magFilter = vk::Filter::eLinear,
         .minFilter = vk::Filter::eLinear,
-        .mipmapMode = vk::SamplerMipmapMode::eLinear,
+        .mipmapMode = vk::SamplerMipmapMode::eNearest,
         .addressModeU = vk::SamplerAddressMode::eRepeat,
         .addressModeV = vk::SamplerAddressMode::eRepeat,
         .addressModeW = vk::SamplerAddressMode::eRepeat,
@@ -262,7 +259,7 @@ vk::UniqueSampler MemoryHelper::createImageSamplerUnique(uint32_t mipLevels)
         .maxAnisotropy = physicalDevice_.getProperties().limits.maxSamplerAnisotropy,
         .compareEnable = VK_FALSE,
         .compareOp = vk::CompareOp::eAlways,
-        .minLod = static_cast<float>(mipLevels/2),
+        .minLod = 0.0f,
         .maxLod = static_cast<float>(mipLevels),
         .borderColor = vk::BorderColor::eIntOpaqueBlack,
         .unnormalizedCoordinates = VK_FALSE

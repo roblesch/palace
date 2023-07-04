@@ -8,6 +8,24 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
 namespace pl {
 
+std::vector<char> readSpirVFile(const std::string& spirVFile)
+{
+    std::ifstream file(spirVFile, std::ios::binary | std::ios::in | std::ios::ate);
+
+    if (!file.is_open()) {
+        printf("(VK_:ERROR) Pipeline failed to open spir-v file for reading: %s", spirVFile.c_str());
+        exit(1);
+    }
+
+    size_t fileSize = file.tellg();
+    file.seekg(std::ios::beg);
+    std::vector<char> spirVBytes(fileSize);
+    file.read(spirVBytes.data(), static_cast<long>(fileSize));
+    file.close();
+
+    return spirVBytes;
+}
+
 VkBool32 debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
     VkDebugUtilsMessageTypeFlagsEXT messageType,
     const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
@@ -50,10 +68,7 @@ Vulkan::Vulkan(bool enableValidation)
     window_ = SDL_CreateWindow("palace", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         sWidth_, sHeight_, SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | SDL_WINDOW_VULKAN);
     SDL_SetWindowMinimumSize(window_, 400, 300);
-    extent_ = vk::Extent2D {
-        .width = sWidth_,
-        .height = sHeight_
-    };
+    extent_ = vk::Extent3D { sWidth_, sHeight_, 1 };
 
     // sdl2
     unsigned int extensionCount;
@@ -204,29 +219,36 @@ Vulkan::Vulkan(bool enableValidation)
 
     descriptorLayouts_.ubo = device_->createDescriptorSetLayoutUnique(uboDescriptorLayoutInfo);
 
-    vk::DescriptorSetLayoutBinding samplerLayoutBinding {
+    vk::DescriptorSetLayoutBinding textureSamplerLayoutBinding {
         .binding = 0,
         .descriptorType = vk::DescriptorType::eCombinedImageSampler,
         .descriptorCount = 1,
         .stageFlags = vk::ShaderStageFlagBits::eFragment
     };
 
-    vk::DescriptorSetLayoutCreateInfo textureDescriptorLayoutInfo {
-        .bindingCount = 1,
-        .pBindings = &samplerLayoutBinding
+    vk::DescriptorSetLayoutBinding normalSamplerLayoutBinding {
+        .binding = 1,
+        .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+        .descriptorCount = 1,
+        .stageFlags = vk::ShaderStageFlagBits::eFragment
     };
 
-    descriptorLayouts_.material = device_->createDescriptorSetLayoutUnique(textureDescriptorLayoutInfo);
+    std::array<vk::DescriptorSetLayoutBinding, 2> materialLayoutBindings { textureSamplerLayoutBinding, normalSamplerLayoutBinding };
+    vk::DescriptorSetLayoutCreateInfo materialDescriptorLayoutInfo {
+        .bindingCount = static_cast<uint32_t>(materialLayoutBindings.size()),
+        .pBindings = materialLayoutBindings.data()
+    };
+
+    descriptorLayouts_.material = device_->createDescriptorSetLayoutUnique(materialDescriptorLayoutInfo);
 
     // renderpass
     vk::AttachmentDescription colorAttachment {
-        .format = vk::Format::eB8G8R8A8Unorm,
-        .samples = vk::SampleCountFlagBits::e1,
+        .format = sSwapchainFormat_,
+        .samples = sMsaaSamples_,
         .loadOp = vk::AttachmentLoadOp::eClear,
         .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
         .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
-        .initialLayout = vk::ImageLayout::eUndefined,
-        .finalLayout = vk::ImageLayout::ePresentSrcKHR
+        .finalLayout = vk::ImageLayout::eColorAttachmentOptimal
     };
 
     vk::AttachmentReference colorAttachmentRef {
@@ -234,14 +256,27 @@ Vulkan::Vulkan(bool enableValidation)
         .layout = vk::ImageLayout::eColorAttachmentOptimal
     };
 
+    vk::AttachmentDescription colorResolve {
+        .format = sSwapchainFormat_,
+        .samples = vk::SampleCountFlagBits::e1,
+        .loadOp = vk::AttachmentLoadOp::eDontCare,
+        .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
+        .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
+        .finalLayout = vk::ImageLayout::ePresentSrcKHR
+    };
+
+    vk::AttachmentReference colorResolveRef {
+        .attachment = 2,
+        .layout = vk::ImageLayout::eColorAttachmentOptimal
+    };
+
     vk::AttachmentDescription depthAttachment {
         .format = vk::Format::eD32Sfloat,
-        .samples = vk::SampleCountFlagBits::e1,
+        .samples = sMsaaSamples_,
         .loadOp = vk::AttachmentLoadOp::eClear,
         .storeOp = vk::AttachmentStoreOp::eDontCare,
         .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
         .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
-        .initialLayout = vk::ImageLayout::eUndefined,
         .finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal
     };
 
@@ -254,6 +289,7 @@ Vulkan::Vulkan(bool enableValidation)
         .pipelineBindPoint = vk::PipelineBindPoint::eGraphics,
         .colorAttachmentCount = 1,
         .pColorAttachments = &colorAttachmentRef,
+        .pResolveAttachments = &colorResolveRef,
         .pDepthStencilAttachment = &depthAttachmentRef
     };
 
@@ -265,7 +301,7 @@ Vulkan::Vulkan(bool enableValidation)
         .dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite | vk::AccessFlagBits::eDepthStencilAttachmentWrite
     };
 
-    std::array<vk::AttachmentDescription, 2> attachments = { colorAttachment, depthAttachment };
+    std::array<vk::AttachmentDescription, 3> attachments = { colorAttachment, depthAttachment, colorResolve };
 
     vk::RenderPassCreateInfo renderPassInfo {
         .attachmentCount = static_cast<uint32_t>(attachments.size()),
@@ -278,16 +314,12 @@ Vulkan::Vulkan(bool enableValidation)
 
     renderPass_ = device_->createRenderPassUnique(renderPassInfo);
 
-    // pipelines
-    pl::PipelineHelperCreateInfo pipelineHelperInfo {
-        .device = *device_,
-        .extent = extent_,
-        .descriptorCount = sConcurrentFrames_,
-    };
-    pipelineHelper_ = createPipelineHelperUnique(pipelineHelperInfo);
+    // multisampling
+    colorImage_ = memoryHelper_->createImage(extent_, sSwapchainFormat_, vk::ImageUsageFlagBits::eTransientAttachment | vk::ImageUsageFlagBits::eColorAttachment, 1, sMsaaSamples_);
+    colorImageView_ = memoryHelper_->createImageViewUnique(colorImage_->image, sSwapchainFormat_, vk::ImageAspectFlagBits::eColor, 1);
 
-    //colorPipeline_ = pipelineHelper_->createPipeline({ *descriptorLayouts_.ubo }, *renderPass_);
-    texturePipeline_ = pipelineHelper_->createPipeline({ *descriptorLayouts_.ubo, *descriptorLayouts_.material }, *renderPass_);
+    // pipelines
+    createPipelines();
 
     // uniform buffers
     uniformBuffers_.resize(sConcurrentFrames_);
@@ -340,7 +372,7 @@ Vulkan::Vulkan(bool enableValidation)
         .DescriptorPool = *imguiDescriptorPool_,
         .MinImageCount = 3,
         .ImageCount = 3,
-        .MSAASamples = VK_SAMPLE_COUNT_1_BIT
+        .MSAASamples = VK_SAMPLE_COUNT_4_BIT
     };
 
     ImGui_ImplVulkan_Init(&imguiInfo, *renderPass_);
@@ -399,22 +431,47 @@ void Vulkan::loadGltfModel(const char* path)
 
         _material->descriptorSet = std::move(device_->allocateDescriptorSetsUnique(descriptorSetInfo)[0]);
 
-        vk::DescriptorImageInfo samplerInfo {
+        vk::DescriptorImageInfo textureSamplerInfo {
             .sampler = _material->baseColor->sampler.get(),
             .imageView = _material->baseColor->view.get(),
             .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
         };
 
-        vk::WriteDescriptorSet samplerWriteDescriptor {
+        vk::WriteDescriptorSet textureWriteDescriptor {
             .dstSet = _material->descriptorSet.get(),
             .dstBinding = 0,
             .dstArrayElement = 0,
             .descriptorCount = 1,
             .descriptorType = vk::DescriptorType::eCombinedImageSampler,
-            .pImageInfo = &samplerInfo
+            .pImageInfo = &textureSamplerInfo
         };
 
-        device_->updateDescriptorSets(1, &samplerWriteDescriptor, 0, nullptr);
+        vk::DescriptorImageInfo normalSamplerInfo;
+        if (_material->useNormalTexture > 0.5f) {
+            normalSamplerInfo = {
+                .sampler = _material->normal->sampler.get(),
+                .imageView = _material->normal->view.get(),
+                .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
+            }; 
+        } else {
+            normalSamplerInfo = {
+                .sampler = _material->baseColor->sampler.get(),
+                .imageView = _material->baseColor->view.get(),
+                .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
+            }; 
+        }
+
+        vk::WriteDescriptorSet normalWriteDescriptor {
+            .dstSet = _material->descriptorSet.get(),
+            .dstBinding = 1,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+            .pImageInfo = &normalSamplerInfo
+        };
+
+        std::array<vk::WriteDescriptorSet, 2> writeDescriptors = { textureWriteDescriptor, normalWriteDescriptor };
+        device_->updateDescriptorSets(static_cast<uint32_t>(writeDescriptors.size()), writeDescriptors.data(), 0, nullptr);
     }
 
     // ubo descriptor sets
@@ -448,6 +505,184 @@ void Vulkan::loadGltfModel(const char* path)
     isSceneLoaded_ = true;
 }
 
+void Vulkan::createPipelines()
+{
+    // shaders
+    std::vector<char> vertexShaderBytes = readSpirVFile("shaders/vertex.spv");
+    std::vector<char> fragmentShaderBytes = readSpirVFile("shaders/fragment.spv");
+
+    vk::UniqueShaderModule vertexShaderModule = device_->createShaderModuleUnique({ .codeSize = vertexShaderBytes.size(),
+        .pCode = reinterpret_cast<const uint32_t*>(vertexShaderBytes.data()) });
+
+    vk::UniqueShaderModule fragmentShaderModule = device_->createShaderModuleUnique({ .codeSize = fragmentShaderBytes.size(),
+        .pCode = reinterpret_cast<const uint32_t*>(fragmentShaderBytes.data()) });
+
+    // pipeline layout
+    vk::PushConstantRange pushConstantRange {
+        .stageFlags = vk::ShaderStageFlagBits::eVertex,
+        .offset = 0,
+        .size = sizeof(PushConstants)
+    };
+
+    std::vector<vk::DescriptorSetLayout> setLayouts = { *descriptorLayouts_.ubo, *descriptorLayouts_.material };
+
+    vk::PipelineLayoutCreateInfo pipelineLayoutInfo {
+        .setLayoutCount = static_cast<uint32_t>(setLayouts.size()),
+        .pSetLayouts = setLayouts.data(),
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &pushConstantRange
+    };
+
+    texturePipeline_.layout = device_->createPipelineLayoutUnique(pipelineLayoutInfo);
+
+    std::vector<vk::PipelineShaderStageCreateInfo> shaderStageInfos = {
+        { .stage = vk::ShaderStageFlagBits::eVertex,
+            .module = *vertexShaderModule,
+            .pName = "main" },
+        { .stage = vk::ShaderStageFlagBits::eFragment,
+            .module = *fragmentShaderModule,
+            .pName = "main" }
+    };
+
+    // vertex input
+    vk::VertexInputBindingDescription vertexBindingDescription {
+        .binding = 0,
+        .stride = sizeof(pl::Vertex),
+        .inputRate = vk::VertexInputRate::eVertex
+    };
+    vk::VertexInputAttributeDescription posDescription {
+        .location = 0,
+        .binding = 0,
+        .format = vk::Format::eR32G32B32Sfloat,
+        .offset = offsetof(pl::Vertex, pos)
+    };
+    vk::VertexInputAttributeDescription normalDescription {
+        .location = 1,
+        .binding = 0,
+        .format = vk::Format::eR32G32B32Sfloat,
+        .offset = offsetof(pl::Vertex, normal)
+    };
+    vk::VertexInputAttributeDescription colorDescription {
+        .location = 2,
+        .binding = 0,
+        .format = vk::Format::eR32G32B32A32Sfloat,
+        .offset = offsetof(pl::Vertex, color)
+    };
+    vk::VertexInputAttributeDescription uvDescription {
+        .location = 3,
+        .binding = 0,
+        .format = vk::Format::eR32G32Sfloat,
+        .offset = offsetof(pl::Vertex, uv)
+    };
+
+    std::array<vk::VertexInputAttributeDescription, 4> vertexAttributeDescriptions { posDescription, normalDescription, colorDescription, uvDescription };
+
+    vk::PipelineVertexInputStateCreateInfo vertexInputStateInfo = {
+        .vertexBindingDescriptionCount = 1,
+        .pVertexBindingDescriptions = &vertexBindingDescription,
+        .vertexAttributeDescriptionCount = vertexAttributeDescriptions.size(),
+        .pVertexAttributeDescriptions = vertexAttributeDescriptions.data()
+    };
+
+    // input assembly
+    vk::PipelineInputAssemblyStateCreateInfo inputAssemblyStateInfo = {
+        .topology = vk::PrimitiveTopology::eTriangleList,
+        .primitiveRestartEnable = VK_FALSE
+    };
+
+    // viewport state
+    vk::Viewport viewport = {
+        .x = 0.0f,
+        .y = 0.0f,
+        .width = static_cast<float>(extent_.width),
+        .height = static_cast<float>(extent_.height),
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f
+    };
+    vk::Rect2D scissor = {
+        .offset = { 0, 0 },
+        .extent = { extent_.width, extent_.height }
+    };
+    vk::PipelineViewportStateCreateInfo viewportStateInfo = {
+        .viewportCount = 1,
+        .pViewports = &viewport,
+        .scissorCount = 1,
+        .pScissors = &scissor
+    };
+
+    // rasterization state
+    vk::PipelineRasterizationStateCreateInfo rasterStateInfo = {
+        .depthClampEnable = VK_FALSE,
+        .rasterizerDiscardEnable = VK_FALSE,
+        .polygonMode = vk::PolygonMode::eFill,
+        .cullMode = vk::CullModeFlagBits::eBack,
+        .frontFace = vk::FrontFace::eCounterClockwise,
+        .depthBiasEnable = VK_FALSE,
+        .lineWidth = 1.0f
+    };
+
+    // multisample state
+    vk::PipelineMultisampleStateCreateInfo multisampleStateInfo = {
+        .rasterizationSamples = sMsaaSamples_,
+        .sampleShadingEnable = VK_FALSE
+    };
+
+    // color blend state
+    vk::PipelineColorBlendAttachmentState colorBlendAttachment = {
+        .blendEnable = VK_FALSE,
+        //.srcColorBlendFactor = vk::BlendFactor::eSrcAlpha,
+        //.dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
+        //.colorBlendOp = vk::BlendOp::eAdd,
+        //.srcAlphaBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
+        //.dstAlphaBlendFactor = vk::BlendFactor::eZero,
+        .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA
+    };
+
+    vk::PipelineColorBlendStateCreateInfo colorBlendStateInfo = {
+        .logicOpEnable = VK_FALSE,
+        .attachmentCount = 1,
+        .pAttachments = &colorBlendAttachment
+    };
+
+    // depth state
+    vk::PipelineDepthStencilStateCreateInfo depthStencilStateInfo = {
+        .depthTestEnable = VK_TRUE,
+        .depthWriteEnable = VK_TRUE,
+        .depthCompareOp = vk::CompareOp::eLess,
+        .depthBoundsTestEnable = VK_FALSE,
+        .stencilTestEnable = VK_FALSE
+    };
+
+    // dynamic state
+    std::vector<vk::DynamicState> dynamicStates {
+        vk::DynamicState::eViewport,
+        vk::DynamicState::eScissor
+    };
+    vk::PipelineDynamicStateCreateInfo dynamicStateInfo = {
+        .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
+        .pDynamicStates = dynamicStates.data()
+    };
+
+    // pipeline
+    vk::GraphicsPipelineCreateInfo pipelineInfo {
+        .stageCount = static_cast<uint32_t>(shaderStageInfos.size()),
+        .pStages = shaderStageInfos.data(),
+        .pVertexInputState = &vertexInputStateInfo,
+        .pInputAssemblyState = &inputAssemblyStateInfo,
+        .pViewportState = &viewportStateInfo,
+        .pRasterizationState = &rasterStateInfo,
+        .pMultisampleState = &multisampleStateInfo,
+        .pDepthStencilState = &depthStencilStateInfo,
+        .pColorBlendState = &colorBlendStateInfo,
+        .pDynamicState = &dynamicStateInfo,
+        .layout = *texturePipeline_.layout,
+        .renderPass = *renderPass_,
+        .subpass = 0
+    };
+
+    texturePipeline_.pipeline = device_->createGraphicsPipelineUnique(nullptr, pipelineInfo).value;
+}
+
 void Vulkan::createSwapchain(vk::SwapchainKHR oldSwapchain)
 {
     // swapchain
@@ -457,12 +692,10 @@ void Vulkan::createSwapchain(vk::SwapchainKHR oldSwapchain)
         std::clamp(extent_.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
     };
 
-    auto imageFormat = vk::Format::eB8G8R8A8Unorm;
-
     vk::SwapchainCreateInfoKHR swapChainInfo {
         .surface = *surface_,
         .minImageCount = capabilities.minImageCount + 1,
-        .imageFormat = imageFormat,
+        .imageFormat = sSwapchainFormat_,
         .imageExtent = swapchainExtent,
         .imageArrayLayers = 1,
         .imageUsage = vk::ImageUsageFlagBits::eColorAttachment,
@@ -480,17 +713,17 @@ void Vulkan::createSwapchain(vk::SwapchainKHR oldSwapchain)
     // image views
     swapchainImageViews_.resize(swapchainImages_.size());
     for (size_t i = 0; i < swapchainImages_.size(); i++) {
-        swapchainImageViews_[i] = memoryHelper_->createImageViewUnique(swapchainImages_[i], imageFormat, vk::ImageAspectFlagBits::eColor);
+        swapchainImageViews_[i] = memoryHelper_->createImageViewUnique(swapchainImages_[i], sSwapchainFormat_, vk::ImageAspectFlagBits::eColor, 1);
     }
 
     // depth buffer
-    depthImage_ = memoryHelper_->createImage(vk::Extent3D(extent_.width, extent_.height, 1), vk::Format::eD32Sfloat, vk::ImageUsageFlagBits::eDepthStencilAttachment);
-    depthView_ = memoryHelper_->createImageViewUnique(depthImage_->image, vk::Format::eD32Sfloat, vk::ImageAspectFlagBits::eDepth);
+    depthImage_ = memoryHelper_->createImage(extent_, vk::Format::eD32Sfloat, vk::ImageUsageFlagBits::eDepthStencilAttachment, 1, sMsaaSamples_);
+    depthView_ = memoryHelper_->createImageViewUnique(depthImage_->image, vk::Format::eD32Sfloat, vk::ImageAspectFlagBits::eDepth, 1);
 
     // framebuffers
     swapchainFramebuffers_.resize(swapchainImages_.size());
     for (size_t i = 0; i < swapchainImages_.size(); i++) {
-        std::array<vk::ImageView, 2> attachments = { *swapchainImageViews_[i], *depthView_ };
+        std::array<vk::ImageView, 3> attachments = { *colorImageView_, *depthView_, *swapchainImageViews_[i] };
         vk::FramebufferCreateInfo framebufferInfo {
             .renderPass = *renderPass_,
             .attachmentCount = static_cast<uint32_t>(attachments.size()),
@@ -509,10 +742,7 @@ void Vulkan::recreateSwapchain()
     int width, height;
     SDL_GetWindowSize(window_, &width, &height);
 
-    extent_ = vk::Extent2D {
-        .width = static_cast<uint32_t>(width),
-        .height = static_cast<uint32_t>(height)
-    };
+    extent_ = vk::Extent3D { static_cast<uint32_t>(width), static_cast<uint32_t>(height), 1 };
 
     createSwapchain(*swapchain_);
     camera_.resize((float)extent_.width / (float)extent_.height);
@@ -536,7 +766,7 @@ void Vulkan::drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node)
             matrix = parent->matrix * matrix;
             parent = parent->parent;
         }
-        commandBuffer.pushConstants(*texturePipeline_->pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), &matrix);
+        //commandBuffer.pushConstants(*texturePipeline_.layout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), &matrix);
         for (const auto& _primitive : node->mesh->primitives) {
             if (_primitive->indexCount > 0) {
                 if (_primitive->material->baseColor) {
@@ -544,11 +774,14 @@ void Vulkan::drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node)
                         uboDescriptorSets_[currentFrame_].get(),
                         _primitive->material->descriptorSet.get()
                     };
-                    commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *texturePipeline_->pipeline);
-                    commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *texturePipeline_->pipelineLayout, 0, 2, descriptorSets.data(), 0, nullptr);
+                    pushConstants_.meshTransform = matrix;
+                    pushConstants_.useNormalTexture = _primitive->material->useNormalTexture;
+                    commandBuffer.pushConstants(*texturePipeline_.layout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(PushConstants), &pushConstants_);
+                    commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *texturePipeline_.pipeline);
+                    commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *texturePipeline_.layout, 0, 2, descriptorSets.data(), 0, nullptr);
                 } else {
-                    //commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *colorPipeline_->pipeline);
-                    //commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *colorPipeline_->pipelineLayout, 0, 1, &uboDescriptorSets_[currentFrame_].get(), 0, nullptr);
+                    // commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *colorPipeline_->pipeline);
+                    // commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *colorPipeline_->pipelineLayout, 0, 1, &uboDescriptorSets_[currentFrame_].get(), 0, nullptr);
                 }
                 commandBuffer.drawIndexed(_primitive->indexCount, 1, _primitive->firstIndex, 0, 0);
             }
@@ -595,7 +828,7 @@ void Vulkan::drawFrame()
         .framebuffer = *swapchainFramebuffers_[imageIndex],
         .renderArea = {
             .offset = { 0, 0 },
-            .extent = extent_ },
+            .extent = { extent_.width, extent_.height } },
         .clearValueCount = static_cast<uint32_t>(clearValues.size()),
         .pClearValues = clearValues.data()
     };
@@ -615,7 +848,7 @@ void Vulkan::drawFrame()
 
         vk::Rect2D scissor {
             .offset = { 0, 0 },
-            .extent = extent_
+            .extent = { extent_.width, extent_.height }
         };
         commandBuffer.setScissor(0, 1, &scissor);
 

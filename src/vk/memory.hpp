@@ -36,9 +36,9 @@ public:
     VmaBuffer* createBuffer(size_t size, vk::BufferUsageFlags usage, VmaAllocationCreateFlags flags);
     void uploadToBuffer(VmaBuffer* buffer, void* src);
     void uploadToBufferDirect(VmaBuffer* buffer, void* src);
-    VmaImage* createImage(vk::Extent3D extent, vk::Format format, vk::ImageUsageFlags usage, uint32_t mipLevels = 1);
+    VmaImage* createImage(vk::Extent3D extent, vk::Format format, vk::ImageUsageFlags usage, uint32_t mipLevels, vk::SampleCountFlagBits samples);
     VmaImage* createTextureImage(const void* src, size_t size, vk::Extent3D extent, uint32_t mipLevels);
-    vk::UniqueImageView createImageViewUnique(vk::Image image, vk::Format format, vk::ImageAspectFlagBits aspectMask = vk::ImageAspectFlagBits::eColor, uint32_t mipLevels = 1);
+    vk::UniqueImageView createImageViewUnique(vk::Image image, vk::Format format, vk::ImageAspectFlagBits aspectMask, uint32_t);
     vk::UniqueSampler createImageSamplerUnique(uint32_t mipLevels);
 
 private:

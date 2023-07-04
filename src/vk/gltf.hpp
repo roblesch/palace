@@ -25,6 +25,7 @@ struct Texture {
 
 struct Material {
     std::string name;
+    float useNormalTexture;
     Texture* baseColor;
     Texture* normal;
     vk::UniqueDescriptorSet descriptorSet;

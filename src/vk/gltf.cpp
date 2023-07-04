@@ -52,7 +52,7 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
         auto size = texture->extent.width * texture->extent.height * 4 * sizeof(unsigned char);
         auto mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(_image.width, _image.height)))) + 1;
         texture->image = memory->createTextureImage(_image.image.data(), size, texture->extent, mipLevels);
-        texture->view = memory->createImageViewUnique(texture->image->image, vk::Format::eR8G8B8A8Unorm);
+        texture->view = memory->createImageViewUnique(texture->image->image, vk::Format::eR8G8B8A8Unorm, vk::ImageAspectFlagBits::eColor, mipLevels);
         texture->sampler = memory->createImageSamplerUnique(mipLevels);
         textures.push_back(texture);
     }
@@ -68,6 +68,7 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
             material->baseColor = textures[model.textures[_material.pbrMetallicRoughness.baseColorTexture.index].source].get();
         }
         if (_material.normalTexture.index > -1) {
+            material->useNormalTexture = 1.0f;
             material->normal = textures[model.textures[_material.normalTexture.index].source].get();
         }
     }
