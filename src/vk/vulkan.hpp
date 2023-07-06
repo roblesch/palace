@@ -25,8 +25,8 @@ private:
     void drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node);
     void drawFrame();
 
-    static constexpr int sWidth_ = 1600;
-    static constexpr int sHeight_ = 900;
+    static constexpr int sWidth_ = 1584;
+    static constexpr int sHeight_ = 396;
     static constexpr const std::string_view sSpirVDir_ = "/shaders";
     static constexpr uint32_t sConcurrentFrames_ = 2;
     static constexpr vk::Format sSwapchainFormat_ = vk::Format::eB8G8R8A8Unorm;
