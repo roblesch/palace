@@ -22,10 +22,11 @@ const float Ks = 0.2;
 
 vec3 getNormal()
 {
+	// http://www.thetenthplanet.de/archives/1180
+
 	if (useNormalTexture < 0.5)
 		return vertexNormal;
 
-	// http://www.thetenthplanet.de/archives/1180
 	vec3 tangentNormal = texture(normalSampler, uv).xyz * 2.0 - 1.0;
 
 	vec3 q1 = dFdx(pos);
@@ -42,11 +43,12 @@ vec3 getNormal()
 }
 
 void main() {
+	// https://learnopengl.com/Advanced-Lighting/Advanced-Lighting
+
 	vec4 tex = texture(texSampler, uv);
 	if (tex.a < 0.5)
 		discard;
 
-	// https://learnopengl.com/Advanced-Lighting/Advanced-Lighting
 	vec3 texColor = tex.rgb;
 	vec3 ambient = texColor;
 	vec3 normal = getNormal();

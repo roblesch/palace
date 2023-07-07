@@ -244,7 +244,7 @@ vk::UniqueImageView MemoryHelper::createImageViewUnique(vk::Image image, vk::For
     return device_.createImageViewUnique(imageViewInfo);
 }
 
-vk::UniqueSampler MemoryHelper::createImageSamplerUnique(uint32_t mipLevels)
+vk::UniqueSampler MemoryHelper::createTextureSamplerUnique(uint32_t mipLevels)
 {
     vk::SamplerCreateInfo samplerInfo
     {

@@ -204,6 +204,9 @@ Vulkan::Vulkan(bool enableValidation)
 
     memoryHelper_ = createMemoryHelperUnique(memoryInfo);
 
+    // offscreen shadow pass
+    createOffscreenResources();
+
     // descriptors
     vk::DescriptorSetLayoutBinding uboLayoutBinding {
         .binding = 0,
@@ -271,7 +274,7 @@ Vulkan::Vulkan(bool enableValidation)
     };
 
     vk::AttachmentDescription depthAttachment {
-        .format = vk::Format::eD32Sfloat,
+        .format = sDepthAttachmentFormat_,
         .samples = sMsaaSamples_,
         .loadOp = vk::AttachmentLoadOp::eClear,
         .storeOp = vk::AttachmentStoreOp::eDontCare,
@@ -322,10 +325,7 @@ Vulkan::Vulkan(bool enableValidation)
     createPipelines();
 
     // uniform buffers
-    uniformBuffers_.resize(sConcurrentFrames_);
-    for (size_t i = 0; i < sConcurrentFrames_; i++) {
-        uniformBuffers_[i] = memoryHelper_->createBuffer(sizeof(UniformBuffer), vk::BufferUsageFlagBits::eUniformBuffer, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
-    }
+    sceneUbo_.buffer = memoryHelper_->createBuffer(sizeof(cameraUniformBuffer_), vk::BufferUsageFlagBits::eUniformBuffer, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 
     // swapchain
     createSwapchain();
@@ -452,13 +452,13 @@ void Vulkan::loadGltfModel(const char* path)
                 .sampler = _material->normal->sampler.get(),
                 .imageView = _material->normal->view.get(),
                 .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
-            }; 
+            };
         } else {
             normalSamplerInfo = {
                 .sampler = _material->baseColor->sampler.get(),
                 .imageView = _material->baseColor->view.get(),
                 .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
-            }; 
+            };
         }
 
         vk::WriteDescriptorSet normalWriteDescriptor {
@@ -477,32 +477,120 @@ void Vulkan::loadGltfModel(const char* path)
     // ubo descriptor sets
     std::vector<vk::DescriptorSetLayout> layouts(sConcurrentFrames_, *descriptorLayouts_.ubo);
 
-    vk::DescriptorSetAllocateInfo descriptorSetInfo {
+    vk::DescriptorSetAllocateInfo uboDescriptorSetInfo {
         .descriptorPool = *descriptorPool_,
-        .descriptorSetCount = sConcurrentFrames_,
-        .pSetLayouts = layouts.data()
+        .descriptorSetCount = 1,
+        .pSetLayouts = &descriptorLayouts_.ubo.get()
     };
 
-    uboDescriptorSets_ = device_->allocateDescriptorSetsUnique(descriptorSetInfo);
+    sceneUbo_.descriptorSet = std::move(device_->allocateDescriptorSetsUnique(uboDescriptorSetInfo)[0]);
 
-    for (size_t i = 0; i < sConcurrentFrames_; i++) {
-        vk::DescriptorBufferInfo uboInfo {
-            .buffer = uniformBuffers_[i]->buffer,
-            .offset = 0,
-            .range = sizeof(UniformBuffer)
-        };
-        vk::WriteDescriptorSet uboWriteDescriptor {
-            .dstSet = *uboDescriptorSets_[i],
-            .dstBinding = 0,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = vk::DescriptorType::eUniformBuffer,
-            .pBufferInfo = &uboInfo
-        };
-        device_->updateDescriptorSets(1, &uboWriteDescriptor, 0, nullptr);
-    }
+    vk::DescriptorBufferInfo uboInfo {
+        .buffer = sceneUbo_.buffer->buffer,
+        .offset = 0,
+        .range = sizeof(cameraUniformBuffer_)
+    };
+    vk::WriteDescriptorSet uboWriteDescriptor {
+        .dstSet = *sceneUbo_.descriptorSet,
+        .dstBinding = 0,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType = vk::DescriptorType::eUniformBuffer,
+        .pBufferInfo = &uboInfo
+    };
+    device_->updateDescriptorSets(1, &uboWriteDescriptor, 0, nullptr);
 
     isSceneLoaded_ = true;
+}
+
+void Vulkan::createOffscreenResources()
+{
+    offscreenResources_.width = sShadowResolution_;
+    offscreenResources_.height = sShadowResolution_;
+
+    vk::Extent3D extent { .width = sShadowResolution_, .height = sShadowResolution_, .depth = 1 };
+
+    offscreenResources_.depthImage = memoryHelper_->createImage(extent, sDepthAttachmentFormat_, vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled, 1, vk::SampleCountFlagBits::e1);
+    offscreenResources_.depthView = memoryHelper_->createImageViewUnique(offscreenResources_.depthImage->image, sDepthAttachmentFormat_, vk::ImageAspectFlagBits::eDepth, 1);
+
+    vk::SamplerCreateInfo samplerInfo {
+        .magFilter = vk::Filter::eLinear,
+        .minFilter = vk::Filter::eLinear,
+        .mipmapMode = vk::SamplerMipmapMode::eLinear,
+        .addressModeU = vk::SamplerAddressMode::eClampToEdge,
+        .addressModeV = vk::SamplerAddressMode::eClampToEdge,
+        .addressModeW = vk::SamplerAddressMode::eClampToEdge,
+        .mipLodBias = 0.0f,
+        .maxAnisotropy = 1.0f,
+        .minLod = 0.0f,
+        .maxLod = 1.0f,
+        .borderColor = vk::BorderColor::eFloatOpaqueWhite
+    };
+
+    offscreenResources_.depthSampler = device_->createSamplerUnique(samplerInfo);
+
+    vk::AttachmentDescription depthAttachment {
+        .format = sDepthAttachmentFormat_,
+        .samples = vk::SampleCountFlagBits::e1,
+        .loadOp = vk::AttachmentLoadOp::eClear,
+        .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
+        .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
+        .finalLayout = vk::ImageLayout::eDepthStencilReadOnlyOptimal
+    };
+
+    vk::AttachmentReference depthAttachmentRef {
+        .attachment = 0,
+        .layout = vk::ImageLayout::eDepthStencilAttachmentOptimal
+    };
+
+    vk::SubpassDescription subpass {
+        .pipelineBindPoint = vk::PipelineBindPoint::eGraphics,
+        .colorAttachmentCount = 0,
+        .pDepthStencilAttachment = &depthAttachmentRef
+    };
+
+    vk::SubpassDependency depthWrite {
+        .srcSubpass = VK_SUBPASS_EXTERNAL,
+        .dstSubpass = 0,
+        .srcStageMask = vk::PipelineStageFlagBits::eFragmentShader,
+        .dstStageMask = vk::PipelineStageFlagBits::eEarlyFragmentTests,
+        .srcAccessMask = vk::AccessFlagBits::eShaderRead,
+        .dstAccessMask = vk::AccessFlagBits::eDepthStencilAttachmentWrite,
+        .dependencyFlags = vk::DependencyFlagBits::eByRegion
+    };
+
+    vk::SubpassDependency shaderRead {
+        .srcSubpass = 0,
+        .dstSubpass = VK_SUBPASS_EXTERNAL,
+        .srcStageMask = vk::PipelineStageFlagBits::eLateFragmentTests,
+        .dstStageMask = vk::PipelineStageFlagBits::eFragmentShader,
+        .srcAccessMask = vk::AccessFlagBits::eDepthStencilAttachmentWrite,
+        .dstAccessMask = vk::AccessFlagBits::eShaderRead
+    };
+
+    std::array<vk::SubpassDependency, 2> dependencies = { depthWrite, shaderRead };
+
+    vk::RenderPassCreateInfo renderPassInfo {
+        .attachmentCount = 1,
+        .pAttachments = &depthAttachment,
+        .subpassCount = 1,
+        .pSubpasses = &subpass,
+        .dependencyCount = static_cast<uint32_t>(dependencies.size()),
+        .pDependencies = dependencies.data()
+    };
+
+    offscreenResources_.renderPass = device_->createRenderPassUnique(renderPassInfo);
+
+    vk::FramebufferCreateInfo framebufferInfo {
+        .renderPass = *offscreenResources_.renderPass,
+        .attachmentCount = 1,
+        .pAttachments = &offscreenResources_.depthView.get(),
+        .width = offscreenResources_.width,
+        .height = offscreenResources_.height,
+        .layers = 1
+    };
+
+    offscreenResources_.frameBuffer = device_->createFramebufferUnique(framebufferInfo);
 }
 
 void Vulkan::createPipelines()
@@ -630,11 +718,6 @@ void Vulkan::createPipelines()
     // color blend state
     vk::PipelineColorBlendAttachmentState colorBlendAttachment = {
         .blendEnable = VK_FALSE,
-        //.srcColorBlendFactor = vk::BlendFactor::eSrcAlpha,
-        //.dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
-        //.colorBlendOp = vk::BlendOp::eAdd,
-        //.srcAlphaBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
-        //.dstAlphaBlendFactor = vk::BlendFactor::eZero,
         .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA
     };
 
@@ -717,8 +800,8 @@ void Vulkan::createSwapchain(vk::SwapchainKHR oldSwapchain)
     }
 
     // depth buffer
-    depthImage_ = memoryHelper_->createImage(extent_, vk::Format::eD32Sfloat, vk::ImageUsageFlagBits::eDepthStencilAttachment, 1, sMsaaSamples_);
-    depthView_ = memoryHelper_->createImageViewUnique(depthImage_->image, vk::Format::eD32Sfloat, vk::ImageAspectFlagBits::eDepth, 1);
+    depthImage_ = memoryHelper_->createImage(extent_, sDepthAttachmentFormat_, vk::ImageUsageFlagBits::eDepthStencilAttachment, 1, sMsaaSamples_);
+    depthView_ = memoryHelper_->createImageViewUnique(depthImage_->image, sDepthAttachmentFormat_, vk::ImageAspectFlagBits::eDepth, 1);
 
     // framebuffers
     swapchainFramebuffers_.resize(swapchainImages_.size());
@@ -750,11 +833,10 @@ void Vulkan::recreateSwapchain()
 
 void Vulkan::updateUniformBuffers(int dx)
 {
-    ubo_.model = glm::rotate(ubo_.model, 0.0001f * dx, camera_.up);
-    ubo_.view = camera_.view;
-    ubo_.proj = camera_.proj;
+    cameraUniformBuffer_.view = camera_.view;
+    cameraUniformBuffer_.proj = camera_.proj;
 
-    memoryHelper_->uploadToBufferDirect(uniformBuffers_[currentFrame_], &ubo_);
+    memoryHelper_->uploadToBufferDirect(sceneUbo_.buffer, &cameraUniformBuffer_);
 }
 
 void Vulkan::drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node)
@@ -766,12 +848,11 @@ void Vulkan::drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node)
             matrix = parent->matrix * matrix;
             parent = parent->parent;
         }
-        //commandBuffer.pushConstants(*texturePipeline_.layout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), &matrix);
         for (const auto& _primitive : node->mesh->primitives) {
             if (_primitive->indexCount > 0) {
                 if (_primitive->material->baseColor) {
                     std::array<vk::DescriptorSet, 2> descriptorSets {
-                        uboDescriptorSets_[currentFrame_].get(),
+                        sceneUbo_.descriptorSet.get(),
                         _primitive->material->descriptorSet.get()
                     };
                     pushConstants_.meshTransform = matrix;
@@ -780,8 +861,7 @@ void Vulkan::drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node)
                     commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *texturePipeline_.pipeline);
                     commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *texturePipeline_.layout, 0, 2, descriptorSets.data(), 0, nullptr);
                 } else {
-                    // commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *colorPipeline_->pipeline);
-                    // commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *colorPipeline_->pipelineLayout, 0, 1, &uboDescriptorSets_[currentFrame_].get(), 0, nullptr);
+                    // TODO: color pipeline
                 }
                 commandBuffer.drawIndexed(_primitive->indexCount, 1, _primitive->firstIndex, 0, 0);
             }
@@ -1057,7 +1137,7 @@ void Vulkan::run()
         Uint64 end = SDL_GetPerformanceCounter();
         float elapsedMS = (float)(end - start) / (float)SDL_GetPerformanceFrequency();
 
-        printf("\33[2KMS: %f\r", elapsedMS);
+        printf("\33[2K%d fps\r", (int)(1.0 / elapsedMS));
     }
 
     device_->waitIdle();

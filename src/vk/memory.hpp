@@ -39,7 +39,7 @@ public:
     VmaImage* createImage(vk::Extent3D extent, vk::Format format, vk::ImageUsageFlags usage, uint32_t mipLevels, vk::SampleCountFlagBits samples);
     VmaImage* createTextureImage(const void* src, size_t size, vk::Extent3D extent, uint32_t mipLevels);
     vk::UniqueImageView createImageViewUnique(vk::Image image, vk::Format format, vk::ImageAspectFlagBits aspectMask, uint32_t);
-    vk::UniqueSampler createImageSamplerUnique(uint32_t mipLevels);
+    vk::UniqueSampler createTextureSamplerUnique(uint32_t mipLevels);
 
 private:
     VmaBuffer* createStagingBuffer(size_t size);

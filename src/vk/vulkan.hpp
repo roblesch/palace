@@ -18,6 +18,7 @@ public:
     void run();
 
 private:
+    void createOffscreenResources();
     void createPipelines();
     void createSwapchain(vk::SwapchainKHR oldSwapchain = VK_NULL_HANDLE);
     void recreateSwapchain();
@@ -25,11 +26,12 @@ private:
     void drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node);
     void drawFrame();
 
-    static constexpr int sWidth_ = 1584;
-    static constexpr int sHeight_ = 396;
-    static constexpr const std::string_view sSpirVDir_ = "/shaders";
+    static constexpr int sWidth_ = 1600;
+    static constexpr int sHeight_ = 900;
+    static constexpr int sShadowResolution_ = 2048;
     static constexpr uint32_t sConcurrentFrames_ = 2;
     static constexpr vk::Format sSwapchainFormat_ = vk::Format::eB8G8R8A8Unorm;
+    static constexpr vk::Format sDepthAttachmentFormat_ = vk::Format::eD32Sfloat;
     static constexpr vk::SampleCountFlagBits sMsaaSamples_ = vk::SampleCountFlagBits::e4;
 
     bool isValidationEnabled_ = true;
@@ -63,6 +65,17 @@ private:
     // memory
     pl::UniqueMemoryHelper memoryHelper_;
 
+    // offscreen resources
+    struct {
+        uint32_t width {}, height {};
+        vk::UniqueFramebuffer frameBuffer;
+        pl::VmaImage* depthImage {};
+        vk::UniqueImageView depthView;
+        vk::UniqueSampler depthSampler;
+        vk::UniqueRenderPass renderPass;
+        vk::DescriptorImageInfo descriptor;
+    } offscreenResources_;
+
     // descriptors
     struct DescriptorSetLayouts {
         vk::UniqueDescriptorSetLayout ubo;
@@ -80,15 +93,20 @@ private:
     } colorPipeline_, texturePipeline_;
 
     // uniforms
-    std::vector<VmaBuffer*> uniformBuffers_;
-    std::vector<vk::UniqueDescriptorSet> uboDescriptorSets_;
+    struct {
+        VmaBuffer* buffer;
+        vk::UniqueDescriptorSet descriptorSet;
+    } sceneUbo_, lightUbo_;
 
-    // ubo
-    struct UniformBuffer {
-        glm::mat4 model { 1.0f };
+    // ubos
+    struct {
         glm::mat4 view { 1.0f };
         glm::mat4 proj { 1.0f };
-    } ubo_;
+    } cameraUniformBuffer_;
+
+    struct {
+        glm::mat4 modelViewProj { 1.0f };
+    } lightUniformBuffer_;
 
     // push constants
     struct PushConstants {
@@ -103,6 +121,8 @@ private:
     std::vector<vk::UniqueFramebuffer> swapchainFramebuffers_;
     pl::VmaImage* depthImage_;
     vk::UniqueImageView depthView_;
+    pl::VmaImage* shadowImage_;
+    vk::UniqueImageView shadowView_;
 
     // multisampling
     pl::VmaImage* colorImage_;

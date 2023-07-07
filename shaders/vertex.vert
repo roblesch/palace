@@ -1,15 +1,14 @@
 #version 450
 
-layout(binding = 0) uniform UniformBufferObject {
-    mat4 model;
+layout(binding = 0) uniform UniformBuffer {
     mat4 view;
     mat4 proj;
-} ubo;
+} uniforms;
 
-layout(push_constant) uniform constants {
-    mat4 transform;
+layout(push_constant) uniform PushConstants {
+    mat4 model;
     float useNormalTexture;
-} consts;
+} constants;
 
 layout(location = 0) in vec3 pos;
 layout(location = 1) in vec3 normal;
@@ -23,11 +22,11 @@ layout(location = 3) out vec3 vertNormal;
 layout(location = 4) out float useNormalTexture;
 
 void main() {
-    vec4 vertPos = ubo.view * ubo.model * consts.transform * vec4(pos, 1.0);
-    gl_Position = ubo.proj * vertPos;
+    vec4 vertPos = uniforms.view * constants.model * vec4(pos, 1.0);
+    gl_Position = uniforms.proj * vertPos;
     fragPos = vec3(vertPos) / vertPos.w;
     fragColor = color;
     fragUv = uv;
-    vertNormal = normalize(transpose(inverse(mat3(ubo.model * consts.transform))) * normal);
-    useNormalTexture = consts.useNormalTexture;
+    vertNormal = normalize(transpose(inverse(mat3(constants.model))) * normal);
+    useNormalTexture = constants.useNormalTexture;
 }
