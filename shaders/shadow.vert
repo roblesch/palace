@@ -1,11 +1,20 @@
 #version 450
 
-layout (location = 0) in vec3 inPos;
-
-layout (binding = 0) uniform UBO 
+layout(binding = 0) uniform UBO 
 {
-	mat4 depthMVP;
+    mat4 view;
+    mat4 proj;
+    mat4 lightView;
+    mat4 lightProj;
+	vec3 lightPos;
 } ubo;
+
+layout(push_constant) uniform PushConstants {
+    mat4 model;
+    float useNormalTexture;
+} constants;
+
+layout(location = 0) in vec3 pos;
 
 out gl_PerVertex 
 {
@@ -14,5 +23,5 @@ out gl_PerVertex
 
 void main()
 {
-	gl_Position =  ubo.depthMVP * vec4(inPos, 1.0);
+	gl_Position =  ubo.lightProj * ubo.lightView * constants.model * vec4(pos, 1.0);
 }

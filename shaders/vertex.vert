@@ -3,7 +3,9 @@
 layout(binding = 0) uniform UniformBuffer {
     mat4 view;
     mat4 proj;
-    vec3 lightPos;
+    mat4 lightView;
+    mat4 lightProj;
+	vec3 lightPos;
 } uniforms;
 
 layout(push_constant) uniform PushConstants {

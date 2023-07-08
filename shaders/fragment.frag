@@ -2,6 +2,15 @@
 
 #extension GL_KHR_vulkan_glsl : enable
 
+const vec3 lightDir = vec3(1.0);
+const vec3 specColor = vec3(1.0);
+const float shininess = 120.0;
+const float Ka = 0.3;
+const float Kd = 0.5;
+const float Ks = 0.2;
+const float ambient = 0.5;
+
+layout(set = 0, binding = 1) uniform sampler2D shadowMap;
 layout(set = 1, binding = 0) uniform sampler2D texSampler;
 layout(set = 1, binding = 1) uniform sampler2D normalSampler;
 
@@ -12,13 +21,6 @@ layout(location = 3) in vec3 vertexNormal;
 layout(location = 4) in float useNormalTexture;
 
 layout(location = 0) out vec4 outColor;
-
-const vec3 lightDir = vec3(1.0, 1.0, -1.0);
-const vec3 specColor = vec3(1.0);
-const float shininess = 120.0;
-const float Ka = 0.3;
-const float Kd = 0.5;
-const float Ks = 0.2;
 
 vec3 getNormal()
 {

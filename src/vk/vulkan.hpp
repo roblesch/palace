@@ -69,7 +69,6 @@ private:
     // descriptors
     vk::UniqueDescriptorPool descriptorPool_;
     struct DescriptorSetLayouts {
-        vk::UniqueDescriptorSetLayout shadowPass;
         vk::UniqueDescriptorSetLayout ubo;
         vk::UniqueDescriptorSetLayout material;
     } descriptorLayouts_;
@@ -80,14 +79,11 @@ private:
         vk::UniqueFramebuffer frameBuffer;
         pl::VmaImage* depthImage {};
         pl::VmaBuffer* buffer;
-        vk::UniqueDescriptorSet descriptorSet;
         vk::UniqueImageView depthView;
         vk::UniqueSampler depthSampler;
         vk::UniqueRenderPass renderPass;
-        vk::DescriptorImageInfo descriptor;
         vk::UniquePipelineLayout pipelineLayout;
         vk::UniquePipeline pipeline;
-        glm::mat4 pushConstants;
     } shadowPass_;
 
     // renderpass
@@ -103,18 +99,16 @@ private:
     struct {
         VmaBuffer* buffer;
         vk::UniqueDescriptorSet descriptorSet;
-    } sceneUbo_;
+    } uniformBuffer_;
 
     // ubos
-    struct {
-        glm::mat4 view { 1.0f };
-        glm::mat4 proj { 1.0f };
+    struct UniformBuffer {
+        glm::mat4 cameraView { 1.0f };
+        glm::mat4 cameraProj { 1.0f };
+        glm::mat4 lightView { 1.0f };
+        glm::mat4 lightProj { 1.0f };
         glm::vec3 lightPos { 0.0f };
-    } cameraUniformBuffer_;
-
-    struct {
-        glm::mat4 modelViewProj { 1.0f };
-    } lightUniformBuffer_;
+    } ubo_;
 
     // push constants
     struct PushConstants {
