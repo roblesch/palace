@@ -18,12 +18,13 @@ public:
     void run();
 
 private:
-    void createOffscreenResources();
+    void createShadowPassResources();
     void createPipelines();
     void createSwapchain(vk::SwapchainKHR oldSwapchain = VK_NULL_HANDLE);
     void recreateSwapchain();
     void updateUniformBuffers(int dx);
     void drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node);
+    void drawNodeShadow(vk::CommandBuffer& commandBuffer, pl::Node* node);
     void drawFrame();
 
     static constexpr int sWidth_ = 1600;
@@ -65,23 +66,29 @@ private:
     // memory
     pl::UniqueMemoryHelper memoryHelper_;
 
-    // offscreen resources
-    struct {
+    // descriptors
+    vk::UniqueDescriptorPool descriptorPool_;
+    struct DescriptorSetLayouts {
+        vk::UniqueDescriptorSetLayout shadowPass;
+        vk::UniqueDescriptorSetLayout ubo;
+        vk::UniqueDescriptorSetLayout material;
+    } descriptorLayouts_;
+
+    // shadow pass resources
+    struct ShadowPassResources {
         uint32_t width {}, height {};
         vk::UniqueFramebuffer frameBuffer;
         pl::VmaImage* depthImage {};
+        pl::VmaBuffer* buffer;
+        vk::UniqueDescriptorSet descriptorSet;
         vk::UniqueImageView depthView;
         vk::UniqueSampler depthSampler;
         vk::UniqueRenderPass renderPass;
         vk::DescriptorImageInfo descriptor;
-    } offscreenResources_;
-
-    // descriptors
-    struct DescriptorSetLayouts {
-        vk::UniqueDescriptorSetLayout ubo;
-        vk::UniqueDescriptorSetLayout material;
-    } descriptorLayouts_;
-    vk::UniqueDescriptorPool descriptorPool_;
+        vk::UniquePipelineLayout pipelineLayout;
+        vk::UniquePipeline pipeline;
+        glm::mat4 pushConstants;
+    } shadowPass_;
 
     // renderpass
     vk::UniqueRenderPass renderPass_;
@@ -90,18 +97,19 @@ private:
     struct {
         vk::UniquePipelineLayout layout;
         vk::UniquePipeline pipeline;
-    } colorPipeline_, texturePipeline_;
+    } texturePipeline_;
 
     // uniforms
     struct {
         VmaBuffer* buffer;
         vk::UniqueDescriptorSet descriptorSet;
-    } sceneUbo_, lightUbo_;
+    } sceneUbo_;
 
     // ubos
     struct {
         glm::mat4 view { 1.0f };
         glm::mat4 proj { 1.0f };
+        glm::vec3 lightPos { 0.0f };
     } cameraUniformBuffer_;
 
     struct {
@@ -121,8 +129,6 @@ private:
     std::vector<vk::UniqueFramebuffer> swapchainFramebuffers_;
     pl::VmaImage* depthImage_;
     vk::UniqueImageView depthView_;
-    pl::VmaImage* shadowImage_;
-    vk::UniqueImageView shadowView_;
 
     // multisampling
     pl::VmaImage* colorImage_;

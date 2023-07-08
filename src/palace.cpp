@@ -1,6 +1,13 @@
 #include "util/parser.hpp"
 #include "vk/vulkan.hpp"
 
+/* === TODO ===
+* descriptor init and organization
+* pipeline init and organization
+* vma mapping pointers each frame
+* decouple input handling 
+* process input on sep thread */
+
 using namespace pl;
 
 int main(const int argc, const char* argv[])

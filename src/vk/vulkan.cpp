@@ -205,21 +205,38 @@ Vulkan::Vulkan(bool enableValidation)
     memoryHelper_ = createMemoryHelperUnique(memoryInfo);
 
     // offscreen shadow pass
-    createOffscreenResources();
+    createShadowPassResources();
 
     // descriptors
+    vk::DescriptorSetLayoutBinding shadowPassUboBinding {
+        .binding = 0,
+        .descriptorType = vk::DescriptorType::eUniformBuffer,
+        .descriptorCount = 1,
+        .stageFlags = vk::ShaderStageFlagBits::eVertex
+    };
+    vk::DescriptorSetLayoutBinding shadowPassSamplerBinding {
+        .binding = 1,
+        .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+        .descriptorCount = 1,
+        .stageFlags = vk::ShaderStageFlagBits::eFragment
+    };
+    std::array<vk::DescriptorSetLayoutBinding, 2> shadowPassBindings = { shadowPassUboBinding, shadowPassSamplerBinding };
+    vk::DescriptorSetLayoutCreateInfo shadowPassLayoutInfo {
+        .bindingCount = static_cast<uint32_t>(shadowPassBindings.size()),
+        .pBindings = shadowPassBindings.data()
+    };
+    descriptorLayouts_.shadowPass = device_->createDescriptorSetLayoutUnique(shadowPassLayoutInfo);
+
     vk::DescriptorSetLayoutBinding uboLayoutBinding {
         .binding = 0,
         .descriptorType = vk::DescriptorType::eUniformBuffer,
         .descriptorCount = 1,
         .stageFlags = vk::ShaderStageFlagBits::eVertex
     };
-
     vk::DescriptorSetLayoutCreateInfo uboDescriptorLayoutInfo {
         .bindingCount = 1,
         .pBindings = &uboLayoutBinding
     };
-
     descriptorLayouts_.ubo = device_->createDescriptorSetLayoutUnique(uboDescriptorLayoutInfo);
 
     vk::DescriptorSetLayoutBinding textureSamplerLayoutBinding {
@@ -228,20 +245,17 @@ Vulkan::Vulkan(bool enableValidation)
         .descriptorCount = 1,
         .stageFlags = vk::ShaderStageFlagBits::eFragment
     };
-
     vk::DescriptorSetLayoutBinding normalSamplerLayoutBinding {
         .binding = 1,
         .descriptorType = vk::DescriptorType::eCombinedImageSampler,
         .descriptorCount = 1,
         .stageFlags = vk::ShaderStageFlagBits::eFragment
     };
-
     std::array<vk::DescriptorSetLayoutBinding, 2> materialLayoutBindings { textureSamplerLayoutBinding, normalSamplerLayoutBinding };
     vk::DescriptorSetLayoutCreateInfo materialDescriptorLayoutInfo {
         .bindingCount = static_cast<uint32_t>(materialLayoutBindings.size()),
         .pBindings = materialLayoutBindings.data()
     };
-
     descriptorLayouts_.material = device_->createDescriptorSetLayoutUnique(materialDescriptorLayoutInfo);
 
     // renderpass
@@ -325,6 +339,7 @@ Vulkan::Vulkan(bool enableValidation)
     createPipelines();
 
     // uniform buffers
+    shadowPass_.buffer = memoryHelper_->createBuffer(sizeof(lightUniformBuffer_), vk::BufferUsageFlagBits::eUniformBuffer, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
     sceneUbo_.buffer = memoryHelper_->createBuffer(sizeof(cameraUniformBuffer_), vk::BufferUsageFlagBits::eUniformBuffer, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 
     // swapchain
@@ -399,27 +414,88 @@ Vulkan::~Vulkan()
 void Vulkan::loadGltfModel(const char* path)
 {
     model_ = pl::createGltfModelUnique({ path, memoryHelper_.get() });
-    uint32_t textureCount = static_cast<uint32_t>(model_->textures.size());
+    // light, scene
+    uint32_t uboCount = 2;
+    // shadow map, textures
+    uint32_t samplerCount = 1 + static_cast<uint32_t>(model_->textures.size());
 
     // descriptor pool
     vk::DescriptorPoolSize uboSize {
         .type = vk::DescriptorType::eUniformBuffer,
-        .descriptorCount = sConcurrentFrames_
+        .descriptorCount = uboCount
     };
     vk::DescriptorPoolSize samplerSize {
         .type = vk::DescriptorType::eCombinedImageSampler,
-        .descriptorCount = textureCount
+        .descriptorCount = samplerCount
     };
     std::array<vk::DescriptorPoolSize, 2> pipelinePoolSizes { uboSize, samplerSize };
 
     vk::DescriptorPoolCreateInfo pipelinePoolInfo {
         .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-        .maxSets = sConcurrentFrames_ + textureCount,
-        .poolSizeCount = 2,
+        .maxSets = uboCount + samplerCount,
+        .poolSizeCount = static_cast<uint32_t>(pipelinePoolSizes.size()),
         .pPoolSizes = pipelinePoolSizes.data()
     };
 
     descriptorPool_ = device_->createDescriptorPoolUnique(pipelinePoolInfo);
+
+    // shadow pass descriptor set
+    vk::DescriptorSetAllocateInfo shadowPassDescriptorInfo {
+        .descriptorPool = *descriptorPool_,
+        .descriptorSetCount = 1,
+        .pSetLayouts = &descriptorLayouts_.shadowPass.get()
+    };
+    shadowPass_.descriptorSet = std::move(device_->allocateDescriptorSetsUnique(shadowPassDescriptorInfo)[0]);
+    vk::DescriptorBufferInfo shadowPassUboInfo {
+        .buffer = shadowPass_.buffer->buffer,
+        .offset = 0,
+        .range = sizeof(lightUniformBuffer_)
+    };
+    vk::WriteDescriptorSet shadowPassUboWriteDescriptor {
+        .dstSet = *shadowPass_.descriptorSet,
+        .dstBinding = 0,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType = vk::DescriptorType::eUniformBuffer,
+        .pBufferInfo = &shadowPassUboInfo
+    };
+    vk::DescriptorImageInfo shadowPassSamplerInfo {
+        .sampler = *shadowPass_.depthSampler,
+        .imageView = *shadowPass_.depthView,
+        .imageLayout = vk::ImageLayout::eDepthStencilReadOnlyOptimal
+    };
+    vk::WriteDescriptorSet shadowPassSamplerWriteDescriptor {
+        .dstSet = *shadowPass_.descriptorSet,
+        .dstBinding = 1,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+        .pImageInfo = &shadowPassSamplerInfo
+    };
+    std::array<vk::WriteDescriptorSet, 2> shadowPassWriteDescriptors = { shadowPassUboWriteDescriptor, shadowPassSamplerWriteDescriptor };
+    device_->updateDescriptorSets(static_cast<uint32_t>(shadowPassWriteDescriptors.size()), shadowPassWriteDescriptors.data(), 0, nullptr);
+
+    // scene ubo descriptor set
+    vk::DescriptorSetAllocateInfo uboDescriptorSetInfo {
+        .descriptorPool = *descriptorPool_,
+        .descriptorSetCount = 1,
+        .pSetLayouts = &descriptorLayouts_.ubo.get()
+    };
+    sceneUbo_.descriptorSet = std::move(device_->allocateDescriptorSetsUnique(uboDescriptorSetInfo)[0]);
+    vk::DescriptorBufferInfo sceneUboInfo {
+        .buffer = sceneUbo_.buffer->buffer,
+        .offset = 0,
+        .range = sizeof(cameraUniformBuffer_)
+    };
+    vk::WriteDescriptorSet sceneUboWriteDescriptor {
+        .dstSet = *sceneUbo_.descriptorSet,
+        .dstBinding = 0,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType = vk::DescriptorType::eUniformBuffer,
+        .pBufferInfo = &sceneUboInfo
+    };
+    device_->updateDescriptorSets(1, &sceneUboWriteDescriptor, 0, nullptr);
 
     // material descriptor sets
     for (auto& _material : model_->materials) {
@@ -428,15 +504,12 @@ void Vulkan::loadGltfModel(const char* path)
             .descriptorSetCount = 1,
             .pSetLayouts = &descriptorLayouts_.material.get()
         };
-
         _material->descriptorSet = std::move(device_->allocateDescriptorSetsUnique(descriptorSetInfo)[0]);
-
         vk::DescriptorImageInfo textureSamplerInfo {
             .sampler = _material->baseColor->sampler.get(),
             .imageView = _material->baseColor->view.get(),
             .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
         };
-
         vk::WriteDescriptorSet textureWriteDescriptor {
             .dstSet = _material->descriptorSet.get(),
             .dstBinding = 0,
@@ -445,7 +518,6 @@ void Vulkan::loadGltfModel(const char* path)
             .descriptorType = vk::DescriptorType::eCombinedImageSampler,
             .pImageInfo = &textureSamplerInfo
         };
-
         vk::DescriptorImageInfo normalSamplerInfo;
         if (_material->useNormalTexture > 0.5f) {
             normalSamplerInfo = {
@@ -460,7 +532,6 @@ void Vulkan::loadGltfModel(const char* path)
                 .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
             };
         }
-
         vk::WriteDescriptorSet normalWriteDescriptor {
             .dstSet = _material->descriptorSet.get(),
             .dstBinding = 1,
@@ -469,49 +540,22 @@ void Vulkan::loadGltfModel(const char* path)
             .descriptorType = vk::DescriptorType::eCombinedImageSampler,
             .pImageInfo = &normalSamplerInfo
         };
-
         std::array<vk::WriteDescriptorSet, 2> writeDescriptors = { textureWriteDescriptor, normalWriteDescriptor };
         device_->updateDescriptorSets(static_cast<uint32_t>(writeDescriptors.size()), writeDescriptors.data(), 0, nullptr);
     }
 
-    // ubo descriptor sets
-    std::vector<vk::DescriptorSetLayout> layouts(sConcurrentFrames_, *descriptorLayouts_.ubo);
-
-    vk::DescriptorSetAllocateInfo uboDescriptorSetInfo {
-        .descriptorPool = *descriptorPool_,
-        .descriptorSetCount = 1,
-        .pSetLayouts = &descriptorLayouts_.ubo.get()
-    };
-
-    sceneUbo_.descriptorSet = std::move(device_->allocateDescriptorSetsUnique(uboDescriptorSetInfo)[0]);
-
-    vk::DescriptorBufferInfo uboInfo {
-        .buffer = sceneUbo_.buffer->buffer,
-        .offset = 0,
-        .range = sizeof(cameraUniformBuffer_)
-    };
-    vk::WriteDescriptorSet uboWriteDescriptor {
-        .dstSet = *sceneUbo_.descriptorSet,
-        .dstBinding = 0,
-        .dstArrayElement = 0,
-        .descriptorCount = 1,
-        .descriptorType = vk::DescriptorType::eUniformBuffer,
-        .pBufferInfo = &uboInfo
-    };
-    device_->updateDescriptorSets(1, &uboWriteDescriptor, 0, nullptr);
-
     isSceneLoaded_ = true;
 }
 
-void Vulkan::createOffscreenResources()
+void Vulkan::createShadowPassResources()
 {
-    offscreenResources_.width = sShadowResolution_;
-    offscreenResources_.height = sShadowResolution_;
+    shadowPass_.width = sShadowResolution_;
+    shadowPass_.height = sShadowResolution_;
 
     vk::Extent3D extent { .width = sShadowResolution_, .height = sShadowResolution_, .depth = 1 };
 
-    offscreenResources_.depthImage = memoryHelper_->createImage(extent, sDepthAttachmentFormat_, vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled, 1, vk::SampleCountFlagBits::e1);
-    offscreenResources_.depthView = memoryHelper_->createImageViewUnique(offscreenResources_.depthImage->image, sDepthAttachmentFormat_, vk::ImageAspectFlagBits::eDepth, 1);
+    shadowPass_.depthImage = memoryHelper_->createImage(extent, sDepthAttachmentFormat_, vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled, 1, vk::SampleCountFlagBits::e1);
+    shadowPass_.depthView = memoryHelper_->createImageViewUnique(shadowPass_.depthImage->image, sDepthAttachmentFormat_, vk::ImageAspectFlagBits::eDepth, 1);
 
     vk::SamplerCreateInfo samplerInfo {
         .magFilter = vk::Filter::eLinear,
@@ -527,7 +571,7 @@ void Vulkan::createOffscreenResources()
         .borderColor = vk::BorderColor::eFloatOpaqueWhite
     };
 
-    offscreenResources_.depthSampler = device_->createSamplerUnique(samplerInfo);
+    shadowPass_.depthSampler = device_->createSamplerUnique(samplerInfo);
 
     vk::AttachmentDescription depthAttachment {
         .format = sDepthAttachmentFormat_,
@@ -579,25 +623,29 @@ void Vulkan::createOffscreenResources()
         .pDependencies = dependencies.data()
     };
 
-    offscreenResources_.renderPass = device_->createRenderPassUnique(renderPassInfo);
+    shadowPass_.renderPass = device_->createRenderPassUnique(renderPassInfo);
 
     vk::FramebufferCreateInfo framebufferInfo {
-        .renderPass = *offscreenResources_.renderPass,
+        .renderPass = *shadowPass_.renderPass,
         .attachmentCount = 1,
-        .pAttachments = &offscreenResources_.depthView.get(),
-        .width = offscreenResources_.width,
-        .height = offscreenResources_.height,
+        .pAttachments = &shadowPass_.depthView.get(),
+        .width = shadowPass_.width,
+        .height = shadowPass_.height,
         .layers = 1
     };
 
-    offscreenResources_.frameBuffer = device_->createFramebufferUnique(framebufferInfo);
+    shadowPass_.frameBuffer = device_->createFramebufferUnique(framebufferInfo);
 }
 
 void Vulkan::createPipelines()
 {
     // shaders
+    std::vector<char> shadowShaderBytes = readSpirVFile("shaders/shadow.spv");
     std::vector<char> vertexShaderBytes = readSpirVFile("shaders/vertex.spv");
     std::vector<char> fragmentShaderBytes = readSpirVFile("shaders/fragment.spv");
+
+    vk::UniqueShaderModule shadowShaderModule = device_->createShaderModuleUnique({ .codeSize = shadowShaderBytes.size(),
+        .pCode = reinterpret_cast<const uint32_t*>(shadowShaderBytes.data()) });
 
     vk::UniqueShaderModule vertexShaderModule = device_->createShaderModuleUnique({ .codeSize = vertexShaderBytes.size(),
         .pCode = reinterpret_cast<const uint32_t*>(vertexShaderBytes.data()) });
@@ -605,8 +653,24 @@ void Vulkan::createPipelines()
     vk::UniqueShaderModule fragmentShaderModule = device_->createShaderModuleUnique({ .codeSize = fragmentShaderBytes.size(),
         .pCode = reinterpret_cast<const uint32_t*>(fragmentShaderBytes.data()) });
 
-    // pipeline layout
-    vk::PushConstantRange pushConstantRange {
+    // shadow pipeline layout
+    vk::PushConstantRange shadowPushRange {
+        .stageFlags = vk::ShaderStageFlagBits::eVertex,
+        .offset = 0,
+        .size = sizeof(shadowPass_.pushConstants)
+    };
+
+    vk::PipelineLayoutCreateInfo shadowPassPipelineLayoutInfo {
+        .setLayoutCount = 1,
+        .pSetLayouts = &descriptorLayouts_.shadowPass.get(),
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &shadowPushRange
+    };
+
+    shadowPass_.pipelineLayout = device_->createPipelineLayoutUnique(shadowPassPipelineLayoutInfo);
+
+    // texture pipeline layout
+    vk::PushConstantRange texturePushRange {
         .stageFlags = vk::ShaderStageFlagBits::eVertex,
         .offset = 0,
         .size = sizeof(PushConstants)
@@ -614,14 +678,14 @@ void Vulkan::createPipelines()
 
     std::vector<vk::DescriptorSetLayout> setLayouts = { *descriptorLayouts_.ubo, *descriptorLayouts_.material };
 
-    vk::PipelineLayoutCreateInfo pipelineLayoutInfo {
+    vk::PipelineLayoutCreateInfo texturePipelineLayoutInfo {
         .setLayoutCount = static_cast<uint32_t>(setLayouts.size()),
         .pSetLayouts = setLayouts.data(),
         .pushConstantRangeCount = 1,
-        .pPushConstantRanges = &pushConstantRange
+        .pPushConstantRanges = &texturePushRange
     };
 
-    texturePipeline_.layout = device_->createPipelineLayoutUnique(pipelineLayoutInfo);
+    texturePipeline_.layout = device_->createPipelineLayoutUnique(texturePipelineLayoutInfo);
 
     std::vector<vk::PipelineShaderStageCreateInfo> shaderStageInfos = {
         { .stage = vk::ShaderStageFlagBits::eVertex,
@@ -764,6 +828,26 @@ void Vulkan::createPipelines()
     };
 
     texturePipeline_.pipeline = device_->createGraphicsPipelineUnique(nullptr, pipelineInfo).value;
+
+    // shadow pass pipeline
+    vk::PipelineShaderStageCreateInfo shadowPassStageInfo {
+        .stage = vk::ShaderStageFlagBits::eVertex,
+        .module = *shadowShaderModule,
+        .pName = "main"
+    };
+    pipelineInfo.stageCount = 1;
+    colorBlendStateInfo.attachmentCount = 0;
+    rasterStateInfo.cullMode = vk::CullModeFlagBits::eNone;
+    rasterStateInfo.depthBiasEnable = VK_TRUE;
+    multisampleStateInfo.rasterizationSamples = vk::SampleCountFlagBits::e1;
+    depthStencilStateInfo.depthCompareOp = vk::CompareOp::eLessOrEqual;
+    dynamicStates.push_back(vk::DynamicState::eDepthBias);
+    dynamicStateInfo = {
+        .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
+        .pDynamicStates = dynamicStates.data()
+    };
+    pipelineInfo.renderPass = *shadowPass_.renderPass;
+    shadowPass_.pipeline = device_->createGraphicsPipelineUnique(nullptr, pipelineInfo).value;
 }
 
 void Vulkan::createSwapchain(vk::SwapchainKHR oldSwapchain)
@@ -837,6 +921,7 @@ void Vulkan::updateUniformBuffers(int dx)
     cameraUniformBuffer_.proj = camera_.proj;
 
     memoryHelper_->uploadToBufferDirect(sceneUbo_.buffer, &cameraUniformBuffer_);
+    memoryHelper_->uploadToBufferDirect(shadowPass_.buffer, &lightUniformBuffer_);
 }
 
 void Vulkan::drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node)
@@ -872,6 +957,28 @@ void Vulkan::drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node)
     }
 }
 
+void Vulkan::drawNodeShadow(vk::CommandBuffer& commandBuffer, pl::Node* node)
+{
+    if (node->mesh != nullptr && !node->mesh->primitives.empty()) {
+        glm::mat4 matrix = node->matrix;
+        pl::Node* parent = node->parent;
+        while (parent != nullptr) {
+            matrix = parent->matrix * matrix;
+            parent = parent->parent;
+        }
+        for (const auto& _primitive : node->mesh->primitives) {
+            if (_primitive->indexCount > 0) {
+                shadowPass_.pushConstants = matrix;
+                commandBuffer.pushConstants(*shadowPass_.pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(shadowPass_.pushConstants), &shadowPass_.pushConstants);
+                commandBuffer.drawIndexed(_primitive->indexCount, 1, _primitive->firstIndex, 0, 0);
+            }
+        }
+    }
+    for (const auto& _node : node->children) {
+        drawNodeShadow(commandBuffer, _node);
+    }
+}
+
 void Vulkan::drawFrame()
 {
     auto inFlight = *inFlightFences_[currentFrame_];
@@ -898,29 +1005,35 @@ void Vulkan::drawFrame()
     device_->resetFences(inFlight);
 
     commandBuffer.reset();
-    vk::CommandBufferBeginInfo commandBufferInfo {};
-    vk::ClearValue clearColor { .color = { std::array<float, 4> { 0.0f, 0.0f, 0.0f, 1.0f } } };
+    vk::CommandBufferBeginInfo beginInfo {};
+    commandBuffer.begin(beginInfo);
+
+    vk::ClearValue clearColor { .color = { std::array<float, 4> { 0.0f, 0.0f, 0.0f, 0.0f } } };
     vk::ClearValue clearDepthValue { .depthStencil = vk::ClearDepthStencilValue { 1.0f } };
     std::array<vk::ClearValue, 2> clearValues { clearColor, clearDepthValue };
 
-    vk::RenderPassBeginInfo renderPassInfo {
-        .renderPass = *renderPass_,
-        .framebuffer = *swapchainFramebuffers_[imageIndex],
-        .renderArea = {
-            .offset = { 0, 0 },
-            .extent = { extent_.width, extent_.height } },
-        .clearValueCount = static_cast<uint32_t>(clearValues.size()),
-        .pClearValues = clearValues.data()
-    };
+    /*
+        Off-screen draw
+    */
+    if (false) {
+        vk::RenderPassBeginInfo renderPassInfo {
+            .renderPass = *shadowPass_.renderPass,
+            .framebuffer = *shadowPass_.frameBuffer,
+            .renderArea = {
+                .offset = { 0, 0 },
+                .extent = { shadowPass_.width, shadowPass_.height },
+            },
+            .clearValueCount = 1,
+            .pClearValues = clearValues.data()
+        };
 
-    commandBuffer.begin(commandBufferInfo);
-    commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
-    {
+        commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
+
         vk::Viewport viewport {
             .x = 0.0f,
             .y = 0.0f,
-            .width = static_cast<float>(extent_.width),
-            .height = static_cast<float>(extent_.height),
+            .width = static_cast<float>(shadowPass_.width),
+            .height = static_cast<float>(shadowPass_.height),
             .minDepth = 0.0f,
             .maxDepth = 1.0f
         };
@@ -928,20 +1041,66 @@ void Vulkan::drawFrame()
 
         vk::Rect2D scissor {
             .offset = { 0, 0 },
-            .extent = { extent_.width, extent_.height }
+            .extent = { shadowPass_.width, shadowPass_.height }
         };
         commandBuffer.setScissor(0, 1, &scissor);
-
+        // TODO: re-examine examine this
+        commandBuffer.setDepthBias(1.25f, 0.0f, 1.75f);
+        commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *shadowPass_.pipeline);
+        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *shadowPass_.pipelineLayout, 0, 1, &shadowPass_.descriptorSet.get(), 0, nullptr);
         commandBuffer.bindVertexBuffers(0, vk::Buffer(model_->vertexBuffer->buffer), { 0 });
         commandBuffer.bindIndexBuffer(vk::Buffer(model_->indexBuffer->buffer), 0, vk::IndexType::eUint32);
-
+        
         for (const auto& _node : model_->defaultScene->nodes) {
-            drawNode(commandBuffer, _node);
+            drawNodeShadow(commandBuffer, _node);
         }
-
-        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
+        
+        commandBuffer.endRenderPass();
     }
-    commandBuffer.endRenderPass();
+
+    /*
+        On-screen draw
+    */
+    {
+        vk::RenderPassBeginInfo renderPassInfo {
+            .renderPass = *renderPass_,
+            .framebuffer = *swapchainFramebuffers_[imageIndex],
+            .renderArea = {
+                .offset = { 0, 0 },
+                .extent = { extent_.width, extent_.height } },
+            .clearValueCount = static_cast<uint32_t>(clearValues.size()),
+            .pClearValues = clearValues.data()
+        };
+
+        commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
+        {
+            vk::Viewport viewport {
+                .x = 0.0f,
+                .y = 0.0f,
+                .width = static_cast<float>(extent_.width),
+                .height = static_cast<float>(extent_.height),
+                .minDepth = 0.0f,
+                .maxDepth = 1.0f
+            };
+            commandBuffer.setViewport(0, 1, &viewport);
+
+            vk::Rect2D scissor {
+                .offset = { 0, 0 },
+                .extent = { extent_.width, extent_.height }
+            };
+            commandBuffer.setScissor(0, 1, &scissor);
+
+            commandBuffer.bindVertexBuffers(0, vk::Buffer(model_->vertexBuffer->buffer), { 0 });
+            commandBuffer.bindIndexBuffer(vk::Buffer(model_->indexBuffer->buffer), 0, vk::IndexType::eUint32);
+
+            for (const auto& _node : model_->defaultScene->nodes) {
+                drawNode(commandBuffer, _node);
+            }
+
+            ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
+        }
+        commandBuffer.endRenderPass();
+    }
     commandBuffer.end();
 
     vk::PipelineStageFlags waitDstStageMask { vk::PipelineStageFlagBits::eColorAttachmentOutput };

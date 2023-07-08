@@ -15,9 +15,11 @@ add_custom_command(TARGET palace POST_BUILD
 endif()
 
 # compile & copy shaders
+file(REMOVE "${PROJECT_BINARY_DIR}/shaders/")
 file(GLOB_RECURSE GLSL_SOURCE_FILES
-		"${PROJECT_SOURCE_DIR}/shaders/*.frag"
-		"${PROJECT_SOURCE_DIR}/shaders/*.vert")
+		"${PROJECT_SOURCE_DIR}/shaders/shadow.vert"
+		"${PROJECT_SOURCE_DIR}/shaders/fragment.frag"
+		"${PROJECT_SOURCE_DIR}/shaders/vertex.vert")
 foreach(GLSL ${GLSL_SOURCE_FILES})
 	get_filename_component(FILE_NAME ${GLSL} NAME_WE)
 	set(SPIRV "${PROJECT_BINARY_DIR}/shaders/${FILE_NAME}.spv")
