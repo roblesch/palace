@@ -66,6 +66,29 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
         // base color
         if (_material.pbrMetallicRoughness.baseColorTexture.index > -1) {
             material->baseColor = textures[model.textures[_material.pbrMetallicRoughness.baseColorTexture.index].source].get();
+        } else {
+            auto texture = std::make_shared<Texture>();
+            texture->name = _material.name + "_BASE_COLOR";
+            texture->extent = vk::Extent3D {
+                .width = 32,
+                .height = 32,
+                .depth = 1
+            };
+            auto size = texture->extent.width * texture->extent.height * 4 * sizeof(unsigned char);
+            uint32_t px = 32 * 32;
+            uint32_t mipLevels = 1;
+            std::vector<unsigned char> baseColor;
+            for (uint32_t i = 0; i < px; i++) {
+                baseColor.push_back(_material.pbrMetallicRoughness.baseColorFactor[0]);
+                baseColor.push_back(_material.pbrMetallicRoughness.baseColorFactor[1]);
+                baseColor.push_back(_material.pbrMetallicRoughness.baseColorFactor[2]);
+                baseColor.push_back(_material.pbrMetallicRoughness.baseColorFactor[3]);
+            }
+            texture->image = memory->createTextureImage(baseColor.data(), size, texture->extent, mipLevels);
+            texture->view = memory->createImageViewUnique(texture->image->image, vk::Format::eR8G8B8A8Unorm, vk::ImageAspectFlagBits::eColor, mipLevels);
+            texture->sampler = memory->createTextureSamplerUnique(mipLevels);
+            textures.push_back(texture);
+            material->baseColor = texture.get();
         }
         if (_material.normalTexture.index > -1) {
             material->useNormalTexture = 1.0f;
@@ -185,21 +208,36 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
             nodes[i]->children.push_back(nodes[child].get());
         }
 
-        nodes[i]->matrix = glm::mat4(1.0f);
-        if (_node.translation.size() == 3)
-            nodes[i]->matrix = glm::translate(nodes[i]->matrix, glm::vec3(glm::make_vec3(_node.translation.data())));
+        //nodes[i]->matrix = glm::mat4(1.0f);
 
+        // translation
+        glm::vec3 translation = glm::vec3(0.0f);
+        if (_node.translation.size() == 3)
+            translation = glm::make_vec3(_node.translation.data());
+            //nodes[i]->matrix = glm::translate(nodes[i]->matrix, glm::vec3());
+
+        // rotate
+        glm::mat4 rotation = glm::mat4(1.0f);
         if (_node.rotation.size() == 4) {
             glm::quat q = glm::make_quat(_node.rotation.data());
-            nodes[i]->matrix *= glm::mat4(q);
+            rotation = glm::mat4(q);
+            //nodes[i]->matrix *= glm::mat4(q);
         }
 
+        // scale
+        glm::vec3 scale = glm::vec3(1.0f);
         if (_node.scale.size() == 3)
-            nodes[i]->matrix = glm::scale(nodes[i]->matrix, glm::vec3(glm::make_vec3(_node.scale.data())));
+            scale = glm::make_vec3(_node.scale.data());
+            //nodes[i]->matrix = glm::scale(nodes[i]->matrix, glm::vec3(glm::make_vec3(_node.scale.data())));
 
-        if (_node.matrix.size() == 16)
-            nodes[i]->matrix = glm::make_mat4(_node.matrix.data());
+        glm::mat4 matrix(1.0f);
+        if (_node.matrix.size() == 16) {
+            matrix = glm::make_mat4x4(_node.matrix.data());
+            //glm::mat4 matrix = glm::make_mat4(_node.matrix.data()); 
+            //nodes[i]->matrix = nodes[i]->matrix*matrix;
+        }
 
+        nodes[i]->matrix = glm::translate(glm::mat4(1.0f), translation) * glm::mat4(rotation) * glm::scale(glm::mat4(1.0f), scale) * matrix;
         nodes[i]->mesh = _node.mesh > -1 ? meshes[_node.mesh].get() : nullptr;
     }
 
