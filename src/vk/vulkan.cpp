@@ -327,7 +327,10 @@ Vulkan::Vulkan(bool enableValidation)
     createPipelines();
 
     // uniform buffers
-    uniformBuffer_.buffer = memoryHelper_->createBuffer(sizeof(ubo_), vk::BufferUsageFlagBits::eUniformBuffer, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+    uniformBuffers_.resize(sConcurrentFrames_);
+    for (int i = 0; i < sConcurrentFrames_; i++) {
+        uniformBuffers_[i].buffer = memoryHelper_->createBuffer(sizeof(ubo_), vk::BufferUsageFlagBits::eUniformBuffer, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+    }
 
     // swapchain
     createSwapchain();
@@ -427,40 +430,42 @@ void Vulkan::loadGltfModel(const char* path)
     descriptorPool_ = device_->createDescriptorPoolUnique(pipelinePoolInfo);
 
     // ubo descriptors
-    vk::DescriptorSetAllocateInfo uboDescriptorSetInfo {
-        .descriptorPool = *descriptorPool_,
-        .descriptorSetCount = 1,
-        .pSetLayouts = &descriptorLayouts_.ubo.get()
-    };
-    uniformBuffer_.descriptorSet = std::move(device_->allocateDescriptorSetsUnique(uboDescriptorSetInfo)[0]);
-    vk::DescriptorBufferInfo uboBufferInfo {
-        .buffer = uniformBuffer_.buffer->buffer,
-        .offset = 0,
-        .range = sizeof(ubo_)
-    };
-    vk::WriteDescriptorSet sceneUboWriteDescriptor {
-        .dstSet = *uniformBuffer_.descriptorSet,
-        .dstBinding = 0,
-        .dstArrayElement = 0,
-        .descriptorCount = 1,
-        .descriptorType = vk::DescriptorType::eUniformBuffer,
-        .pBufferInfo = &uboBufferInfo
-    };
-    vk::DescriptorImageInfo shadowMapSamplerInfo {
-        .sampler = *shadowPass_.depthSampler,
-        .imageView = *shadowPass_.depthView,
-        .imageLayout = vk::ImageLayout::eDepthStencilReadOnlyOptimal
-    };
-    vk::WriteDescriptorSet shadowMapWriteDescriptor {
-        .dstSet = *uniformBuffer_.descriptorSet,
-        .dstBinding = 1,
-        .dstArrayElement = 0,
-        .descriptorCount = 1,
-        .descriptorType = vk::DescriptorType::eCombinedImageSampler,
-        .pImageInfo = &shadowMapSamplerInfo
-    };
-    std::array<vk::WriteDescriptorSet, 2> uboWriteDescriptors = { sceneUboWriteDescriptor, shadowMapWriteDescriptor };
-    device_->updateDescriptorSets(static_cast<uint32_t>(uboWriteDescriptors.size()), uboWriteDescriptors.data(), 0, nullptr);
+    for (int i = 0; i < sConcurrentFrames_; i++) {
+        vk::DescriptorSetAllocateInfo uboDescriptorSetInfo {
+            .descriptorPool = *descriptorPool_,
+            .descriptorSetCount = 1,
+            .pSetLayouts = &descriptorLayouts_.ubo.get()
+        };
+        uniformBuffers_[i].descriptorSet = std::move(device_->allocateDescriptorSetsUnique(uboDescriptorSetInfo)[0]);
+        vk::DescriptorBufferInfo uboBufferInfo {
+            .buffer = uniformBuffers_[i].buffer->buffer,
+            .offset = 0,
+            .range = sizeof(ubo_)
+        };
+        vk::WriteDescriptorSet sceneUboWriteDescriptor {
+            .dstSet = *uniformBuffers_[i].descriptorSet,
+            .dstBinding = 0,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = vk::DescriptorType::eUniformBuffer,
+            .pBufferInfo = &uboBufferInfo
+        };
+        vk::DescriptorImageInfo shadowMapSamplerInfo {
+            .sampler = *shadowPass_.depthSampler,
+            .imageView = *shadowPass_.depthView,
+            .imageLayout = vk::ImageLayout::eDepthStencilReadOnlyOptimal
+        };
+        vk::WriteDescriptorSet shadowMapWriteDescriptor {
+            .dstSet = *uniformBuffers_[i].descriptorSet,
+            .dstBinding = 1,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+            .pImageInfo = &shadowMapSamplerInfo
+        };
+        std::array<vk::WriteDescriptorSet, 2> uboWriteDescriptors = { sceneUboWriteDescriptor, shadowMapWriteDescriptor };
+        device_->updateDescriptorSets(static_cast<uint32_t>(uboWriteDescriptors.size()), uboWriteDescriptors.data(), 0, nullptr);
+    }
 
     // material descriptor sets
     for (auto& _material : model_->materials) {
@@ -883,7 +888,7 @@ void Vulkan::updateUniformBuffers(int dx)
     ubo_.lightProj = glm::perspective(45.0f, 1.0f, 1.0f, 100.0f);
     ubo_.lightPos = glm::vec3(10.0f, 10.0f, 0.0f);
 
-    memoryHelper_->uploadToBufferDirect(uniformBuffer_.buffer, &ubo_);
+    memoryHelper_->uploadToBufferDirect(uniformBuffers_[currentFrame_].buffer, &ubo_);
 }
 
 void Vulkan::drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node)
@@ -899,7 +904,7 @@ void Vulkan::drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node)
             if (_primitive->indexCount > 0) {
                 if (_primitive->material->baseColor) {
                     std::array<vk::DescriptorSet, 2> descriptorSets {
-                        uniformBuffer_.descriptorSet.get(),
+                        uniformBuffers_[currentFrame_].descriptorSet.get(),
                         _primitive->material->descriptorSet.get()
                     };
                     pushConstants_.meshTransform = matrix;
@@ -1006,11 +1011,9 @@ void Vulkan::drawFrame()
             .extent = { shadowPass_.width, shadowPass_.height }
         };
         commandBuffer.setScissor(0, 1, &scissor);
-        // TODO: re-examine examine this
         commandBuffer.setDepthBias(1.25f, 0.0f, 1.75f);
         commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *shadowPass_.pipeline);
-        // TODO:: descriptor set binding
-        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *shadowPass_.pipelineLayout, 0, 1, &uniformBuffer_.descriptorSet.get(), 0, nullptr);
+        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *shadowPass_.pipelineLayout, 0, 1, &uniformBuffers_[currentFrame_].descriptorSet.get(), 0, nullptr);
         commandBuffer.bindVertexBuffers(0, vk::Buffer(model_->vertexBuffer->buffer), { 0 });
         commandBuffer.bindIndexBuffer(vk::Buffer(model_->indexBuffer->buffer), 0, vk::IndexType::eUint32);
 

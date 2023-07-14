@@ -96,10 +96,11 @@ private:
     } texturePipeline_;
 
     // uniforms
-    struct {
+    struct CameraUniformBuffer {
         VmaBuffer* buffer;
         vk::UniqueDescriptorSet descriptorSet;
-    } uniformBuffer_;
+    };
+    std::vector<CameraUniformBuffer> uniformBuffers_;
 
     // ubos
     struct UniformBuffer {
