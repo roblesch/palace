@@ -4,43 +4,14 @@
 #define TINYGLTF_IMPLEMENTATION
 #define TINYGLTF_NO_STB_IMAGE_WRITE
 #define STB_IMAGE_IMPLEMENTATION
-#include "tiny_gltf.h"
 #include <filesystem>
 
 namespace fs = std::filesystem;
 
 namespace pl {
 
-GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
+void GltfModel::loadImages(const char* path, tinygltf::Model& model)
 {
-    auto path = createInfo.path;
-    auto memory = createInfo.memory;
-
-    defaultScene = nullptr;
-    vertexBuffer = nullptr;
-    indexBuffer = nullptr;
-
-    tinygltf::Model model;
-    tinygltf::TinyGLTF loader;
-    std::string warn, err;
-
-    bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, path);
-
-    if (!warn.empty()) {
-        pl::LOG_WARN(warn.c_str(), "GLTF");
-    }
-
-    if (!err.empty()) {
-        pl::LOG_ERROR(err.c_str(), "GLTF");
-        return;
-    }
-
-    if (!ret) {
-        pl::LOG_ERROR("Failed to parse gltf file", "GLTF");
-        return;
-    }
-
-    // textures
     for (const auto& _image : model.images) {
         auto texture = std::make_shared<Texture>();
         texture->name = (fs::path(path).parent_path() / _image.uri).string();
@@ -51,13 +22,15 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
         };
         auto size = texture->extent.width * texture->extent.height * 4 * sizeof(unsigned char);
         auto mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(_image.width, _image.height)))) + 1;
-        texture->image = memory->createTextureImage(_image.image.data(), size, texture->extent, mipLevels);
-        texture->view = memory->createImageViewUnique(texture->image->image, vk::Format::eR8G8B8A8Unorm, vk::ImageAspectFlagBits::eColor, mipLevels);
-        texture->sampler = memory->createTextureSamplerUnique(mipLevels);
+        texture->image = memoryHelper->createTextureImage(_image.image.data(), size, texture->extent, mipLevels);
+        texture->view = memoryHelper->createImageViewUnique(texture->image->image, vk::Format::eR8G8B8A8Unorm, vk::ImageAspectFlagBits::eColor, mipLevels);
+        texture->sampler = memoryHelper->createTextureSamplerUnique(mipLevels);
         textures.push_back(texture);
     }
+}
 
-    // materials
+void GltfModel::loadMaterials(tinygltf::Model& model)
+{
     for (const auto& _material : model.materials) {
         auto material = std::make_shared<Material>();
         materials.push_back(material);
@@ -84,9 +57,9 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
                 baseColor.push_back(_material.pbrMetallicRoughness.baseColorFactor[2]);
                 baseColor.push_back(_material.pbrMetallicRoughness.baseColorFactor[3]);
             }
-            texture->image = memory->createTextureImage(baseColor.data(), size, texture->extent, mipLevels);
-            texture->view = memory->createImageViewUnique(texture->image->image, vk::Format::eR8G8B8A8Unorm, vk::ImageAspectFlagBits::eColor, mipLevels);
-            texture->sampler = memory->createTextureSamplerUnique(mipLevels);
+            texture->image = memoryHelper->createTextureImage(baseColor.data(), size, texture->extent, mipLevels);
+            texture->view = memoryHelper->createImageViewUnique(texture->image->image, vk::Format::eR8G8B8A8Unorm, vk::ImageAspectFlagBits::eColor, mipLevels);
+            texture->sampler = memoryHelper->createTextureSamplerUnique(mipLevels);
             textures.push_back(texture);
             material->baseColor = texture.get();
         }
@@ -95,8 +68,10 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
             material->normal = textures[model.textures[_material.normalTexture.index].source].get();
         }
     }
+}
 
-    // meshes
+void GltfModel::loadMeshes(tinygltf::Model& model)
+{
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
 
@@ -189,64 +164,109 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
     }
 
     // buffers
-    vertexBuffer = memory->createBuffer(vertices.size() * sizeof(Vertex), vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer, {});
-    indexBuffer = memory->createBuffer(indices.size() * sizeof(uint32_t), vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer, {});
-    memory->uploadToBuffer(vertexBuffer, vertices.data());
-    memory->uploadToBuffer(indexBuffer, indices.data());
+    vertexBuffer = memoryHelper->createBuffer(vertices.size() * sizeof(Vertex), vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer, {});
+    indexBuffer = memoryHelper->createBuffer(indices.size() * sizeof(uint32_t), vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer, {});
+    memoryHelper->uploadToBuffer(vertexBuffer, vertices.data());
+    memoryHelper->uploadToBuffer(indexBuffer, indices.data());
+}
 
-    // nodes
-    for (size_t i = 0; i < model.nodes.size(); i++) {
-        auto node = std::make_shared<Node>();
-        node->parent = nullptr;
-        nodes.push_back(node);
+glm::mat4 Node::localMatrix() {
+    return glm::translate(glm::mat4(1.0f), translation) * glm::mat4(rotation) * glm::scale(glm::mat4(1.0f), scale) * matrix;
+}
+
+glm::mat4 Node::globalMatrix() {
+    glm::mat4 m = localMatrix();
+    Node* p = parent;
+    while (p) {
+        m = p->localMatrix() * m;
+        p = p->parent;
     }
-    for (size_t i = 0; i < model.nodes.size(); i++) {
-        auto _node = model.nodes[i];
+    return m;
+}
 
-        for (int child : _node.children) {
-            nodes[child]->parent = nodes[i].get();
-            nodes[i]->children.push_back(nodes[child].get());
-        }
+void GltfModel::loadNode(Scene* scene, Node* parent, tinygltf::Node& node, tinygltf::Model& model)
+{
+    auto newNode = std::make_shared<Node>();
+    scene->nodes.push_back(newNode.get());
+    nodes.push_back(newNode);
+    newNode->parent = parent;
+    newNode->name = node.name;
+    newNode->matrix = glm::mat4(1.0f);
 
-        //nodes[i]->matrix = glm::mat4(1.0f);
-
-        // translation
-        glm::vec3 translation = glm::vec3(0.0f);
-        if (_node.translation.size() == 3)
-            translation = glm::make_vec3(_node.translation.data());
-            //nodes[i]->matrix = glm::translate(nodes[i]->matrix, glm::vec3());
-
-        // rotate
-        glm::mat4 rotation = glm::mat4(1.0f);
-        if (_node.rotation.size() == 4) {
-            glm::quat q = glm::make_quat(_node.rotation.data());
-            rotation = glm::mat4(q);
-            //nodes[i]->matrix *= glm::mat4(q);
-        }
-
-        // scale
-        glm::vec3 scale = glm::vec3(1.0f);
-        if (_node.scale.size() == 3)
-            scale = glm::make_vec3(_node.scale.data());
-            //nodes[i]->matrix = glm::scale(nodes[i]->matrix, glm::vec3(glm::make_vec3(_node.scale.data())));
-
-        glm::mat4 matrix(1.0f);
-        if (_node.matrix.size() == 16) {
-            matrix = glm::make_mat4x4(_node.matrix.data());
-            //glm::mat4 matrix = glm::make_mat4(_node.matrix.data()); 
-            //nodes[i]->matrix = nodes[i]->matrix*matrix;
-        }
-
-        nodes[i]->matrix = glm::translate(glm::mat4(1.0f), translation) * glm::mat4(rotation) * glm::scale(glm::mat4(1.0f), scale) * matrix;
-        nodes[i]->mesh = _node.mesh > -1 ? meshes[_node.mesh].get() : nullptr;
+    // Generate local node matrix
+    glm::vec3 translation = glm::vec3(0.0f);
+    if (node.translation.size() == 3) {
+        translation = glm::make_vec3(node.translation.data());
+        newNode->translation = translation;
     }
+    glm::mat4 rotation = glm::mat4(1.0f);
+    if (node.rotation.size() == 4) {
+        glm::quat q = glm::make_quat(node.rotation.data());
+        newNode->rotation = glm::mat4(q);
+    }
+    glm::vec3 scale = glm::vec3(1.0f);
+    if (node.scale.size() == 3) {
+        scale = glm::make_vec3(node.scale.data());
+        newNode->scale = scale;
+    }
+    if (node.matrix.size() == 16) {
+        newNode->matrix = glm::make_mat4x4(node.matrix.data());
+    };
+
+    //newNode->matrix = glm::translate(glm::mat4(1.0f), translation) * glm::mat4(rotation) * glm::scale(glm::mat4(1.0f), scale) * newNode->matrix;
+
+    if (node.children.size() > 0) {
+        for (size_t i = 0; i < node.children.size(); i++) {
+            loadNode(scene, newNode.get(), model.nodes[node.children[i]], model);
+        }
+    }
+
+    if (node.mesh > -1) {
+        newNode->mesh = meshes[node.mesh].get();
+    }
+}
+
+GltfModel::GltfModel(const GltfModelCreateInfo& createInfo) : memoryHelper(createInfo.memory)
+{
+    defaultScene = nullptr;
+    vertexBuffer = nullptr;
+    indexBuffer = nullptr;
+
+    tinygltf::Model model;
+    tinygltf::TinyGLTF loader;
+    std::string warn, err;
+
+    bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, createInfo.path);
+
+    if (!warn.empty()) {
+        pl::LOG_WARN(warn.c_str(), "GLTF");
+    }
+
+    if (!err.empty()) {
+        pl::LOG_ERROR(err.c_str(), "GLTF");
+        return;
+    }
+
+    if (!ret) {
+        pl::LOG_ERROR("Failed to parse gltf file", "GLTF");
+        return;
+    }
+
+    // textures
+    loadImages(createInfo.path, model);
+
+    // materials
+    loadMaterials(model);
+
+    // meshes
+    loadMeshes(model);
 
     // scenes
     for (const auto& _scene : model.scenes) {
         auto scene = std::make_shared<Scene>();
         scene->name = _scene.name;
         for (int i : _scene.nodes) {
-            scene->nodes.push_back(nodes[i].get());
+            loadNode(scene.get(), nullptr, model.nodes[i], model);            
         }
         scenes.push_back(scene);
     }

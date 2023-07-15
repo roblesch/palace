@@ -1,6 +1,7 @@
 #pragma once
 
 #include "memory.hpp"
+#include "tiny_gltf.h"
 #include "types.hpp"
 #include <string>
 #include <vector>
@@ -46,12 +47,15 @@ struct Mesh {
 
 struct Node {
     Node* parent;
+    std::string name;
     Mesh* mesh;
     std::vector<Node*> children;
-    glm::vec3 translation;
-    glm::quat rotation;
-    glm::vec3 scale;
+    glm::vec3 translation {};
+    glm::quat rotation {};
+    glm::vec3 scale { 1.0f };
     glm::mat4 matrix;
+    glm::mat4 localMatrix();
+    glm::mat4 globalMatrix();
 };
 
 struct Scene {
@@ -78,6 +82,14 @@ public:
     Scene* defaultScene;
     VmaBuffer* vertexBuffer;
     VmaBuffer* indexBuffer;
+
+private:
+    MemoryHelper* memoryHelper;
+
+    void loadImages(const char* path, tinygltf::Model& model);
+    void loadMaterials(tinygltf::Model& model);
+    void loadMeshes(tinygltf::Model& model);
+    void loadNode(Scene* scene, Node* parent, tinygltf::Node& node, tinygltf::Model& model);
 };
 
 using UniqueGltfModel = std::unique_ptr<GltfModel>;

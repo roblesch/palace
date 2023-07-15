@@ -88,7 +88,7 @@ Vulkan::Vulkan(bool enableValidation)
     vk::ApplicationInfo appInfo {
         .pApplicationName = "viewer",
         .pEngineName = "palace",
-        .apiVersion = VK_API_VERSION_1_0
+        .apiVersion = VK_API_VERSION_1_1
     };
 
     // validation
@@ -388,7 +388,7 @@ Vulkan::Vulkan(bool enableValidation)
 
     // camera
     camera_ = Camera { .fovy = 45.0f, .znear = 0.1f, .zfar = 100.0f };
-    camera_.lookAt({ 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, -1.0f, 0.0f });
+    camera_.lookAt({ 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f });
     camera_.resize((float)extent_.width / (float)extent_.height);
 
     isInitialized_ = true;
@@ -407,7 +407,7 @@ void Vulkan::loadGltfModel(const char* path)
     // light, scene
     uint32_t uboCount = 2;
     // shadow map, textures
-    uint32_t samplerCount = 1 + static_cast<uint32_t>(model_->textures.size());
+    uint32_t samplerCount = 2 + 2*static_cast<uint32_t>(model_->materials.size());
 
     // descriptor pool
     vk::DescriptorPoolSize uboSize {
@@ -709,9 +709,9 @@ void Vulkan::createPipelines()
     // viewport state
     vk::Viewport viewport = {
         .x = 0.0f,
-        .y = 0.0f,
+        .y = (float)extent_.height,
         .width = static_cast<float>(extent_.width),
-        .height = static_cast<float>(extent_.height),
+        .height = -static_cast<float>(extent_.height),
         .minDepth = 0.0f,
         .maxDepth = 1.0f
     };
@@ -884,7 +884,7 @@ void Vulkan::updateUniformBuffers(int dx)
 {
     ubo_.cameraView = camera_.view;
     ubo_.cameraProj = camera_.proj;
-    ubo_.lightView = glm::lookAt(glm::vec3(10.0f, 10.0f, 0.0f), glm::vec3(0.0f), glm::vec3(0.0f, -1.0f, 0.0f));
+    ubo_.lightView = glm::lookAt(glm::vec3(10.0f, 10.0f, 0.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
     ubo_.lightProj = glm::perspective(45.0f, 1.0f, 1.0f, 100.0f);
     ubo_.lightPos = glm::vec3(10.0f, 10.0f, 0.0f);
 
@@ -894,12 +894,7 @@ void Vulkan::updateUniformBuffers(int dx)
 void Vulkan::drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node)
 {
     if (node->mesh != nullptr && !node->mesh->primitives.empty()) {
-        glm::mat4 matrix = node->matrix;
-        pl::Node* parent = node->parent;
-        while (parent != nullptr) {
-            matrix = parent->matrix * matrix;
-            parent = parent->parent;
-        }
+        glm::mat4 matrix = node->globalMatrix();
         for (const auto& _primitive : node->mesh->primitives) {
             if (_primitive->indexCount > 0) {
                 if (_primitive->material->baseColor) {
@@ -1042,9 +1037,9 @@ void Vulkan::drawFrame()
         {
             vk::Viewport viewport {
                 .x = 0.0f,
-                .y = 0.0f,
+                .y = (float)extent_.height,
                 .width = static_cast<float>(extent_.width),
-                .height = static_cast<float>(extent_.height),
+                .height = -static_cast<float>(extent_.height),
                 .minDepth = 0.0f,
                 .maxDepth = 1.0f
             };

@@ -44,12 +44,12 @@ struct Camera {
 
     void rotate(int dx, int dy)
     {
-        forward = glm::rotate(forward, (float)dx / 350.0f, up);
-        right = glm::rotate(right, (float)dx / 350.0f, up);
+        forward = glm::rotate(forward, -(float)dx / 350.0f, up);
+        right = glm::rotate(right, -(float)dx / 350.0f, up);
 
         float angle = glm::angle(forward, up);
-        if ((dy > 0 && angle > 0.1) || (dy < 0 && angle < glm::pi<float>() - 0.1f))
-            forward = glm::rotate(forward, (float)dy / 350.0f, right);
+        if ((dy < 0 && angle > 0.1f) || (dy > 0 && angle < glm::pi<float>() - 0.1f))
+            forward = glm::rotate(forward, -(float)dy / 350.0f, right);
 
         center = eye + forward * glm::length(center - eye);
         lookAt(eye, center, up);
@@ -67,17 +67,17 @@ struct Camera {
     void move(glm::ivec4 wasd, glm::ivec2 spacelctrl, float speed)
     {
         eye += 0.1f * (float)wasd[0] * forward * speed;
-        eye += 0.1f * (float)wasd[1] * right * speed;
+        eye -= 0.1f * (float)wasd[1] * right * speed;
         eye -= 0.1f * (float)wasd[2] * forward * speed;
-        eye -= 0.1f * (float)wasd[3] * right * speed;
+        eye += 0.1f * (float)wasd[3] * right * speed;
         center += 0.1f * (float)wasd[0] * forward * speed;
-        center += 0.1f * (float)wasd[1] * right * speed;
+        center -= 0.1f * (float)wasd[1] * right * speed;
         center -= 0.1f * (float)wasd[2] * forward * speed;
-        center -= 0.1f * (float)wasd[3] * right * speed;
-        eye -= 0.1f * (float)spacelctrl[0] * up * speed;
-        eye += 0.1f * (float)spacelctrl[1] * up * speed;
-        center -= 0.1f * (float)spacelctrl[0] * up * speed;
-        center += 0.1f * (float)spacelctrl[1] * up * speed;
+        center += 0.1f * (float)wasd[3] * right * speed;
+        eye += 0.1f * (float)spacelctrl[0] * up * speed;
+        eye -= 0.1f * (float)spacelctrl[1] * up * speed;
+        center += 0.1f * (float)spacelctrl[0] * up * speed;
+        center -= 0.1f * (float)spacelctrl[1] * up * speed;
 
         lookAt(eye, center, up);
     }
