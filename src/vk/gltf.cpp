@@ -194,20 +194,14 @@ void GltfModel::loadNode(Scene* scene, Node* parent, tinygltf::Node& node, tinyg
     newNode->matrix = glm::mat4(1.0f);
 
     // Generate local node matrix
-    glm::vec3 translation = glm::vec3(0.0f);
     if (node.translation.size() == 3) {
-        translation = glm::make_vec3(node.translation.data());
-        newNode->translation = translation;
+        newNode->translation = glm::make_vec3(node.translation.data());
     }
-    glm::mat4 rotation = glm::mat4(1.0f);
     if (node.rotation.size() == 4) {
-        glm::quat q = glm::make_quat(node.rotation.data());
-        newNode->rotation = glm::mat4(q);
+        newNode->rotation = glm::make_quat(node.rotation.data());
     }
-    glm::vec3 scale = glm::vec3(1.0f);
     if (node.scale.size() == 3) {
-        scale = glm::make_vec3(node.scale.data());
-        newNode->scale = scale;
+        newNode->scale = glm::make_vec3(node.scale.data());
     }
     if (node.matrix.size() == 16) {
         newNode->matrix = glm::make_mat4x4(node.matrix.data());

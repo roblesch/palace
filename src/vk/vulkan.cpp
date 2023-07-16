@@ -886,7 +886,7 @@ void Vulkan::updateUniformBuffers(int dx)
     ubo_.cameraProj = camera_.proj;
     ubo_.lightView = glm::lookAt(glm::vec3(10.0f, 10.0f, 0.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
     ubo_.lightProj = glm::perspective(45.0f, 1.0f, 1.0f, 100.0f);
-    ubo_.lightPos = glm::vec3(10.0f, 10.0f, 0.0f);
+    ubo_.lightPos = glm::vec3(-10.0f, 10.0f, 0.0f);
 
     memoryHelper_->uploadToBufferDirect(uniformBuffers_[currentFrame_].buffer, &ubo_);
 }
