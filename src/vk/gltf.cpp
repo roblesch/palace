@@ -133,7 +133,7 @@ void GltfModel::loadMeshes(tinygltf::Model& model)
                 const auto& accessor = model.accessors[_primitive.indices];
                 const auto& bufferView = model.bufferViews[accessor.bufferView];
                 const auto& buffer = model.buffers[bufferView.buffer];
-                primitive->indexCount = accessor.count;
+                primitive->indexCount = (uint32_t)accessor.count;
 
                 auto readIndexBuffer = [&]<typename T>(T dummy) {
                     T* buf = new T[accessor.count];
@@ -265,6 +265,8 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo) : memoryHelper(creat
         scenes.push_back(scene);
     }
     defaultScene = scenes[model.defaultScene].get();
+    
+    complete = true;
 }
 
 UniqueGltfModel createGltfModelUnique(const GltfModelCreateInfo& createInfo)

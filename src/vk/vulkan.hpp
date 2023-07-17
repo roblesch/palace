@@ -27,8 +27,8 @@ private:
     void drawNodeShadow(vk::CommandBuffer& commandBuffer, pl::Node* node);
     void drawFrame();
 
-    static constexpr int sWidth_ = 1920;
-    static constexpr int sHeight_ = 1080;
+    static constexpr int sWidth_ = 800;
+    static constexpr int sHeight_ = 600;
     static constexpr int sShadowResolution_ = 2048;
     static constexpr uint32_t sConcurrentFrames_ = 2;
     static constexpr vk::Format sSwapchainFormat_ = vk::Format::eB8G8R8A8Unorm;
@@ -108,7 +108,7 @@ private:
         glm::mat4 cameraProj { 1.0f };
         glm::mat4 lightView { 1.0f };
         glm::mat4 lightProj { 1.0f };
-        glm::vec3 lightPos { 0.0f };
+        glm::vec4 lightPos { 0.0f };
     } ubo_;
 
     // push constants

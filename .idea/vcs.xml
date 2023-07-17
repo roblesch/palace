@@ -3,5 +3,10 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/ext/SDL" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/ext/VulkanMemoryAllocator" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/ext/glm" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/ext/imgui" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/ext/stb" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/ext/tinygltf" vcs="Git" />
   </component>
 </project>

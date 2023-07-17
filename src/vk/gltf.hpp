@@ -82,6 +82,7 @@ public:
     Scene* defaultScene;
     VmaBuffer* vertexBuffer;
     VmaBuffer* indexBuffer;
+    bool complete { false };
 
 private:
     MemoryHelper* memoryHelper;

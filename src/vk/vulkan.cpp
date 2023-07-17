@@ -404,6 +404,9 @@ Vulkan::~Vulkan()
 void Vulkan::loadGltfModel(const char* path)
 {
     model_ = pl::createGltfModelUnique({ path, memoryHelper_.get() });
+    if (!model_->complete)
+        return;
+    
     // light, scene
     uint32_t uboCount = 2;
     // shadow map, textures
@@ -551,7 +554,7 @@ void Vulkan::createShadowPassResources()
         .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
         .finalLayout = vk::ImageLayout::eDepthStencilReadOnlyOptimal
     };
-
+    
     vk::AttachmentReference depthAttachmentRef {
         .attachment = 0,
         .layout = vk::ImageLayout::eDepthStencilAttachmentOptimal
@@ -884,9 +887,9 @@ void Vulkan::updateUniformBuffers(int dx)
 {
     ubo_.cameraView = camera_.view;
     ubo_.cameraProj = camera_.proj;
-    ubo_.lightView = glm::lookAt(glm::vec3(10.0f, 10.0f, 0.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    ubo_.lightView = glm::lookAt(glm::vec3(1.0f, 1.0f, -1.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
     ubo_.lightProj = glm::perspective(45.0f, 1.0f, 1.0f, 100.0f);
-    ubo_.lightPos = glm::vec3(-10.0f, 10.0f, 0.0f);
+    ubo_.lightPos = glm::vec4(1.0f, 1.0f, -1.0f, 1.0f);
 
     memoryHelper_->uploadToBufferDirect(uniformBuffers_[currentFrame_].buffer, &ubo_);
 }
@@ -895,6 +898,7 @@ void Vulkan::drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node)
 {
     if (node->mesh != nullptr && !node->mesh->primitives.empty()) {
         glm::mat4 matrix = node->globalMatrix();
+        pushConstants_.meshTransform = matrix;
         for (const auto& _primitive : node->mesh->primitives) {
             if (_primitive->indexCount > 0) {
                 if (_primitive->material->baseColor) {
@@ -902,7 +906,6 @@ void Vulkan::drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node)
                         uniformBuffers_[currentFrame_].descriptorSet.get(),
                         _primitive->material->descriptorSet.get()
                     };
-                    pushConstants_.meshTransform = matrix;
                     pushConstants_.useNormalTexture = _primitive->material->useNormalTexture;
                     commandBuffer.pushConstants(*texturePipeline_.layout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(PushConstants), &pushConstants_);
                     commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *texturePipeline_.pipeline);
@@ -922,16 +925,14 @@ void Vulkan::drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node)
 void Vulkan::drawNodeShadow(vk::CommandBuffer& commandBuffer, pl::Node* node)
 {
     if (node->mesh != nullptr && !node->mesh->primitives.empty()) {
-        pushConstants_.meshTransform = node->matrix;
+        glm::mat4 matrix = node->globalMatrix();
+        pushConstants_.meshTransform = matrix;
         pushConstants_.useNormalTexture = 0.0f;
-        pl::Node* parent = node->parent;
-        while (parent != nullptr) {
-            pushConstants_.meshTransform = parent->matrix * pushConstants_.meshTransform;
-            parent = parent->parent;
-        }
         for (const auto& _primitive : node->mesh->primitives) {
             if (_primitive->indexCount > 0) {
                 commandBuffer.pushConstants(*shadowPass_.pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(PushConstants), &pushConstants_);
+                commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *shadowPass_.pipeline);
+                commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *shadowPass_.pipelineLayout, 0, 1, &uniformBuffers_[currentFrame_].descriptorSet.get(), 0, nullptr);
                 commandBuffer.drawIndexed(_primitive->indexCount, 1, _primitive->firstIndex, 0, 0);
             }
         }
@@ -986,16 +987,16 @@ void Vulkan::drawFrame()
                 .extent = { shadowPass_.width, shadowPass_.height },
             },
             .clearValueCount = 1,
-            .pClearValues = clearValues.data()
+            .pClearValues = &clearDepthValue
         };
 
         commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
 
         vk::Viewport viewport {
             .x = 0.0f,
-            .y = 0.0f,
+            .y = (float)shadowPass_.height,
             .width = static_cast<float>(shadowPass_.width),
-            .height = static_cast<float>(shadowPass_.height),
+            .height = -static_cast<float>(shadowPass_.height),
             .minDepth = 0.0f,
             .maxDepth = 1.0f
         };
@@ -1007,8 +1008,6 @@ void Vulkan::drawFrame()
         };
         commandBuffer.setScissor(0, 1, &scissor);
         commandBuffer.setDepthBias(1.25f, 0.0f, 1.75f);
-        commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *shadowPass_.pipeline);
-        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *shadowPass_.pipelineLayout, 0, 1, &uniformBuffers_[currentFrame_].descriptorSet.get(), 0, nullptr);
         commandBuffer.bindVertexBuffers(0, vk::Buffer(model_->vertexBuffer->buffer), { 0 });
         commandBuffer.bindIndexBuffer(vk::Buffer(model_->indexBuffer->buffer), 0, vk::IndexType::eUint32);
 
@@ -1257,7 +1256,7 @@ void Vulkan::run()
         Uint64 end = SDL_GetPerformanceCounter();
         float elapsedMS = (float)(end - start) / (float)SDL_GetPerformanceFrequency();
 
-        printf("\33[2K%d fps\r", (int)(1.0 / elapsedMS));
+//        printf("\33[2K%d fps\r", (int)(1.0 / elapsedMS));
     }
 
     device_->waitIdle();

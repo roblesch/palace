@@ -57,11 +57,11 @@ struct Camera {
 
     void zoom(float dz)
     {
-        glm::vec3 toCenter = center - eye;
-        if (dz > 0 && glm::length(toCenter) < 0.1f)
-            return;
-        eye += dz * glm::normalize(toCenter);
-        lookAt(eye, center, up);
+//        glm::vec3 toCenter = center - eye;
+//        if (dz > 0 && glm::length(toCenter) < 0.1f)
+//            return;
+//        eye += dz * glm::normalize(toCenter);
+//        lookAt(eye, center, up);
     }
 
     void move(glm::ivec4 wasd, glm::ivec2 spacelctrl, float speed)
@@ -84,9 +84,9 @@ struct Camera {
 
     void reset()
     {
-        eye = { 0.0f, 0.0f, 2.0f };
-        center = { 0.0f, 0.0f, 0.0f };
-        up = { 0.0f, -1.0f, 0.0f };
+//        eye = { 0.0f, 0.0f, 2.0f };
+//        center = { 0.0f, 0.0f, 0.0f };
+//        up = { 0.0f, -1.0f, 0.0f };
     }
 };
 

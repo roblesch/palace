@@ -6,7 +6,9 @@
 * pipeline init and organization
 * vma mapping pointers each frame
 * decouple input handling 
-* process input on sep thread */
+* process input on sep thread
+* color image/swapchain image size mismatch
+*/
 
 using namespace pl;
 
