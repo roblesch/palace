@@ -8,6 +8,7 @@
 * decouple input handling 
 * process input on sep thread
 * color image/swapchain image size mismatch
+* position light at scene bounding box
 */
 
 using namespace pl;

@@ -19,6 +19,5 @@ layout(location = 2) in vec3 color;
 layout(location = 3) in vec2 uv;
 
 void main() {
-    vec4 vertPos = uniforms.lightView * constants.model * vec4(pos, 1.0);
-    gl_Position = uniforms.lightProj * vertPos;
+    gl_Position = uniforms.lightProj * uniforms.lightView * constants.model * vec4(pos, 1.0);;
 }

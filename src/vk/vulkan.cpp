@@ -65,7 +65,7 @@ Vulkan::Vulkan(bool enableValidation)
     // window
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Vulkan_LoadLibrary(nullptr);
-    window_ = SDL_CreateWindow("palace", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+    window_ = SDL_CreateWindow("viewer", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         sWidth_, sHeight_, SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | SDL_WINDOW_VULKAN);
     SDL_SetWindowMinimumSize(window_, 400, 300);
     extent_ = vk::Extent3D { sWidth_, sHeight_, 1 };
@@ -837,7 +837,7 @@ void Vulkan::createSwapchain(vk::SwapchainKHR oldSwapchain)
         .imageSharingMode = vk::SharingMode::eExclusive,
         .preTransform = vk::SurfaceTransformFlagBitsKHR::eIdentity,
         .compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque,
-        .presentMode = vk::PresentModeKHR::eFifo,
+        .presentMode = vk::PresentModeKHR::eMailbox,
         .clipped = VK_TRUE,
         .oldSwapchain = oldSwapchain
     };
@@ -883,13 +883,15 @@ void Vulkan::recreateSwapchain()
     camera_.resize((float)extent_.width / (float)extent_.height);
 }
 
-void Vulkan::updateUniformBuffers(int dx)
+void Vulkan::updateUniformBuffers(float dt)
 {
+    ubo_.lightPos = glm::rotate(ubo_.lightPos, dt*0.2f, glm::vec3(0.0f, 1.0f, 0.0f));
+
     ubo_.cameraView = camera_.view;
     ubo_.cameraProj = camera_.proj;
-    ubo_.lightView = glm::lookAt(glm::vec3(1.0f, 1.0f, -1.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-    ubo_.lightProj = glm::perspective(45.0f, 1.0f, 1.0f, 100.0f);
-    ubo_.lightPos = glm::vec4(1.0f, 1.0f, -1.0f, 1.0f);
+
+    ubo_.lightView = glm::lookAt(glm::vec3(ubo_.lightPos), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    ubo_.lightProj = glm::perspective(45.0f, 1.0f, 1.0f, 1000.0f);
 
     memoryHelper_->uploadToBufferDirect(uniformBuffers_[currentFrame_].buffer, &ubo_);
 }
@@ -994,9 +996,9 @@ void Vulkan::drawFrame()
 
         vk::Viewport viewport {
             .x = 0.0f,
-            .y = (float)shadowPass_.height,
+            .y = 0.0f,
             .width = static_cast<float>(shadowPass_.width),
-            .height = -static_cast<float>(shadowPass_.height),
+            .height = static_cast<float>(shadowPass_.height),
             .minDepth = 0.0f,
             .maxDepth = 1.0f
         };
@@ -1115,7 +1117,8 @@ void Vulkan::run()
 
     glm::ivec4 wasd {};
     glm::ivec2 spacelctrl {};
-    float speed = 1.0f;
+    float speed = 10.0f;
+    float slow = 0.5f;
 
     glm::ivec2 center {};
     glm::ivec2 mouse {};
@@ -1197,7 +1200,7 @@ void Vulkan::run()
                     spacelctrl[1] = 1;
                     break;
                 case SDLK_LSHIFT:
-                    speed = 0.25f;
+                    speed *= slow;
                     break;
                 }
                 break;
@@ -1223,7 +1226,7 @@ void Vulkan::run()
                     spacelctrl[1] = 0;
                     break;
                 case SDLK_LSHIFT:
-                    speed = 1.0f;
+                    speed /= slow;
                     break;
                 }
                 break;
@@ -1232,6 +1235,17 @@ void Vulkan::run()
 
         if (SDL_GetWindowFlags(window_) & SDL_WINDOW_MINIMIZED)
             continue;
+
+        ImGui_ImplVulkan_NewFrame();
+        ImGui_ImplSDL2_NewFrame(window_);
+        ImGui::NewFrame();
+        ImGui::ShowDemoWindow();
+        ImGui::Render();
+
+        drawFrame();
+
+        Uint64 end = SDL_GetPerformanceCounter();
+        float elapsedMs = (float)(end - start) / (float)SDL_GetPerformanceFrequency();
 
         if (SDL_GetRelativeMouseMode()) {
             SDL_GetMouseState(&mouse.x, &mouse.y);
@@ -1242,21 +1256,11 @@ void Vulkan::run()
         keyStates = SDL_GetKeyboardState(nullptr);
 
         if (keyStates[SDL_SCANCODE_W] || keyStates[SDL_SCANCODE_A] || keyStates[SDL_SCANCODE_S] || keyStates[SDL_SCANCODE_D] || keyStates[SDL_SCANCODE_SPACE] || keyStates[SDL_SCANCODE_LCTRL] || keyStates[SDL_SCANCODE_LSHIFT])
-            camera_.move(wasd, spacelctrl, speed);
+            camera_.move(wasd, spacelctrl, speed*elapsedMs);
 
-        ImGui_ImplVulkan_NewFrame();
-        ImGui_ImplSDL2_NewFrame(window_);
-        ImGui::NewFrame();
-        ImGui::ShowDemoWindow();
-        ImGui::Render();
+        updateUniformBuffers(elapsedMs);
 
-        updateUniformBuffers(0);
-        drawFrame();
-
-        Uint64 end = SDL_GetPerformanceCounter();
-        float elapsedMS = (float)(end - start) / (float)SDL_GetPerformanceFrequency();
-
-//        printf("\33[2K%d fps\r", (int)(1.0 / elapsedMS));
+        printf("\33[2K%d fps\r", (int)(1.0 / elapsedMs));
     }
 
     device_->waitIdle();

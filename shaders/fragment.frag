@@ -19,22 +19,45 @@ layout(location = 2) in vec2 uv;
 layout(location = 3) in vec3 vertexNormal;
 layout(location = 4) in float useNormalTexture;
 layout(location = 5) in vec3 lightDir;
-layout(location = 6) in vec4 inShadowCoord;
+layout(location = 6) in vec4 shadowPos;
 
 layout(location = 0) out vec4 outColor;
 
-float textureProj(vec4 shadowCoord, vec2 off)
+float getShadow(vec3 normal, vec2 offset)
 {
-    float shadow = 1.0;
-    if ( shadowCoord.z > -1.0 && shadowCoord.z < 1.0 )
-    {
-        float dist = texture( shadowMap, shadowCoord.st + off ).r;
-        if ( shadowCoord.w > 0.0 && dist < shadowCoord.z )
-        {
-            shadow = ambient;
-        }
-    }
-    return shadow;
+	vec2 shadowUv = ((shadowPos.xyz / shadowPos.w) * 0.5 + 0.5).xy;
+
+    float shadowMapDepth = texture(shadowMap, shadowUv + offset).r;
+	float shadowCoordDepth = shadowPos.z / shadowPos.w;
+	float bias = max(0.05 * (1.0 - dot(normal, lightDir)), 0.005);
+
+	if (shadowCoordDepth < shadowMapDepth)
+		return 1.0;
+	else
+		return ambient;
+}
+
+float pcf(vec3 normal)
+{
+	ivec2 texDim = textureSize(shadowMap, 0);
+	float scale = 0.5;
+	float dx = scale * 1.0 / float(texDim.x);
+	float dy = scale * 1.0 / float(texDim.y);
+
+	float shadowFactor = 0.0;
+	int count = 0;
+	int range = 4;
+	
+	for (int x = -range; x <= range; x++)
+	{
+		for (int y = -range; y <= range; y++)
+		{
+			shadowFactor += getShadow(normal, vec2(dx*x, dy*y));
+			count++;
+		}
+	
+	}
+	return shadowFactor / count;
 }
 
 vec3 getNormal()
@@ -73,10 +96,6 @@ void main() {
     vec3 halfwayDir = normalize(lightDir + viewDir);  
     spec = pow(max(dot(normal, halfwayDir), 0.0), 16.0);
     vec3 specular = specColor * spec;
-    
-//    float shadow = textureProj(inShadowCoord, vec2(0.0));
 
-//    outColor = shadow * vec4(Ka * ambient + Kd * diffuse + Ks * specular, 1.0);
-    outColor = texture(shadowMap, inShadowCoord.st);
-//    outColor = vec4(vec3(shadow), 1.0);
+    outColor = pcf(normal) * vec4(Ka * ambient + Kd * diffuse + Ks * specular, 1.0);
 }

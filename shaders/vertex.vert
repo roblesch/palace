@@ -29,11 +29,13 @@ layout(location = 6) out vec4 shadowCoord;
 void main() {
     vec4 vertPos = uniforms.cameraView * constants.model * vec4(pos, 1.0);
     gl_Position = uniforms.cameraProj * vertPos;
+//    vec4 vertPos = uniforms.lightView * constants.model * vec4(pos, 1.0);
+//    gl_Position = uniforms.lightProj * vertPos;
     fragPos = vec3(vertPos) / vertPos.w;
     fragColor = color;
     fragUv = uv;
     vertNormal = normalize(transpose(inverse(mat3(constants.model))) * normal);
     useNormalTexture = constants.useNormalTexture;
     lightDir = normalize(vec3(uniforms.lightPos));
-    shadowCoord = ( uniforms.lightProj * uniforms.lightView * constants.model ) * vec4(pos, 1.0);    
+    shadowCoord = uniforms.lightProj * uniforms.lightView * constants.model * vec4(pos, 1.0);    
 }

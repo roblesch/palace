@@ -22,7 +22,7 @@ private:
     void createPipelines();
     void createSwapchain(vk::SwapchainKHR oldSwapchain = VK_NULL_HANDLE);
     void recreateSwapchain();
-    void updateUniformBuffers(int dx);
+    void updateUniformBuffers(float dt);
     void drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node);
     void drawNodeShadow(vk::CommandBuffer& commandBuffer, pl::Node* node);
     void drawFrame();
@@ -108,7 +108,7 @@ private:
         glm::mat4 cameraProj { 1.0f };
         glm::mat4 lightView { 1.0f };
         glm::mat4 lightProj { 1.0f };
-        glm::vec4 lightPos { 0.0f };
+        glm::vec4 lightPos { 10.0f, 50.0f, 0.0f, 1.0f };
     } ubo_;
 
     // push constants
