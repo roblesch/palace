@@ -4,10 +4,10 @@
 
 const vec3 specColor = vec3(1.0);
 const float shininess = 120.0;
-const float Ka = 0.4;
+const float Ka = 0.3;
 const float Kd = 0.6;
 const float Ks = 0.2;
-const float ambient = 0.5;
+const float ambient = 0.6;
 
 layout(set = 0, binding = 1) uniform sampler2D shadowMap;
 layout(set = 1, binding = 0) uniform sampler2D texSampler;
@@ -29,9 +29,9 @@ float getShadow(vec3 normal, vec2 offset)
 
     float shadowMapDepth = texture(shadowMap, shadowUv + offset).r;
 	float shadowCoordDepth = shadowPos.z / shadowPos.w;
-	float bias = max(0.05 * (1.0 - dot(normal, lightDir)), 0.005);
+//	float bias = max(0.05 * (1.0 - dot(normal, lightDir)), 0.005);
 
-	if (shadowCoordDepth < shadowMapDepth)
+	if (shadowCoordDepth - 0.0001 < shadowMapDepth)
 		return 1.0;
 	else
 		return ambient;
@@ -40,13 +40,13 @@ float getShadow(vec3 normal, vec2 offset)
 float pcf(vec3 normal)
 {
 	ivec2 texDim = textureSize(shadowMap, 0);
-	float scale = 0.5;
+	float scale = 1.0;
 	float dx = scale * 1.0 / float(texDim.x);
 	float dy = scale * 1.0 / float(texDim.y);
 
 	float shadowFactor = 0.0;
 	int count = 0;
-	int range = 4;
+	int range = 1;
 	
 	for (int x = -range; x <= range; x++)
 	{
@@ -96,6 +96,7 @@ void main() {
     vec3 halfwayDir = normalize(lightDir + viewDir);  
     spec = pow(max(dot(normal, halfwayDir), 0.0), 16.0);
     vec3 specular = specColor * spec;
+	float shadow = pcf(normal);
 
-    outColor = pcf(normal) * vec4(Ka * ambient + Kd * diffuse + Ks * specular, 1.0);
+    outColor = shadow * vec4(Ka * ambient + Kd * diffuse + Ks * specular, 1.0);
 }

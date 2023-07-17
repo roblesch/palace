@@ -30,6 +30,7 @@ public:
     explicit MemoryHelper(const MemoryHelperCreateInfo& createInfo);
     ~MemoryHelper();
 
+    // TODO: move this
     vk::UniqueCommandBuffer beginSingleUseCommandBuffer();
     void endSingleUseCommandBuffer(vk::CommandBuffer& commandBuffer);
 

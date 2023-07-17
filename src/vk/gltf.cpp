@@ -94,6 +94,14 @@ void GltfModel::loadMeshes(tinygltf::Model& model)
             // positions
             {
                 const auto& accessor = model.accessors[_primitive.attributes.at("POSITION")];
+
+                min[0] = accessor.minValues[0] < min[0] ? accessor.minValues[0] : min[0];
+                min[1] = accessor.minValues[1] < min[1] ? accessor.minValues[1] : min[1];
+                min[2] = accessor.minValues[2] < min[2] ? accessor.minValues[2] : min[2];
+                max[0] = accessor.maxValues[0] > max[0] ? accessor.maxValues[0] : max[0];
+                max[1] = accessor.maxValues[1] > max[1] ? accessor.maxValues[1] : max[1];
+                max[2] = accessor.maxValues[2] > max[2] ? accessor.maxValues[2] : max[2];
+
                 const auto& bufferView = model.bufferViews[accessor.bufferView];
                 const auto& buffer = model.buffers[bufferView.buffer];
                 primitive->vertexCount = static_cast<uint32_t>(accessor.count);

@@ -78,6 +78,8 @@ public:
     std::vector<std::shared_ptr<Texture>> textures;
     std::vector<std::shared_ptr<Material>> materials;
     std::vector<std::shared_ptr<Node>> nodes;
+    glm::vec3 min { std::numeric_limits<float>::max() };
+    glm::vec3 max { std::numeric_limits<float>::min() };
 
     Scene* defaultScene;
     VmaBuffer* vertexBuffer;

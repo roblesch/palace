@@ -67,7 +67,7 @@ Vulkan::Vulkan(bool enableValidation)
     SDL_Vulkan_LoadLibrary(nullptr);
     window_ = SDL_CreateWindow("viewer", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         sWidth_, sHeight_, SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | SDL_WINDOW_VULKAN);
-    SDL_SetWindowMinimumSize(window_, 400, 300);
+    SDL_SetWindowMinimumSize(window_, 800, 600);
     extent_ = vk::Extent3D { sWidth_, sHeight_, 1 };
 
     // sdl2
@@ -885,12 +885,12 @@ void Vulkan::recreateSwapchain()
 
 void Vulkan::updateUniformBuffers(float dt)
 {
-    ubo_.lightPos = glm::rotate(ubo_.lightPos, dt*0.2f, glm::vec3(0.0f, 1.0f, 0.0f));
+    //ubo_.lightPos = glm::rotate(ubo_.lightPos, dt*0.2f, glm::vec3(0.0f, 1.0f, 0.0f));
 
     ubo_.cameraView = camera_.view;
     ubo_.cameraProj = camera_.proj;
 
-    ubo_.lightView = glm::lookAt(glm::vec3(ubo_.lightPos), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    ubo_.lightView = glm::lookAt(glm::vec3(ubo_.lightPos), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
     ubo_.lightProj = glm::perspective(45.0f, 1.0f, 1.0f, 1000.0f);
 
     memoryHelper_->uploadToBufferDirect(uniformBuffers_[currentFrame_].buffer, &ubo_);
@@ -1239,7 +1239,7 @@ void Vulkan::run()
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplSDL2_NewFrame(window_);
         ImGui::NewFrame();
-        ImGui::ShowDemoWindow();
+        //ImGui::ShowDemoWindow();
         ImGui::Render();
 
         drawFrame();

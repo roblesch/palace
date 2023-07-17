@@ -1,26 +1,21 @@
 # palace
 
+![preview](https://blog.roblesch.page/assets/images/palace/preview.jpg)
+
 A vulkan engine.
 
-vulkan.hpp
-- designated initializers
-- unique handles
-- dynamic dispatch
+Read more: https://blog.roblesch.page/blog/2023/07/17/palace-1.html
 
-sdl2
+made with -
 
-vma
+[vulkan.hpp](https://github.com/KhronosGroup/Vulkan-Hpp), [sdl2](https://github.com/libsdl-org/SDL), [vma](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator), [tinygltf](https://github.com/syoyo/tinygltf), [glm](https://github.com/g-truc/glm), [imgui](https://github.com/ocornut/imgui)
 
-## resources
+## references
 
-Alexander Overvoorde, Vulkan Tutorial https://vulkan-tutorial.com/
-
-Victor Blanco, Vulkan Guide https://vkguide.dev/
-
-Sascha Willems, Vulkan C++ examples and demos https://github.com/SaschaWillems/Vulkan
-
-KhronosGroup, Vulkan-Hpp: C++ Bindings for Vulkan https://github.com/KhronosGroup/Vulkan-Hpp
-
-YukiSnowy, Example SDL2 Vulkan application https://gist.github.com/YukiSnowy/dc31f47448ac61dd6aedee18b5d53858
-
-evilactually, Compiling GLSL to SPIR-V from CMake https://gist.github.com/evilactually/a0d191701cb48f157b05be7f74d79396
+> Alexander Overvoorde, Vulkan Tutorial https://vulkan-tutorial.com/
+> 
+> Victor Blanco, Vulkan Guide https://vkguide.dev/
+> 
+> Sascha Willems, Vulkan C++ examples and demos https://github.com/SaschaWillems/Vulkan
+> 
+> KhronosGroup, Vulkan-Hpp: C++ Bindings for Vulkan https://github.com/KhronosGroup/Vulkan-Hpp
