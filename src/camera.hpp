@@ -8,9 +8,10 @@
 namespace pl {
 
 struct Camera {
-    float fovy;
-    float znear;
-    float zfar;
+    // https://developer.nvidia.com/content/depth-precision-visualized
+    float fovy { 45.0f };
+    float znear { 0.1f };
+    float zfar { std::numeric_limits<float>::max() };
 
     float aspect;
 
@@ -39,7 +40,7 @@ struct Camera {
     void resize(float _aspect)
     {
         aspect = _aspect;
-        proj = glm::perspective(fovy, _aspect, znear, zfar);
+        proj = glm::perspective(fovy, _aspect, zfar, znear);
     }
 
     void rotate(int dx, int dy)
@@ -57,11 +58,6 @@ struct Camera {
 
     void zoom(float dz)
     {
-        //        glm::vec3 toCenter = center - eye;
-        //        if (dz > 0 && glm::length(toCenter) < 0.1f)
-        //            return;
-        //        eye += dz * glm::normalize(toCenter);
-        //        lookAt(eye, center, up);
     }
 
     void move(glm::ivec4 wasd, glm::ivec2 spacelctrl, float speed)
@@ -84,9 +80,6 @@ struct Camera {
 
     void reset()
     {
-        //        eye = { 0.0f, 0.0f, 2.0f };
-        //        center = { 0.0f, 0.0f, 0.0f };
-        //        up = { 0.0f, -1.0f, 0.0f };
     }
 };
 

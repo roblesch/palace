@@ -1,14 +1,15 @@
 #include "memory.hpp"
 
+#include "engine.hpp"
+
 #define VMA_IMPLEMENTATION
 
 namespace pl {
 
 MemoryHelper::MemoryHelper(const MemoryHelperCreateInfo& createInfo)
-    : physicalDevice_(createInfo.physicalDevice)
+    : engine_(createInfo.engine)
+    , physicalDevice_(createInfo.physicalDevice)
     , device_(createInfo.device)
-    , commandPool_(createInfo.commandPool)
-    , graphicsQueue_(createInfo.graphicsQueue)
 {
     VmaAllocatorCreateInfo allocatorInfo {
         .physicalDevice = createInfo.physicalDevice,
@@ -27,32 +28,6 @@ MemoryHelper::~MemoryHelper()
         vmaDestroyImage(allocator_, image->image, image->allocation);
 
     vmaDestroyAllocator(allocator_);
-}
-
-vk::UniqueCommandBuffer MemoryHelper::beginSingleUseCommandBuffer()
-{
-    vk::CommandBufferAllocateInfo bufferInfo {
-        .commandPool = commandPool_,
-        .level = vk::CommandBufferLevel::ePrimary,
-        .commandBufferCount = 1
-    };
-    vk::UniqueCommandBuffer commandBuffer { std::move(device_.allocateCommandBuffersUnique(bufferInfo)[0]) };
-
-    commandBuffer->begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
-    return commandBuffer;
-}
-
-void MemoryHelper::endSingleUseCommandBuffer(vk::CommandBuffer& commandBuffer)
-{
-    commandBuffer.end();
-
-    vk::SubmitInfo submitInfo {
-        .commandBufferCount = 1,
-        .pCommandBuffers = &commandBuffer
-    };
-
-    graphicsQueue_.submit(submitInfo);
-    graphicsQueue_.waitIdle();
 }
 
 VmaBuffer* MemoryHelper::createBuffer(size_t size, vk::BufferUsageFlags usage, VmaAllocationCreateFlags flags)
@@ -84,14 +59,14 @@ void MemoryHelper::uploadToBuffer(VmaBuffer* buffer, void* src)
     memcpy(data, src, buffer->size);
     vmaUnmapMemory(allocator_, staging->allocation);
 
-    auto cmd = beginSingleUseCommandBuffer();
+    auto cmd = engine_->beginOneTimeCommandBuffer();
     vk::BufferCopy copy {
         .srcOffset = 0,
         .dstOffset = 0,
         .size = buffer->size
     };
     cmd->copyBuffer(staging->buffer, buffer->buffer, 1, &copy);
-    endSingleUseCommandBuffer(*cmd);
+    engine_->endOneTimeCommandBuffer(*cmd);
 
     vmaDestroyBuffer(allocator_, staging->buffer, staging->allocation);
 }
@@ -140,7 +115,7 @@ VmaImage* MemoryHelper::createTextureImage(const void* src, size_t size, vk::Ext
     auto texture = createImage(extent, vk::Format::eR8G8B8A8Unorm, vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled, mipLevels, vk::SampleCountFlagBits::e1);
 
     // transition staging format
-    auto cmd = beginSingleUseCommandBuffer();
+    auto cmd = engine_->beginOneTimeCommandBuffer();
     auto transferBarrier = imageTransitionBarrier(texture->image, {}, vk::AccessFlagBits::eTransferWrite, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, mipLevels);
     cmd->pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTransfer, {}, {}, {}, transferBarrier);
 
@@ -221,7 +196,7 @@ VmaImage* MemoryHelper::createTextureImage(const void* src, size_t size, vk::Ext
 
     cmd->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader, {}, {}, {}, barrier);
 
-    endSingleUseCommandBuffer(*cmd);
+    engine_->endOneTimeCommandBuffer(*cmd);
     vmaDestroyBuffer(allocator_, staging->buffer, staging->allocation);
 
     return texture;

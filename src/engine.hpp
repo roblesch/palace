@@ -9,14 +9,17 @@
 
 namespace pl {
 
-class Vulkan {
+class Engine {
 
 public:
-    Vulkan();
-    ~Vulkan();
+    Engine();
+    ~Engine();
     void init(bool enableValidation = true);
     void loadGltfModel(const char* path);
     void run();
+
+    vk::UniqueCommandBuffer beginOneTimeCommandBuffer();
+    void endOneTimeCommandBuffer(vk::CommandBuffer& commandBuffer);
 
 private:
     void createInstance();
@@ -33,6 +36,7 @@ private:
     void initImGui();
     void createDescriptorPool();
     void createDescriptorSets();
+    void initCamera();
 
     void recreateSwapchain();
     void updateUniformBuffers(float dt);

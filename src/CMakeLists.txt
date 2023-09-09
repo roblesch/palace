@@ -5,7 +5,7 @@ add_library(pl "camera.hpp" "gltf.hpp" "gltf.cpp" "memory.hpp" "memory.cpp" "typ
 add_library(pl::pl ALIAS pl)
 target_link_libraries(pl imgui::imgui glm::glm pl::util VMA::VMA Vulkan::Vulkan SDL2::SDL2 tinygltf)
 
-add_executable(palace "palace.cpp")
+add_executable(palace "engine.cpp")
 set_target_properties(palace PROPERTIES
 		RUNTIME_OUTPUT_DIRECTORY_DEBUG ${PROJECT_BINARY_DIR}
 		RUNTIME_OUTPUT_DIRECTORY_RELEASE ${PROJECT_BINARY_DIR})

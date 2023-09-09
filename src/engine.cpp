@@ -1,4 +1,4 @@
-#include "palace.hpp"
+#include "engine.hpp"
 
 #include "log.hpp"
 #include "parser.hpp"
@@ -53,18 +53,18 @@ std::vector<char> readSpirVFile(const std::string& spirVFile)
 
 namespace pl {
 
-Vulkan::Vulkan()
+Engine::Engine()
 {
 }
 
-Vulkan::~Vulkan()
+Engine::~Engine()
 {
     ImGui_ImplVulkan_Shutdown();
     SDL_DestroyWindow(window_);
     SDL_Quit();
 }
 
-void Vulkan::init(bool enableValidation)
+void Engine::init(bool enableValidation)
 {
     isValidationEnabled_ = enableValidation;
 
@@ -80,11 +80,12 @@ void Vulkan::init(bool enableValidation)
     createSwapchain();
     createGpuSync();
     initImGui();
+    initCamera();
 
     isInitialized_ = true;
 }
 
-void Vulkan::loadGltfModel(const char* path)
+void Engine::loadGltfModel(const char* path)
 {
     model_ = pl::createGltfModelUnique({ path, memoryHelper_.get() });
     if (!model_->complete)
@@ -96,7 +97,7 @@ void Vulkan::loadGltfModel(const char* path)
     isSceneLoaded_ = true;
 }
 
-void Vulkan::run()
+void Engine::run()
 {
     if (!isInitialized_) {
         LOG_ERROR("Failed to run: Vulkan not initialized.", "GFX");
@@ -106,10 +107,6 @@ void Vulkan::run()
         LOG_ERROR("Failed to run: no scene loaded.", "GFX");
         return;
     }
-
-    camera_ = Camera { .fovy = 45.0f, .znear = 0.1f, .zfar = 100.0f };
-    camera_.lookAt({ 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f });
-    camera_.resize((float)extent_.width / (float)extent_.height);
 
     bool quit = false;
     ticks = SDL_GetTicks64();
@@ -265,7 +262,7 @@ void Vulkan::run()
     device_->waitIdle();
 }
 
-void Vulkan::createInstance()
+void Engine::createInstance()
 {
     // window
     SDL_Init(SDL_INIT_VIDEO);
@@ -335,7 +332,7 @@ void Vulkan::createInstance()
     surface_ = vk::UniqueSurfaceKHR(surface, deleter);
 }
 
-void Vulkan::createDevice()
+void Engine::createDevice()
 {
     // physical device
     for (auto& _physicalDevice : instance_->enumeratePhysicalDevices()) {
@@ -390,7 +387,7 @@ void Vulkan::createDevice()
     graphicsQueue_ = device_->getQueue(queueFamilyIndices_.graphics, 0);
 }
 
-void Vulkan::createCommandBuffers()
+void Engine::createCommandBuffers()
 {
     // command pool
     vk::CommandPoolCreateInfo commandPoolInfo {
@@ -410,20 +407,19 @@ void Vulkan::createCommandBuffers()
     commandBuffers_ = device_->allocateCommandBuffersUnique(commandBufferAllocInfo);
 }
 
-void Vulkan::createMemoryHelper()
+void Engine::createMemoryHelper()
 {
     pl::MemoryHelperCreateInfo memoryInfo {
+        .engine = this,
         .physicalDevice = physicalDevice_,
         .device = *device_,
-        .instance = *instance_,
-        .commandPool = *commandPool_,
-        .graphicsQueue = graphicsQueue_
+        .instance = *instance_
     };
 
     memoryHelper_ = createMemoryHelperUnique(memoryInfo);
 }
 
-void Vulkan::createShadowPassResources()
+void Engine::createShadowPassResources()
 {
     shadowPass_.width = sShadowResolution_;
     shadowPass_.height = sShadowResolution_;
@@ -513,7 +509,7 @@ void Vulkan::createShadowPassResources()
     shadowPass_.frameBuffer = device_->createFramebufferUnique(framebufferInfo);
 }
 
-void Vulkan::createDescriptorLayouts()
+void Engine::createDescriptorLayouts()
 {
     vk::DescriptorSetLayoutBinding uboLayoutBinding {
         .binding = 0,
@@ -554,7 +550,7 @@ void Vulkan::createDescriptorLayouts()
     descriptorLayouts_.material = device_->createDescriptorSetLayoutUnique(materialDescriptorLayoutInfo);
 }
 
-void Vulkan::createRenderPass()
+void Engine::createRenderPass()
 {
     vk::AttachmentDescription colorAttachment {
         .format = sSwapchainFormat_,
@@ -629,7 +625,7 @@ void Vulkan::createRenderPass()
     renderPass_ = device_->createRenderPassUnique(renderPassInfo);
 }
 
-void Vulkan::createPipelines()
+void Engine::createPipelines()
 {
     // shaders
     std::vector<char> shadowShaderBytes = readSpirVFile("shaders/shadow.spv");
@@ -781,7 +777,7 @@ void Vulkan::createPipelines()
     vk::PipelineDepthStencilStateCreateInfo depthStencilStateInfo = {
         .depthTestEnable = VK_TRUE,
         .depthWriteEnable = VK_TRUE,
-        .depthCompareOp = vk::CompareOp::eLess,
+        .depthCompareOp = vk::CompareOp::eGreaterOrEqual,
         .depthBoundsTestEnable = VK_FALSE,
         .stencilTestEnable = VK_FALSE
     };
@@ -837,7 +833,7 @@ void Vulkan::createPipelines()
     shadowPass_.pipeline = device_->createGraphicsPipelineUnique(nullptr, pipelineInfo).value;
 }
 
-void Vulkan::createStorageBuffers()
+void Engine::createStorageBuffers()
 {
     // uniform buffers
     uniformBuffers_.resize(sConcurrentFrames_);
@@ -846,7 +842,7 @@ void Vulkan::createStorageBuffers()
     }
 }
 
-void Vulkan::createSwapchain(vk::SwapchainKHR oldSwapchain)
+void Engine::createSwapchain(vk::SwapchainKHR oldSwapchain)
 {
     // multisampling
     colorImage_ = memoryHelper_->createImage(extent_, sSwapchainFormat_, vk::ImageUsageFlagBits::eTransientAttachment | vk::ImageUsageFlagBits::eColorAttachment, 1, sMsaaSamples_);
@@ -903,7 +899,7 @@ void Vulkan::createSwapchain(vk::SwapchainKHR oldSwapchain)
     }
 }
 
-void Vulkan::createGpuSync()
+void Engine::createGpuSync()
 {
     for (size_t i = 0; i < sConcurrentFrames_; i++) {
         imageAvailableSemaphores_.push_back(device_->createSemaphoreUnique({}));
@@ -912,7 +908,7 @@ void Vulkan::createGpuSync()
     }
 }
 
-void Vulkan::initImGui()
+void Engine::initImGui()
 {
     vk::DescriptorPoolSize imguiPoolSizes[] = {
         { vk::DescriptorType::eSampler, 1000 },
@@ -952,13 +948,13 @@ void Vulkan::initImGui()
     };
 
     ImGui_ImplVulkan_Init(&imguiInfo, *renderPass_);
-    auto cmd = memoryHelper_->beginSingleUseCommandBuffer();
+    auto cmd = beginOneTimeCommandBuffer();
     ImGui_ImplVulkan_CreateFontsTexture(*cmd);
-    memoryHelper_->endSingleUseCommandBuffer(*cmd);
+    endOneTimeCommandBuffer(*cmd);
     ImGui_ImplVulkan_DestroyFontUploadObjects();
 }
 
-void Vulkan::createDescriptorPool()
+void Engine::createDescriptorPool()
 {
     uint32_t uboCount = 2;
     uint32_t samplerCount = 2 + 2 * static_cast<uint32_t>(model_->materials.size());
@@ -983,7 +979,7 @@ void Vulkan::createDescriptorPool()
     descriptorPool_ = device_->createDescriptorPoolUnique(pipelinePoolInfo);
 }
 
-void Vulkan::createDescriptorSets()
+void Engine::createDescriptorSets()
 {
     // ubo descriptors
     for (int i = 0; i < sConcurrentFrames_; i++) {
@@ -1071,7 +1067,39 @@ void Vulkan::createDescriptorSets()
     }
 }
 
-void Vulkan::recreateSwapchain()
+void Engine::initCamera()
+{
+    camera_.lookAt({ 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f });
+    camera_.resize((float)extent_.width / (float)extent_.height);
+}
+
+vk::UniqueCommandBuffer Engine::beginOneTimeCommandBuffer()
+{
+    vk::CommandBufferAllocateInfo bufferInfo {
+        .commandPool = *commandPool_,
+        .level = vk::CommandBufferLevel::ePrimary,
+        .commandBufferCount = 1
+    };
+    vk::UniqueCommandBuffer commandBuffer { std::move(device_->allocateCommandBuffersUnique(bufferInfo)[0]) };
+
+    commandBuffer->begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+    return commandBuffer;
+}
+
+void Engine::endOneTimeCommandBuffer(vk::CommandBuffer& commandBuffer)
+{
+    commandBuffer.end();
+
+    vk::SubmitInfo submitInfo {
+        .commandBufferCount = 1,
+        .pCommandBuffers = &commandBuffer
+    };
+
+    graphicsQueue_.submit(submitInfo);
+    graphicsQueue_.waitIdle();
+}
+
+void Engine::recreateSwapchain()
 {
     device_->waitIdle();
     int width, height;
@@ -1083,7 +1111,7 @@ void Vulkan::recreateSwapchain()
     camera_.resize((float)extent_.width / (float)extent_.height);
 }
 
-void Vulkan::updateUniformBuffers(float dt)
+void Engine::updateUniformBuffers(float dt)
 {
     // ubo_.lightPos = glm::rotate(ubo_.lightPos, dt*0.2f, glm::vec3(0.0f, 1.0f, 0.0f));
 
@@ -1096,7 +1124,7 @@ void Vulkan::updateUniformBuffers(float dt)
     memoryHelper_->uploadToBufferDirect(uniformBuffers_[currentFrame_].buffer, &ubo_);
 }
 
-void Vulkan::drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node)
+void Engine::drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node)
 {
     if (node->mesh != nullptr && !node->mesh->primitives.empty()) {
         pushConstants_.meshTransform = node->globalMatrix;
@@ -1120,7 +1148,7 @@ void Vulkan::drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node)
     }
 }
 
-void Vulkan::drawNodeShadow(vk::CommandBuffer& commandBuffer, pl::Node* node)
+void Engine::drawNodeShadow(vk::CommandBuffer& commandBuffer, pl::Node* node)
 {
     if (node->mesh != nullptr && !node->mesh->primitives.empty()) {
         pushConstants_.meshTransform = node->globalMatrix;
@@ -1138,7 +1166,7 @@ void Vulkan::drawNodeShadow(vk::CommandBuffer& commandBuffer, pl::Node* node)
     }
 }
 
-void Vulkan::drawFrame()
+void Engine::drawFrame()
 {
     auto inFlight = *inFlightFences_[currentFrame_];
     auto imageAvailable = *imageAvailableSemaphores_[currentFrame_];
@@ -1168,7 +1196,7 @@ void Vulkan::drawFrame()
     commandBuffer.begin(beginInfo);
 
     vk::ClearValue clearColor { .color = { std::array<float, 4> { 0.0f, 0.0f, 0.0f, 0.0f } } };
-    vk::ClearValue clearDepthValue { .depthStencil = vk::ClearDepthStencilValue { 1.0f } };
+    vk::ClearValue clearDepthValue { .depthStencil = vk::ClearDepthStencilValue { 0.0f } };
     std::array<vk::ClearValue, 2> clearValues { clearColor, clearDepthValue };
 
     /*
@@ -1299,16 +1327,14 @@ void Vulkan::drawFrame()
 
 }
 
-using namespace pl;
-
 int main(const int argc, const char* argv[])
 {
-    Parser args(argc, argv);
-    Vulkan vulkan;
+    pl::Parser args(argc, argv);
+    pl::Engine engine;
 
-    vulkan.init();
-    vulkan.loadGltfModel(args.gltf_path());
-    vulkan.run();
+    engine.init();
+    engine.loadGltfModel(args.gltf_path());
+    engine.run();
 
     return 0;
 }
