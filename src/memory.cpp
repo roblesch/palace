@@ -246,8 +246,7 @@ vk::UniqueImageView MemoryHelper::createImageViewUnique(vk::Image image, vk::For
 
 vk::UniqueSampler MemoryHelper::createTextureSamplerUnique(uint32_t mipLevels)
 {
-    vk::SamplerCreateInfo samplerInfo
-    {
+    vk::SamplerCreateInfo samplerInfo {
         .magFilter = vk::Filter::eLinear,
         .minFilter = vk::Filter::eLinear,
         .mipmapMode = vk::SamplerMipmapMode::eNearest,

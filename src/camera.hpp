@@ -57,36 +57,36 @@ struct Camera {
 
     void zoom(float dz)
     {
-//        glm::vec3 toCenter = center - eye;
-//        if (dz > 0 && glm::length(toCenter) < 0.1f)
-//            return;
-//        eye += dz * glm::normalize(toCenter);
-//        lookAt(eye, center, up);
+        //        glm::vec3 toCenter = center - eye;
+        //        if (dz > 0 && glm::length(toCenter) < 0.1f)
+        //            return;
+        //        eye += dz * glm::normalize(toCenter);
+        //        lookAt(eye, center, up);
     }
 
     void move(glm::ivec4 wasd, glm::ivec2 spacelctrl, float speed)
     {
-        eye += 0.1f * (float)wasd[0] * forward * speed;
-        eye -= 0.1f * (float)wasd[1] * right * speed;
-        eye -= 0.1f * (float)wasd[2] * forward * speed;
-        eye += 0.1f * (float)wasd[3] * right * speed;
-        center += 0.1f * (float)wasd[0] * forward * speed;
-        center -= 0.1f * (float)wasd[1] * right * speed;
-        center -= 0.1f * (float)wasd[2] * forward * speed;
-        center += 0.1f * (float)wasd[3] * right * speed;
-        eye += 0.1f * (float)spacelctrl[0] * up * speed;
-        eye -= 0.1f * (float)spacelctrl[1] * up * speed;
-        center += 0.1f * (float)spacelctrl[0] * up * speed;
-        center -= 0.1f * (float)spacelctrl[1] * up * speed;
+        eye += (float)wasd[0] * forward * speed;
+        eye -= (float)wasd[1] * right * speed;
+        eye -= (float)wasd[2] * forward * speed;
+        eye += (float)wasd[3] * right * speed;
+        center += (float)wasd[0] * forward * speed;
+        center -= (float)wasd[1] * right * speed;
+        center -= (float)wasd[2] * forward * speed;
+        center += (float)wasd[3] * right * speed;
+        eye += (float)spacelctrl[0] * up * speed;
+        eye -= (float)spacelctrl[1] * up * speed;
+        center += (float)spacelctrl[0] * up * speed;
+        center -= (float)spacelctrl[1] * up * speed;
 
         lookAt(eye, center, up);
     }
 
     void reset()
     {
-//        eye = { 0.0f, 0.0f, 2.0f };
-//        center = { 0.0f, 0.0f, 0.0f };
-//        up = { 0.0f, -1.0f, 0.0f };
+        //        eye = { 0.0f, 0.0f, 2.0f };
+        //        center = { 0.0f, 0.0f, 0.0f };
+        //        up = { 0.0f, -1.0f, 0.0f };
     }
 };
 

@@ -1,6 +1,6 @@
 #include "gltf.hpp"
 
-#include "util/log.hpp"
+#include "log.hpp"
 #define TINYGLTF_IMPLEMENTATION
 #define TINYGLTF_NO_STB_IMAGE_WRITE
 #define STB_IMAGE_IMPLEMENTATION
@@ -178,15 +178,17 @@ void GltfModel::loadMeshes(tinygltf::Model& model)
     memoryHelper->uploadToBuffer(indexBuffer, indices.data());
 }
 
-glm::mat4 Node::localMatrix() {
+glm::mat4 Node::getLocalMatrix()
+{
     return glm::translate(glm::mat4(1.0f), translation) * glm::mat4(rotation) * glm::scale(glm::mat4(1.0f), scale) * matrix;
 }
 
-glm::mat4 Node::globalMatrix() {
-    glm::mat4 m = localMatrix();
+glm::mat4 Node::getGlobalMatrix()
+{
+    glm::mat4 m = getLocalMatrix();
     Node* p = parent;
     while (p) {
-        m = p->localMatrix() * m;
+        m = p->getLocalMatrix() * m;
         p = p->parent;
     }
     return m;
@@ -199,7 +201,6 @@ void GltfModel::loadNode(Scene* scene, Node* parent, tinygltf::Node& node, tinyg
     nodes.push_back(newNode);
     newNode->parent = parent;
     newNode->name = node.name;
-    newNode->matrix = glm::mat4(1.0f);
 
     // Generate local node matrix
     if (node.translation.size() == 3) {
@@ -215,8 +216,6 @@ void GltfModel::loadNode(Scene* scene, Node* parent, tinygltf::Node& node, tinyg
         newNode->matrix = glm::make_mat4x4(node.matrix.data());
     };
 
-    //newNode->matrix = glm::translate(glm::mat4(1.0f), translation) * glm::mat4(rotation) * glm::scale(glm::mat4(1.0f), scale) * newNode->matrix;
-
     if (node.children.size() > 0) {
         for (size_t i = 0; i < node.children.size(); i++) {
             loadNode(scene, newNode.get(), model.nodes[node.children[i]], model);
@@ -228,7 +227,8 @@ void GltfModel::loadNode(Scene* scene, Node* parent, tinygltf::Node& node, tinyg
     }
 }
 
-GltfModel::GltfModel(const GltfModelCreateInfo& createInfo) : memoryHelper(createInfo.memory)
+GltfModel::GltfModel(const GltfModelCreateInfo& createInfo)
+    : memoryHelper(createInfo.memory)
 {
     defaultScene = nullptr;
     vertexBuffer = nullptr;
@@ -268,12 +268,15 @@ GltfModel::GltfModel(const GltfModelCreateInfo& createInfo) : memoryHelper(creat
         auto scene = std::make_shared<Scene>();
         scene->name = _scene.name;
         for (int i : _scene.nodes) {
-            loadNode(scene.get(), nullptr, model.nodes[i], model);            
+            loadNode(scene.get(), nullptr, model.nodes[i], model);
+        }
+        for (auto _node : scene->nodes) {
+            _node->globalMatrix = _node->getGlobalMatrix();
         }
         scenes.push_back(scene);
     }
     defaultScene = scenes[model.defaultScene].get();
-    
+
     complete = true;
 }
 

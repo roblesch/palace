@@ -10,32 +10,45 @@
 namespace pl {
 
 class Vulkan {
-public:
-    explicit Vulkan(bool enableValidation = true);
-    ~Vulkan();
 
+public:
+    Vulkan();
+    ~Vulkan();
+    void init(bool enableValidation = true);
     void loadGltfModel(const char* path);
     void run();
 
 private:
+    void createInstance();
+    void createDevice();
+    void createCommandBuffers();
+    void createMemoryHelper();
     void createShadowPassResources();
+    void createDescriptorLayouts();
+    void createRenderPass();
     void createPipelines();
+    void createStorageBuffers();
     void createSwapchain(vk::SwapchainKHR oldSwapchain = VK_NULL_HANDLE);
+    void createGpuSync();
+    void initImGui();
+    void createDescriptorPool();
+    void createDescriptorSets();
+
     void recreateSwapchain();
     void updateUniformBuffers(float dt);
     void drawNode(vk::CommandBuffer& commandBuffer, pl::Node* node);
     void drawNodeShadow(vk::CommandBuffer& commandBuffer, pl::Node* node);
     void drawFrame();
 
-    static constexpr int sWidth_ = 1800;
-    static constexpr int sHeight_ = 600;
+    static constexpr int sWidth_ = 1600;
+    static constexpr int sHeight_ = 900;
     static constexpr int sShadowResolution_ = 4096;
     static constexpr uint32_t sConcurrentFrames_ = 2;
     static constexpr vk::Format sSwapchainFormat_ = vk::Format::eB8G8R8A8Unorm;
     static constexpr vk::Format sDepthAttachmentFormat_ = vk::Format::eD32Sfloat;
     static constexpr vk::SampleCountFlagBits sMsaaSamples_ = vk::SampleCountFlagBits::e4;
 
-    bool isValidationEnabled_ = true;
+    bool isValidationEnabled_;
     bool isInitialized_ = false;
     bool isSceneLoaded_ = false;
     bool isResized_ = false;
@@ -46,7 +59,6 @@ private:
 
     // instance
     SDL_Window* window_;
-    vk::DynamicLoader dynamicLoader_;
     vk::UniqueInstance instance_;
     vk::UniqueSurfaceKHR surface_;
 
@@ -78,7 +90,7 @@ private:
         uint32_t width {}, height {};
         vk::UniqueFramebuffer frameBuffer;
         pl::VmaImage* depthImage {};
-        pl::VmaBuffer* buffer;
+        pl::VmaBuffer* buffer {};
         vk::UniqueImageView depthView;
         vk::UniqueSampler depthSampler;
         vk::UniqueRenderPass renderPass;

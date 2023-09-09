@@ -96,7 +96,8 @@ void main() {
     vec3 halfwayDir = normalize(lightDir + viewDir);  
     spec = pow(max(dot(normal, halfwayDir), 0.0), 16.0);
     vec3 specular = specColor * spec;
-	float shadow = pcf(normal);
+//	float shadow = pcf(normal);
+	float shadow = 1.0;
 
     outColor = shadow * vec4(Ka * ambient + Kd * diffuse + Ks * specular, 1.0);
 }

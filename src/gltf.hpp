@@ -53,9 +53,10 @@ struct Node {
     glm::vec3 translation {};
     glm::quat rotation {};
     glm::vec3 scale { 1.0f };
-    glm::mat4 matrix;
-    glm::mat4 localMatrix();
-    glm::mat4 globalMatrix();
+    glm::mat4 matrix { 1.0f };
+    glm::mat4 globalMatrix { 1.0f };
+    glm::mat4 getLocalMatrix();
+    glm::mat4 getGlobalMatrix();
 };
 
 struct Scene {
