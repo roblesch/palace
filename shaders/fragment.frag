@@ -4,7 +4,7 @@
 
 const vec3 specColor = vec3(1.0);
 const float shininess = 120.0;
-const float Ka = 0.3;
+const float Ka = 0.5;
 const float Kd = 0.6;
 const float Ks = 0.2;
 const float ambient = 0.6;

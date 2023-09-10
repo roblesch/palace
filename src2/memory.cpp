@@ -60,12 +60,14 @@ void MemoryHelper::uploadToBuffer(VmaBuffer* buffer, void* src)
     vmaUnmapMemory(allocator_, staging->allocation);
 
     auto cmd = engine_->beginOneTimeCommandBuffer();
-    vk::BufferCopy copy {
-        .srcOffset = 0,
-        .dstOffset = 0,
-        .size = buffer->size
-    };
-    cmd->copyBuffer(staging->buffer, buffer->buffer, 1, &copy);
+    {
+        vk::BufferCopy copy {
+            .srcOffset = 0,
+            .dstOffset = 0,
+            .size = buffer->size
+        };
+        cmd->copyBuffer(staging->buffer, buffer->buffer, 1, &copy);
+    }
     engine_->endOneTimeCommandBuffer(*cmd);
 
     vmaDestroyBuffer(allocator_, staging->buffer, staging->allocation);
@@ -116,86 +118,87 @@ VmaImage* MemoryHelper::createTextureImage(const void* src, size_t size, vk::Ext
 
     // transition staging format
     auto cmd = engine_->beginOneTimeCommandBuffer();
-    auto transferBarrier = imageTransitionBarrier(texture->image, {}, vk::AccessFlagBits::eTransferWrite, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, mipLevels);
-    cmd->pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTransfer, {}, {}, {}, transferBarrier);
+    {
+        auto transferBarrier = imageTransitionBarrier(texture->image, {}, vk::AccessFlagBits::eTransferWrite, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, mipLevels);
+        cmd->pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTransfer, {}, {}, {}, transferBarrier);
 
-    // copy to image
-    vk::BufferImageCopy copy {
-        .bufferOffset = 0,
-        .bufferRowLength = 0,
-        .bufferImageHeight = 0,
-        .imageSubresource = {
-            .aspectMask = vk::ImageAspectFlagBits::eColor,
-            .mipLevel = 0,
-            .baseArrayLayer = 0,
-            .layerCount = 1 },
-        .imageOffset = { 0, 0, 0 },
-        .imageExtent = extent
-    };
-    cmd->copyBufferToImage(staging->buffer, texture->image, vk::ImageLayout::eTransferDstOptimal, copy);
-
-    // check if filter supported
-    if (!(physicalDevice_.getFormatProperties(vk::Format::eR8G8B8A8Unorm).optimalTilingFeatures & vk::FormatFeatureFlagBits::eSampledImageFilterLinear)) {
-    }
-
-    // generate mipmaps
-    vk::ImageMemoryBarrier barrier {
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = texture->image,
-        .subresourceRange = {
-            .aspectMask = vk::ImageAspectFlagBits::eColor,
-            .levelCount = 1,
-            .baseArrayLayer = 0,
-            .layerCount = 1 }
-    };
-
-    uint32_t mipWidth = extent.width;
-    uint32_t mipHeight = extent.height;
-
-    for (uint32_t i = 1; i < mipLevels; i++) {
-        barrier.subresourceRange.baseMipLevel = i - 1;
-        barrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
-        barrier.newLayout = vk::ImageLayout::eTransferSrcOptimal;
-        barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
-        barrier.dstAccessMask = vk::AccessFlagBits::eTransferRead;
-
-        cmd->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eTransfer, {}, {}, {}, barrier);
-
-        vk::ImageBlit blit {
-            .srcSubresource = {
+        // copy to image
+        vk::BufferImageCopy copy {
+            .bufferOffset = 0,
+            .bufferRowLength = 0,
+            .bufferImageHeight = 0,
+            .imageSubresource = {
                 .aspectMask = vk::ImageAspectFlagBits::eColor,
-                .mipLevel = i - 1,
+                .mipLevel = 0,
                 .baseArrayLayer = 0,
                 .layerCount = 1 },
-            .dstSubresource = { .aspectMask = vk::ImageAspectFlagBits::eColor, .mipLevel = i, .baseArrayLayer = 0, .layerCount = 1 }
+            .imageOffset = { 0, 0, 0 },
+            .imageExtent = extent
         };
-        blit.srcOffsets[0] = { 0, 0, 0 };
-        blit.srcOffsets[1] = { static_cast<int>(mipWidth), static_cast<int>(mipHeight), 1 };
-        blit.dstOffsets[0] = { 0, 0, 0 };
-        blit.dstOffsets[1] = { static_cast<int>(mipWidth > 1 ? mipWidth / 2 : 1), static_cast<int>(mipHeight > 1 ? mipHeight / 2 : 1), 1 };
+        cmd->copyBufferToImage(staging->buffer, texture->image, vk::ImageLayout::eTransferDstOptimal, copy);
 
-        cmd->blitImage(texture->image, vk::ImageLayout::eTransferSrcOptimal, texture->image, vk::ImageLayout::eTransferDstOptimal, 1, &blit, vk::Filter::eLinear);
+        // check if filter supported
+        if (!(physicalDevice_.getFormatProperties(vk::Format::eR8G8B8A8Unorm).optimalTilingFeatures & vk::FormatFeatureFlagBits::eSampledImageFilterLinear)) {
+        }
 
-        barrier.oldLayout = vk::ImageLayout::eTransferSrcOptimal;
+        // generate mipmaps
+        vk::ImageMemoryBarrier barrier {
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image = texture->image,
+            .subresourceRange = {
+                .aspectMask = vk::ImageAspectFlagBits::eColor,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1 }
+        };
+
+        uint32_t mipWidth = extent.width;
+        uint32_t mipHeight = extent.height;
+
+        for (uint32_t i = 1; i < mipLevels; i++) {
+            barrier.subresourceRange.baseMipLevel = i - 1;
+            barrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
+            barrier.newLayout = vk::ImageLayout::eTransferSrcOptimal;
+            barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+            barrier.dstAccessMask = vk::AccessFlagBits::eTransferRead;
+
+            cmd->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eTransfer, {}, {}, {}, barrier);
+
+            vk::ImageBlit blit {
+                .srcSubresource = {
+                    .aspectMask = vk::ImageAspectFlagBits::eColor,
+                    .mipLevel = i - 1,
+                    .baseArrayLayer = 0,
+                    .layerCount = 1 },
+                .dstSubresource = { .aspectMask = vk::ImageAspectFlagBits::eColor, .mipLevel = i, .baseArrayLayer = 0, .layerCount = 1 }
+            };
+            blit.srcOffsets[0] = { 0, 0, 0 };
+            blit.srcOffsets[1] = { static_cast<int>(mipWidth), static_cast<int>(mipHeight), 1 };
+            blit.dstOffsets[0] = { 0, 0, 0 };
+            blit.dstOffsets[1] = { static_cast<int>(mipWidth > 1 ? mipWidth / 2 : 1), static_cast<int>(mipHeight > 1 ? mipHeight / 2 : 1), 1 };
+
+            cmd->blitImage(texture->image, vk::ImageLayout::eTransferSrcOptimal, texture->image, vk::ImageLayout::eTransferDstOptimal, 1, &blit, vk::Filter::eLinear);
+
+            barrier.oldLayout = vk::ImageLayout::eTransferSrcOptimal;
+            barrier.newLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+            barrier.srcAccessMask = vk::AccessFlagBits::eTransferRead;
+            barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+
+            cmd->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader, {}, {}, {}, barrier);
+
+            mipWidth = mipWidth > 1 ? mipWidth / 2 : mipWidth;
+            mipHeight = mipHeight > 1 ? mipHeight / 2 : mipHeight;
+        }
+
+        barrier.subresourceRange.baseMipLevel = mipLevels - 1;
+        barrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
         barrier.newLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-        barrier.srcAccessMask = vk::AccessFlagBits::eTransferRead;
+        barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
         barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
 
         cmd->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader, {}, {}, {}, barrier);
-
-        mipWidth = mipWidth > 1 ? mipWidth / 2 : mipWidth;
-        mipHeight = mipHeight > 1 ? mipHeight / 2 : mipHeight;
     }
-
-    barrier.subresourceRange.baseMipLevel = mipLevels - 1;
-    barrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
-    barrier.newLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-    barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
-    barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
-
-    cmd->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader, {}, {}, {}, barrier);
-
     engine_->endOneTimeCommandBuffer(*cmd);
     vmaDestroyBuffer(allocator_, staging->buffer, staging->allocation);
 

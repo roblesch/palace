@@ -5,6 +5,8 @@
 #include <glm/gtx/rotate_vector.hpp>
 #include <glm/gtx/vector_angle.hpp>
 
+namespace pl {
+
 struct Camera {
     // https://developer.nvidia.com/content/depth-precision-visualized
     float fovy { 45.0f };
@@ -80,3 +82,5 @@ struct Camera {
     {
     }
 };
+
+}
