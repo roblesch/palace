@@ -1,14 +1,14 @@
 #pragma once
 
-#include "graphics.hpp"
-#include "types.hpp"
-
 class Engine {
-    bool _running { false };
+    bool quit = false;
 
 public:
     void init();
     void cleanup();
-
     bool running();
+
+    void input();
+    void update();
+    void render();
 };

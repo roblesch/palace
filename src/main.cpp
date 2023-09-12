@@ -9,6 +9,9 @@ int main(int argc, char* argv[])
 
     while (engine->running())
     {
+        engine->input();
+        engine->update();
+        engine->render();
     }
 
     engine->cleanup();

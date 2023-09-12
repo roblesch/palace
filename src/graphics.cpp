@@ -9,74 +9,28 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 /*
  */
 
-VkBool32 debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
-{
-    char prefix[64] = "VK:";
-
-    if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
-        strcat(prefix, "VERBOSE:");
-    } else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
-        strcat(prefix, "INFO:");
-    } else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-        strcat(prefix, "WARNING:");
-    } else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
-        strcat(prefix, "ERROR:");
-    }
-
-    if (messageType & VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT) {
-        strcat(prefix, "GENERAL");
-    } else if (messageType & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT) {
-        strcat(prefix, "VALIDATION");
-    } else if (messageType & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT) {
-        strcat(prefix, "PERFORMANCE");
-    }
-
-    printf("(%s) %s\n", prefix, pCallbackData->pMessage);
-    return VK_FALSE;
-}
-
-std::vector<char> readSpirVFile(const std::string& spirVFile)
-{
-    std::ifstream file(spirVFile, std::ios::binary | std::ios::in | std::ios::ate);
-
-    if (!file.is_open()) {
-        printf("(VK_:ERROR) Failed to open spir-v file for reading: %s", spirVFile.c_str());
-        exit(1);
-    }
-
-    size_t fileSize = file.tellg();
-    file.seekg(std::ios::beg);
-    std::vector<char> spirVBytes(fileSize);
-    file.read(spirVBytes.data(), static_cast<long>(fileSize));
-    file.close();
-
-    return spirVBytes;
-}
-
-/*
- */
-
 VulkanContext* VulkanContext::singleton = nullptr;
 
 void VulkanContext::init()
 {
     singleton = new VulkanContext();
-    singleton->createWindow();
-    singleton->createInstance();
-    singleton->createSurface();
-    singleton->createDevice();
-    singleton->createCommandPool();
+    singleton->createContextResources();
     singleton->createDescriptorLayouts();
-    singleton->createVmaAllocator();
-    singleton->createSwapchain();
     singleton->createOffScreenResources();
     singleton->createOnScreenResources();
     singleton->createFrameResources();
+    singleton->createImGuiResources();
+    singleton->initialized = true;
 }
 
 void VulkanContext::cleanup()
 {
     delete singleton;
+}
+
+bool VulkanContext::ready()
+{
+    return singleton->initialized;
 }
 
 VulkanContext* VulkanContext::get()
@@ -90,39 +44,55 @@ VulkanContext::VulkanContext()
 
 VulkanContext::~VulkanContext()
 {
+    device->waitIdle();
+
     for (auto& buffer : vma.buffers)
         vmaDestroyBuffer(vma.allocator, buffer->buffer, buffer->allocation);
     for (auto& image : vma.images)
         vmaDestroyImage(vma.allocator, image->image, image->allocation);
 
     vmaDestroyAllocator(vma.allocator);
-
-    // TODO: ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplVulkan_Shutdown();
     SDL_DestroyWindow(singleton->window);
     SDL_Quit();
 }
 
 /*
-    Init
-*/
-void VulkanContext::createWindow()
+ */
+
+vk::Extent2D VulkanContext::extents()
 {
+    return windowExtent;
+}
+
+SDL_Window* VulkanContext::sdlWindow()
+{
+    return window;
+}
+
+void VulkanContext::resize()
+{
+    resized = true;
+}
+
+/*
+ */
+
+void VulkanContext::createContextResources()
+{
+    // window
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Vulkan_LoadLibrary(nullptr);
     window = SDL_CreateWindow("Viewer", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 800, 600, SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | SDL_WINDOW_VULKAN);
     SDL_SetWindowMinimumSize(window, 800, 600);
-    extent = vk::Extent2D { 800, 600 };
-}
+    windowExtent = vk::Extent2D { 800, 600 };
 
-void VulkanContext::createInstance()
-{
-    // sdl2 extensions
+    // instance
     unsigned int extensionCount;
     SDL_Vulkan_GetInstanceExtensions(window, &extensionCount, nullptr);
     std::vector<const char*> instanceExtensions(extensionCount);
     SDL_Vulkan_GetInstanceExtensions(window, &extensionCount, instanceExtensions.data());
 
-    // molten vk
     vk::InstanceCreateFlagBits flags {};
 #ifdef __APPLE__
     instanceExtensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
@@ -137,11 +107,11 @@ void VulkanContext::createInstance()
     };
 
     std::vector<const char*> validationLayers;
-    vk::DebugUtilsMessengerCreateInfoEXT debugInfo {};
 
     instanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     validationLayers.push_back("VK_LAYER_KHRONOS_validation");
-    debugInfo = {
+
+    vk::DebugUtilsMessengerCreateInfoEXT debugInfo {
         .messageSeverity = vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError,
         .messageType = vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation | vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance,
         .pfnUserCallback = debugCallback
@@ -163,18 +133,14 @@ void VulkanContext::createInstance()
 
     instance = vk::createInstanceUnique(instanceInfo, nullptr);
     VULKAN_HPP_DEFAULT_DISPATCHER.init(*instance);
-}
 
-void VulkanContext::createSurface()
-{
+    // surface
     VkSurfaceKHR temp;
     SDL_Vulkan_CreateSurface(window, *instance, &temp);
     vk::ObjectDestroy<vk::Instance, VULKAN_HPP_DEFAULT_DISPATCHER_TYPE> deleter(*instance);
     surface = vk::UniqueSurfaceKHR(temp, deleter);
-}
 
-void VulkanContext::createDevice()
-{
+    // device
     for (auto& _physicalDevice : instance->enumeratePhysicalDevices()) {
         vk::PhysicalDeviceProperties deviceProperties = _physicalDevice.getProperties();
         vk::PhysicalDeviceFeatures deviceFeatures = _physicalDevice.getFeatures();
@@ -207,7 +173,7 @@ void VulkanContext::createDevice()
         .samplerAnisotropy = VK_TRUE
     };
 
-    std::vector<const char*> deviceExtensions = {
+    std::vector<const char*> deviceExtensions {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 #ifdef __APPLE__
         VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME
@@ -224,16 +190,26 @@ void VulkanContext::createDevice()
 
     device = physicalDevice.createDeviceUnique(deviceInfo);
     graphicsQueue = device->getQueue(graphicsQueueIndex, 0);
-}
 
-void VulkanContext::createCommandPool()
-{
+    // swapchain
+    swapchain = createSwapchain(windowExtent, nullptr);
+
+    // command pool
     vk::CommandPoolCreateInfo commandPoolInfo {
         .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
         .queueFamilyIndex = graphicsQueueIndex
     };
 
     commandPool = device->createCommandPoolUnique(commandPoolInfo);
+
+    // vma
+    VmaAllocatorCreateInfo allocatorInfo {
+        .physicalDevice = physicalDevice,
+        .device = *device,
+        .instance = *instance
+    };
+
+    vmaCreateAllocator(&allocatorInfo, &vma.allocator);
 }
 
 void VulkanContext::createDescriptorLayouts()
@@ -245,14 +221,14 @@ void VulkanContext::createDescriptorLayouts()
         .stageFlags = vk::ShaderStageFlagBits::eVertex
     };
 
-    vk::DescriptorSetLayoutBinding shadowMapSamplerBinding {
+    vk::DescriptorSetLayoutBinding offScreenSamplerBinding {
         .binding = 1,
         .descriptorType = vk::DescriptorType::eCombinedImageSampler,
         .descriptorCount = 1,
         .stageFlags = vk::ShaderStageFlagBits::eFragment
     };
 
-    std::array<vk::DescriptorSetLayoutBinding, 2> uboLayoutBindings { uboLayoutBinding, shadowMapSamplerBinding };
+    std::array<vk::DescriptorSetLayoutBinding, 2> uboLayoutBindings { uboLayoutBinding, offScreenSamplerBinding };
 
     vk::DescriptorSetLayoutCreateInfo uboDescriptorLayoutInfo {
         .bindingCount = static_cast<uint32_t>(uboLayoutBindings.size()),
@@ -283,43 +259,6 @@ void VulkanContext::createDescriptorLayouts()
     };
 
     descriptorLayouts.material = device->createDescriptorSetLayoutUnique(materialDescriptorLayoutInfo);
-}
-
-void VulkanContext::createVmaAllocator()
-{
-    VmaAllocatorCreateInfo allocatorInfo {
-        .physicalDevice = physicalDevice,
-        .device = *device,
-        .instance = *instance
-    };
-
-    vmaCreateAllocator(&allocatorInfo, &vma.allocator);
-}
-
-void VulkanContext::createSwapchain(vk::SwapchainKHR oldSwapchain)
-{
-    vk::SurfaceCapabilitiesKHR capabilities = physicalDevice.getSurfaceCapabilitiesKHR(*surface);
-    vk::Extent2D swapchainExtent {
-        std::clamp(extent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
-        std::clamp(extent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
-    };
-
-    vk::SwapchainCreateInfoKHR swapchainInfo {
-        .surface = *surface,
-        .minImageCount = capabilities.minImageCount + 1,
-        .imageFormat = colorFormat,
-        .imageExtent = swapchainExtent,
-        .imageArrayLayers = 1,
-        .imageUsage = vk::ImageUsageFlagBits::eColorAttachment,
-        .imageSharingMode = vk::SharingMode::eExclusive,
-        .preTransform = vk::SurfaceTransformFlagBitsKHR::eIdentity,
-        .compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque,
-        .presentMode = vk::PresentModeKHR::eMailbox,
-        .clipped = VK_TRUE,
-        .oldSwapchain = oldSwapchain
-    };
-
-    swapchain = device->createSwapchainKHRUnique(swapchainInfo);
 }
 
 void VulkanContext::createOffScreenResources()
@@ -384,7 +323,7 @@ void VulkanContext::createOffScreenResources()
         .dstAccessMask = vk::AccessFlagBits::eShaderRead
     };
 
-    std::array<vk::SubpassDependency, 2> dependencies = { depthWrite, shaderRead };
+    std::array<vk::SubpassDependency, 2> dependencies { depthWrite, shaderRead };
 
     vk::RenderPassCreateInfo renderPassInfo {
         .attachmentCount = 1,
@@ -406,16 +345,12 @@ void VulkanContext::createOffScreenResources()
         .layers = 1
     };
 
-    offScreen.frameBuffer = device->createFramebufferUnique(framebufferInfo);
-
-    std::vector<char> shadowShaderBytes = readSpirVFile("shaders/shadow.spv");
-
-    vk::UniqueShaderModule shadowShaderModule = device->createShaderModuleUnique({ .codeSize = shadowShaderBytes.size(), .pCode = reinterpret_cast<const uint32_t*>(shadowShaderBytes.data()) });
+    offScreen.framebuffer = device->createFramebufferUnique(framebufferInfo);
 
     vk::PushConstantRange pushConstantRange {
         .stageFlags = vk::ShaderStageFlagBits::eVertex,
         .offset = 0,
-        .size = sizeof(PushConstants)
+        .size = sizeof(pushConstants)
     };
 
     vk::PipelineLayoutCreateInfo shadowPassPipelineLayoutInfo {
@@ -427,45 +362,112 @@ void VulkanContext::createOffScreenResources()
 
     offScreen.pipelineLayout = device->createPipelineLayoutUnique(shadowPassPipelineLayoutInfo);
 
+    std::vector<char> shadowShaderBytes = readSpirVFile("shaders/shadow.spv");
+    vk::UniqueShaderModule shadowShaderModule = device->createShaderModuleUnique({ .codeSize = shadowShaderBytes.size(), .pCode = reinterpret_cast<const uint32_t*>(shadowShaderBytes.data()) });
+
     vk::PipelineShaderStageCreateInfo shadowPassStageInfo {
         .stage = vk::ShaderStageFlagBits::eVertex,
         .module = *shadowShaderModule,
         .pName = "main"
     };
 
+    std::vector<vk::VertexInputAttributeDescription> vertexAttributeDescriptions = Vertex::vertexAttributeDescriptions();
+
+    vk::PipelineVertexInputStateCreateInfo vertexInputStateInfo {
+        .vertexBindingDescriptionCount = 1,
+        .pVertexBindingDescriptions = Vertex::bindingDescription(),
+        .vertexAttributeDescriptionCount = static_cast<uint32_t>(vertexAttributeDescriptions.size()),
+        .pVertexAttributeDescriptions = vertexAttributeDescriptions.data()
+    };
+
+    vk::PipelineInputAssemblyStateCreateInfo inputAssemblyStateInfo {
+        .topology = vk::PrimitiveTopology::eTriangleList,
+        .primitiveRestartEnable = VK_FALSE
+    };
+
+    vk::Viewport viewport {
+        .x = 0.0f,
+        .y = (float)extent.height,
+        .width = static_cast<float>(extent.width),
+        .height = -static_cast<float>(extent.height),
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f
+    };
+
+    vk::Rect2D scissor {
+        .offset = { 0, 0 },
+        .extent = { extent.width, extent.height }
+    };
+
+    vk::PipelineViewportStateCreateInfo viewportStateInfo {
+        .viewportCount = 1,
+        .pViewports = &viewport,
+        .scissorCount = 1,
+        .pScissors = &scissor
+    };
+
+    vk::PipelineRasterizationStateCreateInfo rasterStateInfo {
+        .depthClampEnable = VK_FALSE,
+        .rasterizerDiscardEnable = VK_FALSE,
+        .polygonMode = vk::PolygonMode::eFill,
+        .cullMode = vk::CullModeFlagBits::eNone,
+        .frontFace = vk::FrontFace::eCounterClockwise,
+        .depthBiasEnable = VK_TRUE,
+        .lineWidth = 1.0f
+    };
+
+    vk::PipelineMultisampleStateCreateInfo multisampleStateInfo {
+        .rasterizationSamples = vk::SampleCountFlagBits::e1,
+        .sampleShadingEnable = VK_FALSE
+    };
+
+    vk::PipelineDepthStencilStateCreateInfo depthStencilStateInfo {
+        .depthTestEnable = VK_TRUE,
+        .depthWriteEnable = VK_TRUE,
+        .depthCompareOp = vk::CompareOp::eGreaterOrEqual,
+        .depthBoundsTestEnable = VK_FALSE,
+        .stencilTestEnable = VK_FALSE
+    };
+
+    std::vector<vk::DynamicState> dynamicStates {
+        vk::DynamicState::eViewport,
+        vk::DynamicState::eScissor,
+        vk::DynamicState::eDepthBias
+    };
+
+    vk::PipelineDynamicStateCreateInfo dynamicStateInfo {
+        .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
+        .pDynamicStates = dynamicStates.data()
+    };
+
     vk::GraphicsPipelineCreateInfo pipelineInfo {
         .stageCount = 1,
         .pStages = &shadowPassStageInfo,
-        //.pVertexInputState = &vertexInputStateInfo,
-        //.pInputAssemblyState = &inputAssemblyStateInfo,
-        //.pViewportState = &viewportStateInfo,
-        //.pRasterizationState = &rasterStateInfo,
-        //.pMultisampleState = &multisampleStateInfo,
-        //.pDepthStencilState = &depthStencilStateInfo,
-        //.pColorBlendState = &colorBlendStateInfo,
-        //.pDynamicState = &dynamicStateInfo,
-        //.layout = *texturePipeline_.layout,
-        //.renderPass = *renderPass_,
+        .pVertexInputState = &vertexInputStateInfo,
+        .pInputAssemblyState = &inputAssemblyStateInfo,
+        .pViewportState = &viewportStateInfo,
+        .pRasterizationState = &rasterStateInfo,
+        .pMultisampleState = &multisampleStateInfo,
+        .pDepthStencilState = &depthStencilStateInfo,
+        .pDynamicState = &dynamicStateInfo,
+        .layout = *offScreen.pipelineLayout,
+        .renderPass = *offScreen.renderPass,
         .subpass = 0
     };
-    
-    // TODO:: OFF-SCREEN PIPELINE
+
+    offScreen.pipeline = device->createGraphicsPipelineUnique(nullptr, pipelineInfo).value;
 }
-/*
 
-    struct OnScreenResources {
-        vk::UniqueRenderPass renderPass;
-        vk::UniquePipelineLayout pipelineLayout;
-        vk::UniquePipeline pipeline;
-        VmaImage* depthImage;
-        vk::UniqueImageView depthView;
-        VmaImage colorImage;
-        vk::UniqueImageView colorImageView;
-    } onScreen;
-
-*/
 void VulkanContext::createOnScreenResources()
 {
+    vk::Extent3D extent { .width = windowExtent.width, .height = windowExtent.height, .depth = 1 };
+
+    onScreen.depthImage = createImage(extent, depthFormat, vk::ImageUsageFlagBits::eDepthStencilAttachment, 1, msaaSampleCount);
+    onScreen.depthView = createImageViewUnique(onScreen.depthImage->image, depthFormat, vk::ImageAspectFlagBits::eDepth, 1);
+
+    onScreen.msaaImage = createImage(extent, colorFormat, vk::ImageUsageFlagBits::eTransientAttachment | vk::ImageUsageFlagBits::eColorAttachment, 1, msaaSampleCount);
+    onScreen.msaaView = createImageViewUnique(onScreen.msaaImage->image, colorFormat, vk::ImageAspectFlagBits::eColor, 1);
+
     vk::AttachmentDescription colorAttachment {
         .format = colorFormat,
         .samples = msaaSampleCount,
@@ -525,7 +527,7 @@ void VulkanContext::createOnScreenResources()
         .dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite | vk::AccessFlagBits::eDepthStencilAttachmentWrite
     };
 
-    std::array<vk::AttachmentDescription, 3> attachments = { colorAttachment, depthAttachment, colorResolve };
+    std::array<vk::AttachmentDescription, 3> attachments { colorAttachment, depthAttachment, colorResolve };
 
     vk::RenderPassCreateInfo renderPassInfo {
         .attachmentCount = static_cast<uint32_t>(attachments.size()),
@@ -538,12 +540,138 @@ void VulkanContext::createOnScreenResources()
 
     onScreen.renderPass = device->createRenderPassUnique(renderPassInfo);
 
-    // TODO: ON SCREEN PIPELINE LAYOUT, PIPELINE, DEPTH PASS, COLOR IMAGE
+    std::vector<vk::DescriptorSetLayout> setLayouts = { *descriptorLayouts.ubo, *descriptorLayouts.material };
+
+    vk::PushConstantRange pushConstantRange {
+        .stageFlags = vk::ShaderStageFlagBits::eVertex,
+        .offset = 0,
+        .size = sizeof(pushConstants)
+    };
+
+    vk::PipelineLayoutCreateInfo texturePipelineLayoutInfo {
+        .setLayoutCount = static_cast<uint32_t>(setLayouts.size()),
+        .pSetLayouts = setLayouts.data(),
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &pushConstantRange
+    };
+
+    onScreen.pipelineLayout = device->createPipelineLayoutUnique(texturePipelineLayoutInfo);
+
+    std::vector<char> vertexShaderBytes = readSpirVFile("shaders/vertex.spv");
+    std::vector<char> fragmentShaderBytes = readSpirVFile("shaders/fragment.spv");
+
+    vk::UniqueShaderModule vertexShaderModule = device->createShaderModuleUnique({ .codeSize = vertexShaderBytes.size(), .pCode = reinterpret_cast<const uint32_t*>(vertexShaderBytes.data()) });
+    vk::UniqueShaderModule fragmentShaderModule = device->createShaderModuleUnique({ .codeSize = fragmentShaderBytes.size(), .pCode = reinterpret_cast<const uint32_t*>(fragmentShaderBytes.data()) });
+
+    std::vector<vk::PipelineShaderStageCreateInfo> shaderStageInfos = {
+        { .stage = vk::ShaderStageFlagBits::eVertex,
+            .module = *vertexShaderModule,
+            .pName = "main" },
+        { .stage = vk::ShaderStageFlagBits::eFragment,
+            .module = *fragmentShaderModule,
+            .pName = "main" }
+    };
+
+    std::vector<vk::VertexInputAttributeDescription> vertexAttributeDescriptions = Vertex::vertexAttributeDescriptions();
+
+    vk::PipelineVertexInputStateCreateInfo vertexInputStateInfo {
+        .vertexBindingDescriptionCount = 1,
+        .pVertexBindingDescriptions = Vertex::bindingDescription(),
+        .vertexAttributeDescriptionCount = static_cast<uint32_t>(vertexAttributeDescriptions.size()),
+        .pVertexAttributeDescriptions = vertexAttributeDescriptions.data()
+    };
+
+    vk::PipelineInputAssemblyStateCreateInfo inputAssemblyStateInfo = {
+        .topology = vk::PrimitiveTopology::eTriangleList,
+        .primitiveRestartEnable = VK_FALSE
+    };
+
+    vk::Viewport viewport = {
+        .x = 0.0f,
+        .y = (float)extent.height,
+        .width = static_cast<float>(extent.width),
+        .height = -static_cast<float>(extent.height),
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f
+    };
+
+    vk::Rect2D scissor = {
+        .offset = { 0, 0 },
+        .extent = { extent.width, extent.height }
+    };
+
+    vk::PipelineViewportStateCreateInfo viewportStateInfo = {
+        .viewportCount = 1,
+        .pViewports = &viewport,
+        .scissorCount = 1,
+        .pScissors = &scissor
+    };
+
+    vk::PipelineRasterizationStateCreateInfo rasterStateInfo = {
+        .depthClampEnable = VK_FALSE,
+        .rasterizerDiscardEnable = VK_FALSE,
+        .polygonMode = vk::PolygonMode::eFill,
+        .cullMode = vk::CullModeFlagBits::eBack,
+        .frontFace = vk::FrontFace::eCounterClockwise,
+        .depthBiasEnable = VK_FALSE,
+        .lineWidth = 1.0f
+    };
+
+    vk::PipelineMultisampleStateCreateInfo multisampleStateInfo = {
+        .rasterizationSamples = msaaSampleCount,
+        .sampleShadingEnable = VK_FALSE
+    };
+
+    vk::PipelineColorBlendAttachmentState colorBlendAttachment = {
+        .blendEnable = VK_FALSE,
+        .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA
+    };
+
+    vk::PipelineColorBlendStateCreateInfo colorBlendStateInfo = {
+        .logicOpEnable = VK_FALSE,
+        .attachmentCount = 1,
+        .pAttachments = &colorBlendAttachment
+    };
+
+    vk::PipelineDepthStencilStateCreateInfo depthStencilStateInfo = {
+        .depthTestEnable = VK_TRUE,
+        .depthWriteEnable = VK_TRUE,
+        .depthCompareOp = vk::CompareOp::eGreaterOrEqual,
+        .depthBoundsTestEnable = VK_FALSE,
+        .stencilTestEnable = VK_FALSE
+    };
+
+    std::vector<vk::DynamicState> dynamicStates {
+        vk::DynamicState::eViewport,
+        vk::DynamicState::eScissor
+    };
+
+    vk::PipelineDynamicStateCreateInfo dynamicStateInfo = {
+        .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
+        .pDynamicStates = dynamicStates.data()
+    };
+
+    vk::GraphicsPipelineCreateInfo pipelineInfo {
+        .stageCount = static_cast<uint32_t>(shaderStageInfos.size()),
+        .pStages = shaderStageInfos.data(),
+        .pVertexInputState = &vertexInputStateInfo,
+        .pInputAssemblyState = &inputAssemblyStateInfo,
+        .pViewportState = &viewportStateInfo,
+        .pRasterizationState = &rasterStateInfo,
+        .pMultisampleState = &multisampleStateInfo,
+        .pDepthStencilState = &depthStencilStateInfo,
+        .pColorBlendState = &colorBlendStateInfo,
+        .pDynamicState = &dynamicStateInfo,
+        .layout = *onScreen.pipelineLayout,
+        .renderPass = *onScreen.renderPass,
+        .subpass = 0
+    };
+
+    onScreen.pipeline = device->createGraphicsPipelineUnique(nullptr, pipelineInfo).value;
 }
 
 void VulkanContext::createFrameResources()
 {
-    uint32_t frameCount = 2;
     frames.resize(frameCount);
 
     vk::DescriptorPoolSize uboPoolSize {
@@ -570,8 +698,7 @@ void VulkanContext::createFrameResources()
         };
 
         frames[i].commandBuffer = std::move(device->allocateCommandBuffersUnique(commandBufferAllocInfo)[0]);
-
-        frames[i].uniformBuffer.buffer = createBuffer(sizeof(UniformBuffer), vk::BufferUsageFlagBits::eUniformBuffer, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+        frames[i].uniformBuffer = createBuffer(sizeof(UniformBuffer), vk::BufferUsageFlagBits::eUniformBuffer, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 
         vk::DescriptorSetAllocateInfo uboDescriptorSetInfo {
             .descriptorPool = *descriptorPools.ubo,
@@ -579,15 +706,15 @@ void VulkanContext::createFrameResources()
             .pSetLayouts = &descriptorLayouts.ubo.get()
         };
 
-        frames[i].uniformBuffer.descriptorSet = std::move(device->allocateDescriptorSetsUnique(uboDescriptorSetInfo)[0]);
+        frames[i].uniformDescriptorSet = std::move(device->allocateDescriptorSetsUnique(uboDescriptorSetInfo)[0]);
         vk::DescriptorBufferInfo uboBufferInfo {
-            .buffer = frames[i].uniformBuffer.buffer->buffer,
+            .buffer = frames[i].uniformBuffer->buffer,
             .offset = 0,
             .range = sizeof(UniformBuffer)
         };
 
         vk::WriteDescriptorSet sceneUboWriteDescriptor {
-            .dstSet = *frames[i].uniformBuffer.descriptorSet,
+            .dstSet = *frames[i].uniformDescriptorSet,
             .dstBinding = 0,
             .dstArrayElement = 0,
             .descriptorCount = 1,
@@ -595,36 +722,139 @@ void VulkanContext::createFrameResources()
             .pBufferInfo = &uboBufferInfo
         };
 
-        vk::DescriptorImageInfo shadowMapSamplerInfo {
+        vk::DescriptorImageInfo offScreenSamplerInfo {
             .sampler = *offScreen.depthSampler,
             .imageView = *offScreen.depthView,
             .imageLayout = vk::ImageLayout::eDepthStencilReadOnlyOptimal
         };
 
-        vk::WriteDescriptorSet shadowMapWriteDescriptor {
-            .dstSet = *frames[i].uniformBuffer.descriptorSet,
+        vk::WriteDescriptorSet offScreenWriteDescriptor {
+            .dstSet = *frames[i].uniformDescriptorSet,
             .dstBinding = 1,
             .dstArrayElement = 0,
             .descriptorCount = 1,
             .descriptorType = vk::DescriptorType::eCombinedImageSampler,
-            .pImageInfo = &shadowMapSamplerInfo
+            .pImageInfo = &offScreenSamplerInfo
         };
 
-        std::array<vk::WriteDescriptorSet, 2> uboWriteDescriptors = { sceneUboWriteDescriptor, shadowMapWriteDescriptor };
+        std::array<vk::WriteDescriptorSet, 2> uboWriteDescriptors { sceneUboWriteDescriptor, offScreenWriteDescriptor };
         device->updateDescriptorSets(static_cast<uint32_t>(uboWriteDescriptors.size()), uboWriteDescriptors.data(), 0, nullptr);
 
-        frames[i].swapchainResources.image = swapchainImages[i];
-        frames[i].swapchainResources.imageView = createImageViewUnique(swapchainImages[i], colorFormat, vk::ImageAspectFlagBits::eColor, 1);
+        frames[i].image = swapchainImages[i];
+        frames[i].imageView = createImageViewUnique(frames[i].image, colorFormat, vk::ImageAspectFlagBits::eColor, 1);
 
-        // TODO: SWAPCHAIN FRAMEBUFFER, SYNC
+        std::array<vk::ImageView, 3> attachments = { *onScreen.msaaView, *onScreen.depthView, *frames[i].imageView };
+
+        vk::FramebufferCreateInfo framebufferInfo {
+            .renderPass = *onScreen.renderPass,
+            .attachmentCount = static_cast<uint32_t>(attachments.size()),
+            .pAttachments = attachments.data(),
+            .width = windowExtent.width,
+            .height = windowExtent.height,
+            .layers = 1
+        };
+
+        frames[i].framebuffer = device->createFramebufferUnique(framebufferInfo);
+
+        frames[i].imageAvailable = device->createSemaphoreUnique({});
+        frames[i].renderFinished = device->createSemaphoreUnique({});
+        frames[i].inFlight = device->createFenceUnique({ .flags = vk::FenceCreateFlagBits::eSignaled });
     }
 }
 
-// TODO: RECREATE SWAPCHAIN
+void VulkanContext::createImGuiResources()
+{
+    // TODO: consider moving this to ui context?
+    vk::DescriptorPoolSize imguiPoolSizes[] = {
+        { vk::DescriptorType::eSampler, 1000 },
+        { vk::DescriptorType::eCombinedImageSampler, 1000 },
+        { vk::DescriptorType::eSampledImage, 1000 },
+        { vk::DescriptorType::eStorageImage, 1000 },
+        { vk::DescriptorType::eUniformTexelBuffer, 1000 },
+        { vk::DescriptorType::eStorageTexelBuffer, 1000 },
+        { vk::DescriptorType::eUniformBuffer, 1000 },
+        { vk::DescriptorType::eStorageBuffer, 1000 },
+        { vk::DescriptorType::eUniformBufferDynamic, 1000 },
+        { vk::DescriptorType::eStorageBufferDynamic, 1000 },
+        { vk::DescriptorType::eInputAttachment, 1000 }
+    };
+
+    vk::DescriptorPoolCreateInfo imguiPoolInfo {
+        .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+        .maxSets = 1000,
+        .poolSizeCount = std::size(imguiPoolSizes),
+        .pPoolSizes = imguiPoolSizes
+    };
+
+    descriptorPools.imGui = device->createDescriptorPoolUnique(imguiPoolInfo);
+
+    ImGui::CreateContext();
+    ImGui_ImplSDL2_InitForVulkan(window);
+
+    ImGui_ImplVulkan_InitInfo imguiInfo {
+        .Instance = *instance,
+        .PhysicalDevice = physicalDevice,
+        .Device = *device,
+        .Queue = graphicsQueue,
+        .DescriptorPool = *descriptorPools.imGui,
+        .MinImageCount = 3,
+        .ImageCount = 3,
+        .MSAASamples = VK_SAMPLE_COUNT_4_BIT
+    };
+
+    ImGui_ImplVulkan_Init(&imguiInfo, *onScreen.renderPass);
+    auto cmd = beginOneTimeCommandBuffer();
+    ImGui_ImplVulkan_CreateFontsTexture(*cmd);
+    endOneTimeCommandBuffer(*cmd);
+    ImGui_ImplVulkan_DestroyFontUploadObjects();
+}
 
 /*
-    Utility
-*/
+ */
+
+VkBool32 VulkanContext::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
+{
+    char prefix[64] = "VK:";
+
+    if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
+        strcat(prefix, "VERBOSE:");
+    } else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
+        strcat(prefix, "INFO:");
+    } else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+        strcat(prefix, "WARNING:");
+    } else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
+        strcat(prefix, "ERROR:");
+    }
+
+    if (messageType & VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT) {
+        strcat(prefix, "GENERAL");
+    } else if (messageType & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT) {
+        strcat(prefix, "VALIDATION");
+    } else if (messageType & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT) {
+        strcat(prefix, "PERFORMANCE");
+    }
+
+    printf("(%s) %s\n", prefix, pCallbackData->pMessage);
+    return VK_FALSE;
+}
+
+std::vector<char> VulkanContext::readSpirVFile(const std::string& spirVFile)
+{
+    std::ifstream file(spirVFile, std::ios::binary | std::ios::in | std::ios::ate);
+
+    if (!file.is_open()) {
+        printf("(VK_:ERROR) Failed to open spir-v file for reading: %s", spirVFile.c_str());
+        exit(1);
+    }
+
+    size_t fileSize = file.tellg();
+    file.seekg(std::ios::beg);
+    std::vector<char> spirVBytes(fileSize);
+    file.read(spirVBytes.data(), static_cast<long>(fileSize));
+    file.close();
+
+    return spirVBytes;
+}
 
 vk::UniqueCommandBuffer VulkanContext::beginOneTimeCommandBuffer()
 {
@@ -652,9 +882,32 @@ void VulkanContext::endOneTimeCommandBuffer(vk::CommandBuffer& commandBuffer)
     graphicsQueue.waitIdle();
 }
 
-/*
-    Memory Helpers
-*/
+vk::UniqueSwapchainKHR VulkanContext::createSwapchain(vk::Extent2D extent, vk::SwapchainKHR oldSwapchain)
+{
+    vk::SurfaceCapabilitiesKHR capabilities = physicalDevice.getSurfaceCapabilitiesKHR(*surface);
+
+    vk::Extent2D swapchainExtent {
+        std::clamp(extent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
+        std::clamp(extent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
+    };
+
+    vk::SwapchainCreateInfoKHR swapchainInfo {
+        .surface = *surface,
+        .minImageCount = frameCount,
+        .imageFormat = colorFormat,
+        .imageExtent = swapchainExtent,
+        .imageArrayLayers = 1,
+        .imageUsage = vk::ImageUsageFlagBits::eColorAttachment,
+        .imageSharingMode = vk::SharingMode::eExclusive,
+        .preTransform = vk::SurfaceTransformFlagBitsKHR::eIdentity,
+        .compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque,
+        .presentMode = vk::PresentModeKHR::eMailbox,
+        .clipped = VK_TRUE,
+        .oldSwapchain = oldSwapchain
+    };
+
+    return device->createSwapchainKHRUnique(swapchainInfo);
+}
 
 VmaBuffer* VulkanContext::createBuffer(size_t size, vk::BufferUsageFlags usage, VmaAllocationCreateFlags flags)
 {
@@ -720,9 +973,11 @@ VmaImage* VulkanContext::createImage(vk::Extent3D extent, vk::Format format, vk:
         .tiling = VK_IMAGE_TILING_OPTIMAL,
         .usage = (VkImageUsageFlags)usage
     };
+
     VmaAllocationCreateInfo imageAllocInfo {
         .usage = VMA_MEMORY_USAGE_AUTO
     };
+
     auto image = new VmaImage;
 
     vmaCreateImage(vma.allocator, &imageInfo, &imageAllocInfo, &image->image, &image->allocation, nullptr);
@@ -878,6 +1133,7 @@ VmaBuffer* VulkanContext::createStagingBuffer(size_t size)
         .size = size,
         .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT
     };
+
     VmaAllocationCreateInfo stagingAllocInfo {
         .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
         .usage = VMA_MEMORY_USAGE_AUTO
@@ -910,6 +1166,155 @@ vk::ImageMemoryBarrier VulkanContext::imageTransitionBarrier(vk::Image image, vk
 /*
  */
 
+void VulkanContext::drawFrame()
+{
+    auto inFlight = *frames[frame].inFlight;
+    auto imageAvailable = *frames[frame].imageAvailable;
+    auto renderFinished = *frames[frame].renderFinished;
+    auto commandBuffer = *frames[frame].commandBuffer;
+
+    vk::Result result = device->waitForFences(inFlight, true, frameTimeout);
+    uint32_t imageIndex;
+
+    try {
+        std::tie(result, imageIndex) = device->acquireNextImageKHR(*swapchain, frameTimeout, imageAvailable);
+        if (result == vk::Result::eSuboptimalKHR || result == vk::Result::eErrorOutOfDateKHR) {
+            frames[frame].imageAvailable = device->createSemaphoreUnique({});
+            recreateSwapchain();
+            SDL_Quit();
+        }
+    } catch (vk::OutOfDateKHRError&) {
+        recreateSwapchain();
+        SDL_Quit();
+        return;
+    }
+
+    device->resetFences(inFlight);
+
+    commandBuffer.reset();
+    vk::CommandBufferBeginInfo beginInfo {};
+    commandBuffer.begin(beginInfo);
+
+    vk::ClearValue clearColor { .color = { std::array<float, 4> { 0.0f, 0.0f, 0.0f, 0.0f } } };
+    vk::ClearValue clearDepthValue { .depthStencil = vk::ClearDepthStencilValue { 0.0f } };
+    std::array<vk::ClearValue, 2> clearValues { clearColor, clearDepthValue };
+
+    /*
+        Color pass
+    */
+    {
+        vk::RenderPassBeginInfo renderPassInfo {
+            .renderPass = *onScreen.renderPass,
+            .framebuffer = *frames[imageIndex].framebuffer,
+            .renderArea = {
+                .offset = { 0, 0 },
+                .extent = windowExtent },
+            .clearValueCount = static_cast<uint32_t>(clearValues.size()),
+            .pClearValues = clearValues.data()
+        };
+
+        commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
+        {
+            vk::Viewport viewport {
+                .x = 0.0f,
+                .y = (float)windowExtent.height,
+                .width = static_cast<float>(windowExtent.width),
+                .height = -static_cast<float>(windowExtent.height),
+                .minDepth = 0.0f,
+                .maxDepth = 1.0f
+            };
+
+            vk::Rect2D scissor {
+                .offset = { 0, 0 },
+                .extent = windowExtent
+            };
+
+            commandBuffer.setScissor(0, 1, &scissor);
+            ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
+            commandBuffer.setViewport(0, 1, &viewport);
+        }
+        commandBuffer.endRenderPass();
+    }
+    commandBuffer.end();
+
+    vk::PipelineStageFlags waitDstStageMask { vk::PipelineStageFlagBits::eColorAttachmentOutput };
+
+    vk::SubmitInfo submitInfo {
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = &imageAvailable,
+        .pWaitDstStageMask = &waitDstStageMask,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &commandBuffer,
+        .signalSemaphoreCount = 1,
+        .pSignalSemaphores = &renderFinished
+    };
+
+    graphicsQueue.submit(submitInfo, inFlight);
+
+    vk::PresentInfoKHR presentInfo {
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = &renderFinished,
+        .swapchainCount = 1,
+        .pSwapchains = &swapchain.get(),
+        .pImageIndices = &imageIndex
+    };
+
+    try {
+        result = graphicsQueue.presentKHR(presentInfo);
+        if (result == vk::Result::eSuboptimalKHR || result == vk::Result::eErrorOutOfDateKHR || resized) {
+            recreateSwapchain();
+            resized = false;
+        }
+    } catch (vk::OutOfDateKHRError&) {
+        recreateSwapchain();
+        resized = false;
+    }
+
+    frame = (frame + 1) % frameCount;
+}
+
+void VulkanContext::recreateSwapchain()
+{
+    // TODO
+    device->waitIdle();
+
+    int width, height;
+    SDL_GetWindowSize(window, &width, &height);
+
+    windowExtent = vk::Extent2D { static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
+    vk::Extent3D extent { width, height, 1 };
+
+    createSwapchain(windowExtent, *swapchain);
+
+    onScreen.depthImage = createImage(extent, depthFormat, vk::ImageUsageFlagBits::eDepthStencilAttachment, 1, msaaSampleCount);
+    onScreen.depthView = createImageViewUnique(onScreen.depthImage->image, depthFormat, vk::ImageAspectFlagBits::eDepth, 1);
+
+    onScreen.msaaImage = createImage(extent, colorFormat, vk::ImageUsageFlagBits::eTransientAttachment | vk::ImageUsageFlagBits::eColorAttachment, 1, msaaSampleCount);
+    onScreen.msaaView = createImageViewUnique(onScreen.msaaImage->image, colorFormat, vk::ImageAspectFlagBits::eColor, 1);
+
+    auto swapchainImages = device->getSwapchainImagesKHR(*swapchain);
+
+    for (int i = 0; i < frameCount; i++) {
+        std::array<vk::ImageView, 3> attachments = { *onScreen.msaaView, *onScreen.depthView, *frames[i].imageView };
+
+        vk::FramebufferCreateInfo framebufferInfo {
+            .renderPass = *onScreen.renderPass,
+            .attachmentCount = static_cast<uint32_t>(attachments.size()),
+            .pAttachments = attachments.data(),
+            .width = windowExtent.width,
+            .height = windowExtent.height,
+            .layers = 1
+        };
+
+        frames[i].framebuffer = device->createFramebufferUnique(framebufferInfo);
+        frames[i].image = swapchainImages[i];
+        frames[i].imageView = createImageViewUnique(frames[i].image, colorFormat, vk::ImageAspectFlagBits::eColor, 1);
+    }
+}
+
+/*
+ */
+
 void gfx::init()
 {
     VulkanContext::init();
@@ -920,7 +1325,17 @@ void gfx::cleanup()
     VulkanContext::cleanup();
 }
 
+bool gfx::ready()
+{
+    return VulkanContext::ready();
+}
+
 VulkanContext* gfx::get()
 {
     return VulkanContext::get();
+}
+
+void gfx::render()
+{
+    VulkanContext::get()->drawFrame();
 }

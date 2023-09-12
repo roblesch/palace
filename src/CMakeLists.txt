@@ -1,4 +1,4 @@
-add_library(pl "engine.cpp" "graphics.cpp" "types.hpp")
+add_library(pl "types.hpp" "engine.cpp" "graphics.cpp" "input.cpp" "ui.cpp")
 add_library(pl::pl ALIAS pl)
 target_link_libraries(pl imgui::imgui glm::glm VMA::VMA Vulkan::Vulkan SDL2::SDL2 tinygltf)
 
