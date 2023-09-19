@@ -16,6 +16,7 @@ void VulkanContext::init()
     singleton = new VulkanContext();
     singleton->createContextResources();
     singleton->createDescriptorLayouts();
+    singleton->createSwapchain(nullptr);
     singleton->createOffScreenResources();
     singleton->createOnScreenResources();
     singleton->createFrameResources();
@@ -47,7 +48,7 @@ VulkanContext::~VulkanContext()
     device->waitIdle();
 
     for (auto& buffer : vma.buffers)
-        vmaDestroyBuffer(vma.allocator, buffer->buffer, buffer->allocation);
+        destroyBuffer(buffer);
     for (auto& image : vma.images)
         vmaDestroyImage(vma.allocator, image->image, image->allocation);
 
@@ -58,25 +59,7 @@ VulkanContext::~VulkanContext()
 }
 
 /*
- */
-
-vk::Extent2D VulkanContext::extents()
-{
-    return windowExtent;
-}
-
-SDL_Window* VulkanContext::sdlWindow()
-{
-    return window;
-}
-
-void VulkanContext::resize()
-{
-    resized = true;
-}
-
-/*
- */
+*/
 
 void VulkanContext::createContextResources()
 {
@@ -191,9 +174,6 @@ void VulkanContext::createContextResources()
     device = physicalDevice.createDeviceUnique(deviceInfo);
     graphicsQueue = device->getQueue(graphicsQueueIndex, 0);
 
-    // swapchain
-    swapchain = createSwapchain(windowExtent, nullptr);
-
     // command pool
     vk::CommandPoolCreateInfo commandPoolInfo {
         .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
@@ -261,11 +241,74 @@ void VulkanContext::createDescriptorLayouts()
     descriptorLayouts.material = device->createDescriptorSetLayoutUnique(materialDescriptorLayoutInfo);
 }
 
+void VulkanContext::createSwapchain(vk::SwapchainKHR oldSwapchain)
+{
+    vk::SurfaceCapabilitiesKHR capabilities = physicalDevice.getSurfaceCapabilitiesKHR(*surface);
+
+    vk::Extent2D swapchainExtent {
+        std::clamp(windowExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
+        std::clamp(windowExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
+    };
+
+    vk::SwapchainCreateInfoKHR swapchainInfo {
+        .surface = *surface,
+        .minImageCount = frameCount,
+        .imageFormat = colorFormat,
+        .imageExtent = swapchainExtent,
+        .imageArrayLayers = 1,
+        .imageUsage = vk::ImageUsageFlagBits::eColorAttachment,
+        .imageSharingMode = vk::SharingMode::eExclusive,
+        .preTransform = vk::SurfaceTransformFlagBitsKHR::eIdentity,
+        .compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque,
+        .presentMode = vk::PresentModeKHR::eMailbox,
+        .clipped = VK_TRUE,
+        .oldSwapchain = oldSwapchain
+    };
+
+    swapchain = device->createSwapchainKHRUnique(swapchainInfo);
+}
+
+void VulkanContext::recreateSwapchain()
+{
+    device->waitIdle();
+
+    int width, height;
+    SDL_GetWindowSize(window, &width, &height);
+
+    windowExtent = vk::Extent2D { static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
+
+    createSwapchain(*swapchain);
+
+    onScreen.depthImage = createImage(windowExtent, depthFormat, vk::ImageUsageFlagBits::eDepthStencilAttachment, 1, msaaSampleCount);
+    onScreen.depthView = createImageViewUnique(onScreen.depthImage->image, depthFormat, vk::ImageAspectFlagBits::eDepth, 1);
+
+    onScreen.msaaImage = createImage(windowExtent, colorFormat, vk::ImageUsageFlagBits::eTransientAttachment | vk::ImageUsageFlagBits::eColorAttachment, 1, msaaSampleCount);
+    onScreen.msaaView = createImageViewUnique(onScreen.msaaImage->image, colorFormat, vk::ImageAspectFlagBits::eColor, 1);
+
+    auto swapchainImages = device->getSwapchainImagesKHR(*swapchain);
+
+    for (int i = 0; i < frameCount; i++) {
+        frames[i].image = swapchainImages[i];
+        frames[i].imageView = createImageViewUnique(frames[i].image, colorFormat, vk::ImageAspectFlagBits::eColor, 1);
+
+        std::array<vk::ImageView, 3> attachments = { *onScreen.msaaView, *onScreen.depthView, *frames[i].imageView };
+
+        vk::FramebufferCreateInfo framebufferInfo {
+            .renderPass = *onScreen.renderPass,
+            .attachmentCount = static_cast<uint32_t>(attachments.size()),
+            .pAttachments = attachments.data(),
+            .width = windowExtent.width,
+            .height = windowExtent.height,
+            .layers = 1
+        };
+
+        frames[i].framebuffer = device->createFramebufferUnique(framebufferInfo);
+    }
+}
+
 void VulkanContext::createOffScreenResources()
 {
-    vk::Extent3D extent { .width = offScreen.shadowResolution, .height = offScreen.shadowResolution, .depth = 1 };
-
-    offScreen.depthImage = createImage(extent, depthFormat, vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled, 1, vk::SampleCountFlagBits::e1);
+    offScreen.depthImage = createImage({offScreen.shadowResolution, offScreen.shadowResolution}, depthFormat, vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled, 1, vk::SampleCountFlagBits::e1);
     offScreen.depthView = createImageViewUnique(offScreen.depthImage->image, depthFormat, vk::ImageAspectFlagBits::eDepth, 1);
 
     vk::SamplerCreateInfo samplerInfo {
@@ -387,16 +430,16 @@ void VulkanContext::createOffScreenResources()
 
     vk::Viewport viewport {
         .x = 0.0f,
-        .y = (float)extent.height,
-        .width = static_cast<float>(extent.width),
-        .height = -static_cast<float>(extent.height),
+        .y = (float)offScreen.shadowResolution,
+        .width = static_cast<float>(offScreen.shadowResolution),
+        .height = -static_cast<float>(offScreen.shadowResolution),
         .minDepth = 0.0f,
         .maxDepth = 1.0f
     };
 
     vk::Rect2D scissor {
         .offset = { 0, 0 },
-        .extent = { extent.width, extent.height }
+        .extent = { offScreen.shadowResolution, offScreen.shadowResolution }
     };
 
     vk::PipelineViewportStateCreateInfo viewportStateInfo {
@@ -460,12 +503,10 @@ void VulkanContext::createOffScreenResources()
 
 void VulkanContext::createOnScreenResources()
 {
-    vk::Extent3D extent { .width = windowExtent.width, .height = windowExtent.height, .depth = 1 };
-
-    onScreen.depthImage = createImage(extent, depthFormat, vk::ImageUsageFlagBits::eDepthStencilAttachment, 1, msaaSampleCount);
+    onScreen.depthImage = createImage(windowExtent, depthFormat, vk::ImageUsageFlagBits::eDepthStencilAttachment, 1, msaaSampleCount);
     onScreen.depthView = createImageViewUnique(onScreen.depthImage->image, depthFormat, vk::ImageAspectFlagBits::eDepth, 1);
 
-    onScreen.msaaImage = createImage(extent, colorFormat, vk::ImageUsageFlagBits::eTransientAttachment | vk::ImageUsageFlagBits::eColorAttachment, 1, msaaSampleCount);
+    onScreen.msaaImage = createImage(windowExtent, colorFormat, vk::ImageUsageFlagBits::eTransientAttachment | vk::ImageUsageFlagBits::eColorAttachment, 1, msaaSampleCount);
     onScreen.msaaView = createImageViewUnique(onScreen.msaaImage->image, colorFormat, vk::ImageAspectFlagBits::eColor, 1);
 
     vk::AttachmentDescription colorAttachment {
@@ -588,16 +629,16 @@ void VulkanContext::createOnScreenResources()
 
     vk::Viewport viewport = {
         .x = 0.0f,
-        .y = (float)extent.height,
-        .width = static_cast<float>(extent.width),
-        .height = -static_cast<float>(extent.height),
+        .y = (float)windowExtent.height,
+        .width = static_cast<float>(windowExtent.width),
+        .height = -static_cast<float>(windowExtent.height),
         .minDepth = 0.0f,
         .maxDepth = 1.0f
     };
 
     vk::Rect2D scissor = {
         .offset = { 0, 0 },
-        .extent = { extent.width, extent.height }
+        .extent = windowExtent
     };
 
     vk::PipelineViewportStateCreateInfo viewportStateInfo = {
@@ -882,33 +923,6 @@ void VulkanContext::endOneTimeCommandBuffer(vk::CommandBuffer& commandBuffer)
     graphicsQueue.waitIdle();
 }
 
-vk::UniqueSwapchainKHR VulkanContext::createSwapchain(vk::Extent2D extent, vk::SwapchainKHR oldSwapchain)
-{
-    vk::SurfaceCapabilitiesKHR capabilities = physicalDevice.getSurfaceCapabilitiesKHR(*surface);
-
-    vk::Extent2D swapchainExtent {
-        std::clamp(extent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
-        std::clamp(extent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
-    };
-
-    vk::SwapchainCreateInfoKHR swapchainInfo {
-        .surface = *surface,
-        .minImageCount = frameCount,
-        .imageFormat = colorFormat,
-        .imageExtent = swapchainExtent,
-        .imageArrayLayers = 1,
-        .imageUsage = vk::ImageUsageFlagBits::eColorAttachment,
-        .imageSharingMode = vk::SharingMode::eExclusive,
-        .preTransform = vk::SurfaceTransformFlagBitsKHR::eIdentity,
-        .compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque,
-        .presentMode = vk::PresentModeKHR::eMailbox,
-        .clipped = VK_TRUE,
-        .oldSwapchain = oldSwapchain
-    };
-
-    return device->createSwapchainKHRUnique(swapchainInfo);
-}
-
 VmaBuffer* VulkanContext::createBuffer(size_t size, vk::BufferUsageFlags usage, VmaAllocationCreateFlags flags)
 {
     VkBufferCreateInfo bufferInfo {
@@ -924,20 +938,23 @@ VmaBuffer* VulkanContext::createBuffer(size_t size, vk::BufferUsageFlags usage, 
     auto buffer = new VmaBuffer;
     buffer->size = size;
     vmaCreateBuffer(vma.allocator, &bufferInfo, &allocInfo, &buffer->buffer, &buffer->allocation, nullptr);
+    vmaMapMemory(vma.allocator, buffer->allocation, &buffer->data);
     vma.buffers.push_back(buffer);
 
     return buffer;
 }
 
+void VulkanContext::destroyBuffer(VmaBuffer* buffer)
+{
+    vmaUnmapMemory(vma.allocator, buffer->allocation);
+    vmaDestroyBuffer(vma.allocator, buffer->buffer, buffer->allocation);
+}
+
 void VulkanContext::uploadToBuffer(VmaBuffer* buffer, void* src)
 {
     auto staging = createStagingBuffer(buffer->size);
-
-    void* data;
-    vmaMapMemory(vma.allocator, staging->allocation, &data);
-    memcpy(data, src, buffer->size);
-    vmaUnmapMemory(vma.allocator, staging->allocation);
-
+    memcpy(staging->data, src, buffer->size);
+    
     auto cmd = beginOneTimeCommandBuffer();
     {
         vk::BufferCopy copy {
@@ -948,25 +965,16 @@ void VulkanContext::uploadToBuffer(VmaBuffer* buffer, void* src)
         cmd->copyBuffer(staging->buffer, buffer->buffer, 1, &copy);
     }
     endOneTimeCommandBuffer(*cmd);
-
-    vmaDestroyBuffer(vma.allocator, staging->buffer, staging->allocation);
+    destroyBuffer(staging);
 }
 
-void VulkanContext::uploadToBufferDirect(VmaBuffer* buffer, void* src)
-{
-    void* data;
-    vmaMapMemory(vma.allocator, buffer->allocation, &data);
-    memcpy(data, src, buffer->size);
-    vmaUnmapMemory(vma.allocator, buffer->allocation);
-}
-
-VmaImage* VulkanContext::createImage(vk::Extent3D extent, vk::Format format, vk::ImageUsageFlags usage, uint32_t mipLevels, vk::SampleCountFlagBits samples)
+VmaImage* VulkanContext::createImage(vk::Extent2D extent, vk::Format format, vk::ImageUsageFlags usage, uint32_t mipLevels, vk::SampleCountFlagBits samples)
 {
     VkImageCreateInfo imageInfo {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = VK_IMAGE_TYPE_2D,
         .format = (VkFormat)format,
-        .extent = extent,
+        .extent = { extent.width, extent.height, 1 },
         .mipLevels = mipLevels,
         .arrayLayers = 1,
         .samples = (VkSampleCountFlagBits)samples,
@@ -979,20 +987,17 @@ VmaImage* VulkanContext::createImage(vk::Extent3D extent, vk::Format format, vk:
     };
 
     auto image = new VmaImage;
-
     vmaCreateImage(vma.allocator, &imageInfo, &imageAllocInfo, &image->image, &image->allocation, nullptr);
     vma.images.push_back(image);
+
     return image;
 }
 
-VmaImage* VulkanContext::createTextureImage(const void* src, size_t size, vk::Extent3D extent, uint32_t mipLevels)
+VmaImage* VulkanContext::createTextureImage(const void* src, size_t size, vk::Extent2D extent, uint32_t mipLevels)
 {
     // upload to staging
     auto staging = createStagingBuffer(size);
-    void* data;
-    vmaMapMemory(vma.allocator, staging->allocation, &data);
-    memcpy(data, src, size);
-    vmaUnmapMemory(vma.allocator, staging->allocation);
+    memcpy(staging->data, src, size);
 
     // create image
     auto texture = createImage(extent, vk::Format::eR8G8B8A8Unorm, vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled, mipLevels, vk::SampleCountFlagBits::e1);
@@ -1014,7 +1019,7 @@ VmaImage* VulkanContext::createTextureImage(const void* src, size_t size, vk::Ex
                 .baseArrayLayer = 0,
                 .layerCount = 1 },
             .imageOffset = { 0, 0, 0 },
-            .imageExtent = extent
+            .imageExtent = { extent.width, extent.height, 1}
         };
         cmd->copyBufferToImage(staging->buffer, texture->image, vk::ImageLayout::eTransferDstOptimal, copy);
 
@@ -1081,7 +1086,7 @@ VmaImage* VulkanContext::createTextureImage(const void* src, size_t size, vk::Ex
         cmd->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader, {}, {}, {}, barrier);
     }
     endOneTimeCommandBuffer(*cmd);
-    vmaDestroyBuffer(vma.allocator, staging->buffer, staging->allocation);
+    destroyBuffer(staging);
 
     return texture;
 }
@@ -1100,7 +1105,7 @@ vk::UniqueImageView VulkanContext::createImageViewUnique(vk::Image image, vk::Fo
             .layerCount = 1 }
     };
 
-    return device->createImageViewUnique(imageViewInfo);
+    return device->createImageViewUnique(imageViewInfo, nullptr);
 }
 
 vk::UniqueSampler VulkanContext::createTextureSamplerUnique(uint32_t mipLevels)
@@ -1141,6 +1146,7 @@ VmaBuffer* VulkanContext::createStagingBuffer(size_t size)
 
     auto staging = new VmaBuffer;
     vmaCreateBuffer(vma.allocator, &stagingBufferInfo, &stagingAllocInfo, &staging->buffer, &staging->allocation, nullptr);
+    
     return staging;
 }
 
@@ -1165,6 +1171,21 @@ vk::ImageMemoryBarrier VulkanContext::imageTransitionBarrier(vk::Image image, vk
 
 /*
  */
+
+vk::Extent2D VulkanContext::extents()
+{
+    return windowExtent;
+}
+
+SDL_Window* VulkanContext::sdlWindow()
+{
+    return window;
+}
+
+void VulkanContext::resize()
+{
+    resized = true;
+}
 
 void VulkanContext::drawFrame()
 {
@@ -1271,45 +1292,6 @@ void VulkanContext::drawFrame()
     }
 
     frame = (frame + 1) % frameCount;
-}
-
-void VulkanContext::recreateSwapchain()
-{
-    // TODO
-    device->waitIdle();
-
-    int width, height;
-    SDL_GetWindowSize(window, &width, &height);
-
-    windowExtent = vk::Extent2D { static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
-    vk::Extent3D extent { width, height, 1 };
-
-    createSwapchain(windowExtent, *swapchain);
-
-    onScreen.depthImage = createImage(extent, depthFormat, vk::ImageUsageFlagBits::eDepthStencilAttachment, 1, msaaSampleCount);
-    onScreen.depthView = createImageViewUnique(onScreen.depthImage->image, depthFormat, vk::ImageAspectFlagBits::eDepth, 1);
-
-    onScreen.msaaImage = createImage(extent, colorFormat, vk::ImageUsageFlagBits::eTransientAttachment | vk::ImageUsageFlagBits::eColorAttachment, 1, msaaSampleCount);
-    onScreen.msaaView = createImageViewUnique(onScreen.msaaImage->image, colorFormat, vk::ImageAspectFlagBits::eColor, 1);
-
-    auto swapchainImages = device->getSwapchainImagesKHR(*swapchain);
-
-    for (int i = 0; i < frameCount; i++) {
-        std::array<vk::ImageView, 3> attachments = { *onScreen.msaaView, *onScreen.depthView, *frames[i].imageView };
-
-        vk::FramebufferCreateInfo framebufferInfo {
-            .renderPass = *onScreen.renderPass,
-            .attachmentCount = static_cast<uint32_t>(attachments.size()),
-            .pAttachments = attachments.data(),
-            .width = windowExtent.width,
-            .height = windowExtent.height,
-            .layers = 1
-        };
-
-        frames[i].framebuffer = device->createFramebufferUnique(framebufferInfo);
-        frames[i].image = swapchainImages[i];
-        frames[i].imageView = createImageViewUnique(frames[i].image, colorFormat, vk::ImageAspectFlagBits::eColor, 1);
-    }
 }
 
 /*

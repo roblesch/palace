@@ -7,6 +7,7 @@
 struct VmaBuffer {
     size_t size;
     VkBuffer buffer;
+    void* data;
     VmaAllocation allocation;
 };
 
@@ -187,27 +188,28 @@ public:
 private:
     void createContextResources();
     void createDescriptorLayouts();
+    void createSwapchain(vk::SwapchainKHR oldSwapchain);
+    void recreateSwapchain();
     void createOffScreenResources();
     void createOnScreenResources();
     void createFrameResources();
     void createImGuiResources();
 
+
     static VkBool32 debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
     std::vector<char> readSpirVFile(const std::string& spirVFile);
     vk::UniqueCommandBuffer beginOneTimeCommandBuffer();
     void endOneTimeCommandBuffer(vk::CommandBuffer& commandBuffer);
-    vk::UniqueSwapchainKHR createSwapchain(vk::Extent2D extent, vk::SwapchainKHR oldSwapchain);
+
     VmaBuffer* createBuffer(size_t size, vk::BufferUsageFlags usage, VmaAllocationCreateFlags flags);
+    void destroyBuffer(VmaBuffer* buffer);
     void uploadToBuffer(VmaBuffer* buffer, void* src);
-    void uploadToBufferDirect(VmaBuffer* buffer, void* src);
-    VmaImage* createImage(vk::Extent3D extent, vk::Format format, vk::ImageUsageFlags usage, uint32_t mipLevels, vk::SampleCountFlagBits samples);
-    VmaImage* createTextureImage(const void* src, size_t size, vk::Extent3D extent, uint32_t mipLevels);
+    VmaImage* createImage(vk::Extent2D extent, vk::Format format, vk::ImageUsageFlags usage, uint32_t mipLevels, vk::SampleCountFlagBits samples);
+    VmaImage* createTextureImage(const void* src, size_t size, vk::Extent2D extent, uint32_t mipLevels);
     vk::UniqueImageView createImageViewUnique(vk::Image image, vk::Format format, vk::ImageAspectFlagBits aspectMask, uint32_t);
     vk::UniqueSampler createTextureSamplerUnique(uint32_t mipLevels);
     VmaBuffer* createStagingBuffer(size_t size);
     vk::ImageMemoryBarrier imageTransitionBarrier(vk::Image image, vk::AccessFlags srcAccessMask, vk::AccessFlags dstAccessMask, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, uint32_t mipLevels = 1);
-
-    void recreateSwapchain();
 };
 
 namespace gfx {
