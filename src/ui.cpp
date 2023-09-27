@@ -1,30 +1,5 @@
 #include "ui.hpp"
 
-#include "graphics.hpp"
-
-UiContext* UiContext::singleton = nullptr;
-
-void UiContext::init()
-{
-    singleton = new UiContext();
-    singleton->initialized = true;
-}
-
-void UiContext::cleanup()
-{
-    delete singleton;
-}
-
-bool UiContext::ready()
-{
-    return singleton->initialized;
-}
-
-UiContext* UiContext::get()
-{
-    return singleton;
-}
-
 UiContext::UiContext()
 {
 }
@@ -38,32 +13,29 @@ UiContext::~UiContext()
 
 void UiContext::update()
 {
-    ImGui_ImplVulkan_NewFrame();
-    ImGui_ImplSDL2_NewFrame(gfx::get()->sdlWindow());
-    ImGui::NewFrame();
-    ImGui::ShowDemoWindow();
-    ImGui::Render();
+//    ImGui_ImplVulkan_NewFrame();
+//    ImGui_ImplSDL2_NewFrame(nullptr);
+//    ImGui::NewFrame();
+//    ImGui::ShowDemoWindow();
+//    ImGui::Render();
 }
 
 /*
 */
 
-void ui::init()
+UiContext* Ui::ui_context_ = nullptr;
+
+void Ui::bind(UiContext* ui_context)
 {
-    UiContext::init();
+    ui_context_ = ui_context;
 }
 
-void ui::cleanup()
+void Ui::unbind()
 {
-    UiContext::cleanup();
+    ui_context_ = nullptr;
 }
 
-bool ui::ready()
+bool Ui::ready()
 {
-    return UiContext::ready();
-}
-
-UiContext* ui::get()
-{
-    return UiContext::get();
+    return ui_context_ != nullptr;
 }

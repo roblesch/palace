@@ -1,32 +1,9 @@
 #include "input.hpp"
 
-#include "graphics.hpp"
+#include "ui.hpp"
 
 /*
 */
-
-InputContext* InputContext::singleton = nullptr;
-
-void InputContext::init()
-{
-    singleton = new InputContext();
-    singleton->initialized = true;
-}
-
-void InputContext::cleanup()
-{
-    delete singleton;
-}
-
-bool InputContext::ready()
-{
-    return singleton->initialized;
-}
-
-InputContext* InputContext::get()
-{
-    return singleton;
-}
 
 InputContext::InputContext()
 {
@@ -39,13 +16,33 @@ InputContext::~InputContext()
 /*
 */
 
-InputContext::Result InputContext::handleSdlEvents()
+void InputContext::init()
 {
-    Result result = CONTINUE;
+}
+
+/*
+ */
+
+std::vector<const char*> InputContext::instanceExtensions()
+{
+    uint32_t extensionCount;
+    SDL_Vulkan_GetInstanceExtensions(sdl_window_, &extensionCount, nullptr);
+    std::vector<const char*> instanceExtensions(extensionCount);
+    SDL_Vulkan_GetInstanceExtensions(sdl_window_, &extensionCount, instanceExtensions.data());
+    return instanceExtensions;
+}
+
+/*
+ *
+ */
+
+InputEventResult InputContext::processEvents()
+{
+    InputEventResult result = CONTINUE;
 
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
-        ImGui_ImplSDL2_ProcessEvent(&event);
+//        ImGui_ImplSDL2_ProcessEvent(&event);
 
         switch (event.type) {
         case SDL_QUIT:
@@ -54,7 +51,6 @@ InputContext::Result InputContext::handleSdlEvents()
         case SDL_WINDOWEVENT:
             switch (event.window.event) {
             case SDL_WINDOWEVENT_RESIZED:
-                gfx::get()->resize();
                 break;
             }
         case SDL_KEYDOWN:
@@ -72,22 +68,19 @@ InputContext::Result InputContext::handleSdlEvents()
 /*
 */
 
-void io::init()
+InputContext* Input::input_context_ = nullptr;
+
+void Input::bind(InputContext* input_context)
 {
-    InputContext::init();
+    input_context_ = input_context;
 }
 
-void io::cleanup()
+void Input::unbind()
 {
-    InputContext::cleanup();
+    input_context_ = nullptr;
 }
 
-bool io::ready()
+bool Input::ready()
 {
-    return InputContext::ready();
-}
-
-InputContext* io::get()
-{
-    return InputContext::get();
+    return input_context_ != nullptr;
 }

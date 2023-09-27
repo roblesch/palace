@@ -1335,17 +1335,14 @@ bool Engine::running()
 
 void Engine::processInput()
 {
-
 }
 
 void Engine::updateState()
 {
-
 }
 
 void Engine::renderFrame()
 {
-
 }
 
 }
@@ -1364,8 +1361,7 @@ int main(const int argc, const char* argv[])
     engine->loadGltfModel(args->gltf_path());
     engine->run();
 
-    while (engine->running())
-    {
+    while (engine->running()) {
         engine->processInput();
         engine->updateState();
         engine->renderFrame();

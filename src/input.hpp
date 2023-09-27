@@ -1,31 +1,32 @@
 #pragma once
 
 #include "types.hpp"
+#include <vector>
+
+enum InputEventResult {
+    CONTINUE,
+    QUIT
+};
 
 class InputContext {
-    static InputContext* singleton;
-    bool initialized = false;
+    SDL_Window* sdl_window_;
 
 public:
-    enum Result { CONTINUE, QUIT };
-
-    static void init();
-    static void cleanup();
-    static bool ready();
-    static InputContext* get();
-
     InputContext();
     ~InputContext();
 
-    InputContext::Result handleSdlEvents();
+    void init();
 
+    std::vector<const char*> instanceExtensions();
+
+    InputEventResult processEvents();
 };
 
-namespace io {
+class Input {
+    static InputContext* input_context_;
 
-void init();
-void cleanup();
-bool ready();
-InputContext* get();
-
+public:
+    static void bind(InputContext* context);
+    static void unbind();
+    static bool ready();
 };

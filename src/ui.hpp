@@ -1,30 +1,21 @@
 #pragma once
 
-#include "types.hpp"
+#include <backends/imgui_impl_sdl2.h>
+#include <backends/imgui_impl_vulkan.h>
 
 class UiContext {
-    static UiContext* singleton;
-    bool initialized;
-
 public:
-    static void init();
-    static void cleanup();
-    static bool ready();
-    static UiContext* get();
-
     UiContext();
     ~UiContext();
 
     void update();
 };
 
-namespace ui {
+class Ui {
+    static UiContext* ui_context_;
 
-void init();
-void cleanup();
-bool ready();
-UiContext* get();
-
-void update();
-
-}
+public:
+    static void bind(UiContext* ui_context);
+    static void unbind();
+    static bool ready();
+};
