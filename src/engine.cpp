@@ -1,9 +1,5 @@
 #include "engine.hpp"
 
-#include "graphics.hpp"
-#include "input.hpp"
-#include "ui.hpp"
-
 Engine::Engine()
     : input_context_(new InputContext())
     , graphics_context_(new GraphicsContext())
@@ -28,12 +24,12 @@ Engine::~Engine()
 
 void Engine::init()
 {
-    input_context_->init();
     graphics_context_->init();
 }
 
 void Engine::cleanup()
 {
+    graphics_context_->cleanup();
 }
 
 bool Engine::running()
