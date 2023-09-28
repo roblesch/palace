@@ -6,7 +6,7 @@
 struct Application {
     const char* name = "palace";
     const char* applicationName = "viewer";
-    uint32_t apiVersion = VK_API_VERSION_1_3;
+    uint32_t apiVersion = VK_API_VERSION_1_2;
 
     VkApplicationInfo* info()
     {

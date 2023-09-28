@@ -1,6 +1,7 @@
 #include "graphics.hpp"
 
 #include <algorithm>
+#include <vulkan/vulkan_core.h>
 
 /*
  *
@@ -99,18 +100,19 @@ VkResult GraphicsContext::createDevice()
     };
 
     vk_device_.extensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+    vk_device_.extensions.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
 #ifdef __APPLE__
     vk_device_.extensions.push_back(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
 #endif
 
-    VkPhysicalDeviceVulkan13Features deviceFeatures {
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+    VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRendering {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
         .dynamicRendering = VK_TRUE
     };
 
     VkDeviceCreateInfo deviceInfo {
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .pNext = &deviceFeatures,
+        .pNext = &dynamicRendering,
         .queueCreateInfoCount = 1,
         .pQueueCreateInfos = &queueInfo,
         .enabledExtensionCount = static_cast<uint32_t>(vk_device_.extensions.size()),
