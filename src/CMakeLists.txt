@@ -1,4 +1,4 @@
-add_library(pl "types.hpp" "engine.cpp" "graphics.cpp" "input.cpp" "ui.cpp")
+add_library(pl "types.hpp" "engine.cpp" "graphics.cpp" "vktypes.cpp" "input.cpp" "ui.cpp")
 add_library(pl::pl ALIAS pl)
 target_link_libraries(pl imgui::imgui glm::glm VMA::VMA Vulkan::Vulkan SDL2::SDL2 tinygltf)
 
@@ -18,9 +18,8 @@ endif()
 # compile & copy shaders
 file(REMOVE "${PROJECT_BINARY_DIR}/shaders/")
 file(GLOB_RECURSE GLSL_SOURCE_FILES
-		"${PROJECT_SOURCE_DIR}/shaders/shadow.vert"
-		"${PROJECT_SOURCE_DIR}/shaders/fragment.frag"
-		"${PROJECT_SOURCE_DIR}/shaders/vertex.vert")
+		"${PROJECT_SOURCE_DIR}/shaders/*.vert"
+		"${PROJECT_SOURCE_DIR}/shaders/*.frag")
 foreach(GLSL ${GLSL_SOURCE_FILES})
 	get_filename_component(FILE_NAME ${GLSL} NAME_WE)
 	set(SPIRV "${PROJECT_BINARY_DIR}/shaders/${FILE_NAME}.spv")

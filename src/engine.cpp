@@ -24,12 +24,12 @@ Engine::~Engine()
 
 void Engine::init()
 {
-    graphics_context_->init();
+    graphics_context_->create();
 }
 
 void Engine::cleanup()
 {
-    graphics_context_->cleanup();
+    graphics_context_->destroy();
 }
 
 bool Engine::running()
@@ -50,4 +50,5 @@ void Engine::update()
 
 void Engine::render()
 {
+    graphics_context_->draw();
 }

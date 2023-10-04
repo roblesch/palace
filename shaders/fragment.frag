@@ -1,7 +1,5 @@
 #version 450
 
-#extension GL_KHR_vulkan_glsl : enable
-
 const vec3 specColor = vec3(1.0);
 const float shininess = 120.0;
 const float Ka = 0.5;

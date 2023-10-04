@@ -6,38 +6,38 @@
 #include <vector>
 
 class GraphicsContext {
-    Application vk_application_;
-    Window sdl_window_;
-    DebugMessenger vk_debug_messenger_;
-    Instance vk_instance_;
-    Surface vk_surface_khr_;
-    PhysicalDevice vk_physical_device_;
-    GraphicsQueue vk_graphics_queue_;
-    Device vk_device_;
-    Swapchain vk_swapchain_khr_;
-    CommandPool vk_command_pool_;
-    CommandBuffer vk_command_buffer_;
+    Application application;
+    Window window;
+    DebugMessenger debug;
+    Instance instance;
+    Surface surface;
+    PhysicalDevice physicalDevice;
+    GraphicsQueue graphicsQueue;
+    Device device;
 
-    struct {
-        VkDescriptorPool descriptorPool;
-    } imgui_;
+    Swapchain swapchain;
+    Viewport viewport;
+    ShaderModule triangleVert;
+    ShaderModule triangleFrag;
+    PipelineLayout pipelineLayout;
+    Pipeline pipeline;
+
+    CommandPool commandPool;
+    CommandBuffer commandBuffer;
+    Fence renderFence;
+    Semaphore renderSemaphore;
+    Semaphore presentSemaphore;
+
+    uint32_t frame = 0;
 
 public:
     GraphicsContext();
     ~GraphicsContext();
 
-    void init();
-    void cleanup();
+    void create();
+    void destroy();
 
-private:
-    void createWindow();
-    VkResult createInstance();
-    SDL_bool createSurface();
-    VkResult createDevice();
-    VkResult createSwapchain(VkSwapchainKHR oldSwapchain);
-    VkResult createCommandPool();
-    VkResult createCommandBuffer();
-    void createImGui();
+    void draw();
 };
 
 class Graphics {
