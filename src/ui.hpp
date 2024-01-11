@@ -1,18 +1,19 @@
 #pragma once
 
-class UiContext {
-public:
-    UiContext();
-    ~UiContext();
+#include "types.hpp"
 
-    void update();
+namespace pl {
+
+struct UiHandlerCreateInfo {
+
 };
 
-class Ui {
-    static UiContext* ui_context_;
+class UiHandler {
 
-public:
-    static void bind(UiContext* ui_context);
-    static void unbind();
-    static bool ready();
 };
+
+using UniqueUiHandler = std::uinique_ptr<UiHandler>;
+
+UniqueUiHandler createUiHandlerUnique(const UiHandlerCreateInfo& createInfo);
+
+}

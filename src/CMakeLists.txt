@@ -1,12 +1,15 @@
-add_library(pl "types.hpp" "engine.cpp" "graphics.cpp" "vktypes.cpp" "input.cpp" "ui.cpp")
-add_library(pl::pl ALIAS pl)
-target_link_libraries(pl imgui::imgui glm::glm VMA::VMA Vulkan::Vulkan SDL2::SDL2 tinygltf)
+add_library(util "log.hpp" "log.cpp" "parser.hpp" "parser.cpp")
+add_library(pl::util ALIAS util)
 
-add_executable(palace "main.cpp")
+add_library(pl "camera.hpp" "gltf.hpp" "gltf.cpp" "memory.hpp" "memory.cpp" "types.hpp")
+add_library(pl::pl ALIAS pl)
+target_link_libraries(pl imgui::imgui glm::glm pl::util VMA::VMA Vulkan::Vulkan SDL2::SDL2 tinygltf)
+
+add_executable(palace "engine.cpp")
 set_target_properties(palace PROPERTIES
 		RUNTIME_OUTPUT_DIRECTORY_DEBUG ${PROJECT_BINARY_DIR}
 		RUNTIME_OUTPUT_DIRECTORY_RELEASE ${PROJECT_BINARY_DIR})
-target_link_libraries(palace pl::pl)
+target_link_libraries(palace pl::util pl::pl)
 
 # copy dlls
 if(WIN32)
@@ -18,8 +21,9 @@ endif()
 # compile & copy shaders
 file(REMOVE "${PROJECT_BINARY_DIR}/shaders/")
 file(GLOB_RECURSE GLSL_SOURCE_FILES
-		"${PROJECT_SOURCE_DIR}/shaders/*.vert"
-		"${PROJECT_SOURCE_DIR}/shaders/*.frag")
+		"${PROJECT_SOURCE_DIR}/shaders/shadow.vert"
+		"${PROJECT_SOURCE_DIR}/shaders/fragment.frag"
+		"${PROJECT_SOURCE_DIR}/shaders/vertex.vert")
 foreach(GLSL ${GLSL_SOURCE_FILES})
 	get_filename_component(FILE_NAME ${GLSL} NAME_WE)
 	set(SPIRV "${PROJECT_BINARY_DIR}/shaders/${FILE_NAME}.spv")

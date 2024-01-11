@@ -1,32 +1,19 @@
 #pragma once
 
 #include "types.hpp"
-#include <vector>
 
-enum InputEventResult {
-    CONTINUE,
-    QUIT
+namespace pl {
+
+struct InputHandlerCreateInfo {
+
 };
 
-class InputContext {
-    SDL_Window* sdl_window_;
+class InputHandler {
 
-public:
-    InputContext();
-    ~InputContext();
-
-    void init();
-
-    std::vector<const char*> instanceExtensions();
-
-    InputEventResult processEvents();
 };
 
-class Input {
-    static InputContext* input_context_;
+using UniqueInputHandler = std::unique_ptr<InputHandler>;
 
-public:
-    static void bind(InputContext* context);
-    static void unbind();
-    static bool ready();
-};
+UniqueInputHandler createInputHandlerUnique(const InputHandlerCreateInfo& createInfo);
+
+}
