@@ -2,8 +2,6 @@
 
 ![preview](https://blog.roblesch.page/assets/images/palace/preview.jpg)
 
-A vulkan engine.
-
 Read more: https://blog.roblesch.page/blog/2023/07/17/palace-1.html
 
 made with -
